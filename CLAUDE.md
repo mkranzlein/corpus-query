@@ -1,0 +1,29 @@
+# corpus-query
+
+## Python
+
+- Package and environment management is [uv](https://docs.astral.sh/uv/).
+  Use `uv add`, `uv run`, and `uv sync` — not pip, not a hand-managed venv.
+  Dependencies live in `pyproject.toml` and are locked in `uv.lock`.
+- Linted and formatted with [ruff](https://docs.astral.sh/ruff/). Ruff's rules
+  are authoritative.
+- Follow the [Google Python style
+  guide](https://google.github.io/styleguide/pyguide.html) wherever it doesn't
+  conflict with a ruff rule. Where they disagree, ruff wins.
+
+## Commits and releases
+
+- [pre-commit](https://pre-commit.com/) runs ruff, gitleaks, and a commit
+  message check locally. Install the hooks with `pre-commit install` and
+  `pre-commit install --hook-type commit-msg`. CI runs the same config, so
+  anything that passes locally passes there.
+- Commit messages use [Conventional
+  Commits](https://www.conventionalcommits.org/). This is enforced by a hook,
+  and the release tooling parses it — a non-conforming message is rejected.
+- Versioning is handled by
+  [python-semantic-release](https://python-semantic-release.readthedocs.io/),
+  which derives the version, CHANGELOG, and tags from commit history. Don't
+  edit the version by hand.
+- Pull requests are squash merged. The squash commit message is what ends up
+  in history and in the CHANGELOG, so it has to be a valid conventional
+  commit — the individual commits on the branch don't.
