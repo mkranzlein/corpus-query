@@ -2,6 +2,46 @@
 
 <!-- version list -->
 
+## v1.3.1 (2026-09-20)
+
+### Bug Fixes
+
+- Read prior-meeting summaries through the store's real schema
+  ([#38](https://github.com/mkranzlein/corpus-query/pull/38),
+  [`687d3b7`](https://github.com/mkranzlein/corpus-query/commit/687d3b7694da6430c0a3a50aa7e82311ed3c923e))
+
+### Continuous Integration
+
+- Measure coverage and upload it to Codecov
+  ([#37](https://github.com/mkranzlein/corpus-query/pull/37),
+  [`4f3610d`](https://github.com/mkranzlein/corpus-query/commit/4f3610d87fcbfa59fd6509c710d861d0ae46da96))
+
+- Pin setup-uv to v10.1.0, which has no floating major tag
+  ([#35](https://github.com/mkranzlein/corpus-query/pull/35),
+  [`aa14c50`](https://github.com/mkranzlein/corpus-query/commit/aa14c504450dc75a4e8fc20d84dd6c9c72bf1dd0))
+
+- Relock for 1.3.0, the version the release just published
+  ([#35](https://github.com/mkranzlein/corpus-query/pull/35),
+  [`aa14c50`](https://github.com/mkranzlein/corpus-query/commit/aa14c504450dc75a4e8fc20d84dd6c9c72bf1dd0))
+
+- Relock on release so CI can install with --locked
+  ([#35](https://github.com/mkranzlein/corpus-query/pull/35),
+  [`aa14c50`](https://github.com/mkranzlein/corpus-query/commit/aa14c504450dc75a4e8fc20d84dd6c9c72bf1dd0))
+
+- Run pytest in CI and as a pre-commit hook
+  ([#35](https://github.com/mkranzlein/corpus-query/pull/35),
+  [`aa14c50`](https://github.com/mkranzlein/corpus-query/commit/aa14c504450dc75a4e8fc20d84dd6c9c72bf1dd0))
+
+### Documentation
+
+- Add the Codecov badge to the README ([#37](https://github.com/mkranzlein/corpus-query/pull/37),
+  [`4f3610d`](https://github.com/mkranzlein/corpus-query/commit/4f3610d87fcbfa59fd6509c710d861d0ae46da96))
+
+- Read merged branches line by line in the cleanup sweep
+  ([#36](https://github.com/mkranzlein/corpus-query/pull/36),
+  [`b85dd28`](https://github.com/mkranzlein/corpus-query/commit/b85dd289ff08aba9be1695d2cbb5509c7af80a87))
+
+
 ## v1.3.0 (2026-09-20)
 
 ### Documentation
