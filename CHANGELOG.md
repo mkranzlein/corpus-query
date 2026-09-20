@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.2.0 (2026-09-20)
+
+### Features
+
+- Add scripts/fetch_models.py to pre-fetch model weights
+  ([#52](https://github.com/mkranzlein/corpus-query/pull/52),
+  [`df3fb47`](https://github.com/mkranzlein/corpus-query/commit/df3fb479f54807e5c6bf0b6b42b11681a76aef41))
+
+
 ## v2.1.0 (2026-09-20)
 
 ### Features
