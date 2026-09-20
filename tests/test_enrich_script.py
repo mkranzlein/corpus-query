@@ -360,3 +360,13 @@ def test_an_enriched_summary_is_what_the_generator_reads_back(corpus, fake_clien
     [prior] = read_summaries(path)
     assert prior.summary == summary
     assert prior.subject == "Meeting 0"
+
+
+def test_a_dry_run_that_skips_dedupe_does_not_print_its_prompt(
+    corpus, fake_client, run, capsys
+):
+    path = corpus("first")
+
+    assert run(["--db", str(path), "--dry-run", "--no-dedupe"], fake_client()) == 0
+
+    assert "===== dedupe =====" not in capsys.readouterr().out

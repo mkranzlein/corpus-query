@@ -178,7 +178,12 @@ def describe(result: Enriched) -> str:
     )
 
 
-def print_prompts(connection, document_ids: list[int], categories: list[str]) -> None:
+def print_prompts(
+    connection,
+    document_ids: list[int],
+    categories: list[str],
+    dedupe: bool = True,
+) -> None:
     """Print what would be sent, for every selected document.
 
     The category list shown is the one that exists now. In a real run it
@@ -189,6 +194,7 @@ def print_prompts(connection, document_ids: list[int], categories: list[str]) ->
         connection: An open document store.
         document_ids: The documents that would be enriched.
         categories: The categories that exist right now.
+        dedupe: Whether the run would finish with the dedupe pass.
     """
     for document_id in document_ids:
         document = read_document(connection, document_id)
@@ -199,8 +205,9 @@ def print_prompts(connection, document_ids: list[int], categories: list[str]) ->
         ):
             print(f"===== {document.slug}: {name} =====")
             print(prompt)
-    print("===== dedupe =====")
-    print(passes.dedupe_prompt(categories))
+    if dedupe:
+        print("===== dedupe =====")
+        print(passes.dedupe_prompt(categories))
 
 
 def main(
@@ -280,7 +287,12 @@ def _run(
         return 0
 
     if args.dry_run:
-        print_prompts(connection, document_ids, list_categories(connection))
+        print_prompts(
+            connection,
+            document_ids,
+            list_categories(connection),
+            dedupe=not args.no_dedupe,
+        )
         return 0
 
     embed, embedding_model_id = embedder_factory()
