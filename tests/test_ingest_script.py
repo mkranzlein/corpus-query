@@ -76,7 +76,7 @@ def test_an_empty_directory_is_an_error(tmp_path, capsys):
     empty = tmp_path / "nothing"
     empty.mkdir()
     assert main(["--dir", str(empty), "--db", str(tmp_path / "corpus.db")]) == 1
-    assert "no transcripts" in capsys.readouterr().err
+    assert "no readable documents" in capsys.readouterr().err
 
 
 def test_a_bad_file_fails_the_run_but_not_the_good_files(tmp_path, corpus, capsys):

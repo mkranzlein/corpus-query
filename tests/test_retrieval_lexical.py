@@ -13,8 +13,9 @@ from corpus_query.store.db import connect
 def _insert_document(connection: sqlite3.Connection, slug: str = "meeting-1") -> int:
     cursor = connection.execute(
         """
-        INSERT INTO documents (slug, source_path, subject, meeting_date)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO documents
+            (slug, source_path, source_kind, title, document_date)
+        VALUES (?, ?, 'transcript', ?, ?)
         """,
         (slug, f"transcripts/{slug}.md", "Weekly sync", "2026-01-05"),
     )
@@ -28,8 +29,9 @@ def _insert_chunk(
     cursor = connection.execute(
         """
         INSERT INTO chunks
-            (document_id, ordinal, text, word_count, turn_start, turn_end, kind)
-        VALUES (?, ?, ?, ?, 0, 0, 'turn_window')
+            (document_id, ordinal, text, word_count, location,
+             span_start, span_end, kind)
+        VALUES (?, ?, ?, ?, 'turn 0', 0, 0, 'turn_window')
         """,
         (document_id, ordinal, text, len(text.split())),
     )

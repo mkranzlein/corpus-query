@@ -14,7 +14,15 @@ from pathlib import Path
 #: The schema version this code knows how to read and write. Stored in the
 #: database file's ``user_version`` pragma, which SQLite reserves for exactly
 #: this purpose and does not use itself.
-SCHEMA_VERSION = 1
+#:
+#: Version 2 generalized the store past transcripts: ``documents`` gained
+#: ``source_kind`` and ``author`` and renamed two columns, and ``chunks``
+#: gained ``location`` and renamed its turn range to a span. There is no
+#: migration from version 1 and there is not meant to be one — the store is
+#: rebuilt by re-running ingestion and enrichment over the corpus, which is
+#: cheap for ingestion and the only honest way to fill the new columns for
+#: everything else.
+SCHEMA_VERSION = 2
 
 #: Where the document store lives by default, relative to the repository
 #: root. Ingestion writes here unless told otherwise, so anything else that

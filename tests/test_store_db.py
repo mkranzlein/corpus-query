@@ -7,14 +7,16 @@ import sqlite3
 import pytest
 
 from corpus_query.store.db import SCHEMA_VERSION, SchemaVersionError, connect
+from corpus_query.store.kinds import CHUNK_KINDS, SOURCE_KINDS
 
 
 def _insert_document(connection: sqlite3.Connection, slug: str = "meeting-1") -> int:
     """Insert a minimal document row and return its id."""
     cursor = connection.execute(
         """
-        INSERT INTO documents (slug, source_path, subject, meeting_date)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO documents
+            (slug, source_path, source_kind, title, document_date)
+        VALUES (?, ?, 'transcript', ?, ?)
         """,
         (slug, f"transcripts/{slug}.md", "Weekly sync", "2026-01-05"),
     )
@@ -32,8 +34,9 @@ def _insert_chunk(
     cursor = connection.execute(
         """
         INSERT INTO chunks
-            (document_id, ordinal, text, word_count, turn_start, turn_end, kind)
-        VALUES (?, ?, ?, ?, ?, ?, 'turn_window')
+            (document_id, ordinal, text, word_count, location,
+             span_start, span_end, kind)
+        VALUES (?, ?, ?, ?, 'turns 0-2', ?, ?, 'turn_window')
         """,
         (document_id, ordinal, text, len(text.split()), 0, 2),
     )
@@ -141,8 +144,9 @@ def test_foreign_key_violation_is_rejected():
         connection.execute(
             """
             INSERT INTO chunks
-                (document_id, ordinal, text, word_count, turn_start, turn_end, kind)
-            VALUES (999, 0, 'orphan', 1, 0, 0, 'turn_window')
+                (document_id, ordinal, text, word_count, location,
+                 span_start, span_end, kind)
+            VALUES (999, 0, 'orphan', 1, 'turn 0', 0, 0, 'turn_window')
             """
         )
 
@@ -201,49 +205,153 @@ def test_document_slug_uniqueness_is_enforced():
         _insert_document(connection, slug="meeting-1")
 
 
-def test_a_summary_chunk_has_no_turn_range():
+def test_a_summary_chunk_has_no_span():
     connection = connect(":memory:")
     document_id = _insert_document(connection)
     cursor = connection.execute(
         """
-        INSERT INTO chunks (document_id, ordinal, text, word_count, kind)
-        VALUES (?, ?, ?, ?, 'summary')
+        INSERT INTO chunks (document_id, ordinal, text, word_count, location, kind)
+        VALUES (?, ?, ?, ?, 'summary', 'summary')
         """,
         (document_id, 99, "The team held the rev B date.", 6),
     )
     connection.commit()
     row = connection.execute(
-        "SELECT turn_start, turn_end FROM chunks WHERE id = ?", (cursor.lastrowid,)
+        "SELECT span_start, span_end FROM chunks WHERE id = ?", (cursor.lastrowid,)
     ).fetchone()
-    assert row["turn_start"] is None
-    assert row["turn_end"] is None
+    assert row["span_start"] is None
+    assert row["span_end"] is None
 
 
-def test_a_summary_chunk_may_not_claim_a_turn_range():
+def test_a_summary_chunk_may_not_claim_a_span():
     connection = connect(":memory:")
     document_id = _insert_document(connection)
     with pytest.raises(sqlite3.IntegrityError):
         connection.execute(
             """
             INSERT INTO chunks
-                (document_id, ordinal, text, word_count, turn_start, turn_end, kind)
-            VALUES (?, ?, ?, ?, ?, ?, 'summary')
+                (document_id, ordinal, text, word_count, location,
+                 span_start, span_end, kind)
+            VALUES (?, ?, ?, ?, 'summary', ?, ?, 'summary')
             """,
             (document_id, 99, "A summary.", 2, 0, 4),
         )
 
 
-def test_a_turn_window_needs_a_turn_range():
+def test_a_turn_window_needs_a_span():
     connection = connect(":memory:")
     document_id = _insert_document(connection)
     with pytest.raises(sqlite3.IntegrityError):
         connection.execute(
             """
-            INSERT INTO chunks (document_id, ordinal, text, word_count, kind)
-            VALUES (?, ?, ?, ?, 'turn_window')
+            INSERT INTO chunks
+                (document_id, ordinal, text, word_count, location, kind)
+            VALUES (?, ?, ?, ?, 'turn 1', 'turn_window')
             """,
             (document_id, 1, "Something said.", 2),
         )
+
+
+def test_a_span_may_not_run_backwards():
+    connection = connect(":memory:")
+    document_id = _insert_document(connection)
+    with pytest.raises(sqlite3.IntegrityError):
+        connection.execute(
+            """
+            INSERT INTO chunks
+                (document_id, ordinal, text, word_count, location,
+                 span_start, span_end, kind)
+            VALUES (?, ?, ?, ?, 'turns 4-0', 4, 0, 'turn_window')
+            """,
+            (document_id, 1, "Something said.", 2),
+        )
+
+
+def test_every_chunk_kind_the_code_names_is_one_the_schema_accepts():
+    connection = connect(":memory:")
+    document_id = _insert_document(connection)
+    for ordinal, kind in enumerate(CHUNK_KINDS):
+        connection.execute(
+            """
+            INSERT INTO chunks
+                (document_id, ordinal, text, word_count, location,
+                 span_start, span_end, kind)
+            VALUES (?, ?, 'some text', 2, 'somewhere', ?, ?, ?)
+            """,
+            (document_id, ordinal, None, None, kind)
+            if kind in ("summary", "sheet_summary")
+            else (document_id, ordinal, 0, 0, kind),
+        )
+    connection.commit()
+    assert len(connection.execute("SELECT id FROM chunks").fetchall()) == len(
+        CHUNK_KINDS
+    )
+
+
+def test_a_chunk_kind_the_code_does_not_name_is_rejected():
+    connection = connect(":memory:")
+    document_id = _insert_document(connection)
+    with pytest.raises(sqlite3.IntegrityError):
+        connection.execute(
+            """
+            INSERT INTO chunks
+                (document_id, ordinal, text, word_count, location,
+                 span_start, span_end, kind)
+            VALUES (?, 0, 'some text', 2, 'somewhere', 0, 0, 'paragraph')
+            """,
+            (document_id,),
+        )
+
+
+def test_every_source_kind_the_code_names_is_one_the_schema_accepts():
+    connection = connect(":memory:")
+    for index, kind in enumerate(SOURCE_KINDS):
+        connection.execute(
+            """
+            INSERT INTO documents
+                (slug, source_path, source_kind, title, document_date)
+            VALUES (?, 'somewhere', ?, 'Something', '2026-01-05')
+            """,
+            (f"document-{index}", kind),
+        )
+    connection.commit()
+    assert len(connection.execute("SELECT id FROM documents").fetchall()) == len(
+        SOURCE_KINDS
+    )
+
+
+def test_a_source_kind_the_code_does_not_name_is_rejected():
+    connection = connect(":memory:")
+    with pytest.raises(sqlite3.IntegrityError):
+        connection.execute(
+            """
+            INSERT INTO documents
+                (slug, source_path, source_kind, title, document_date)
+            VALUES ('odt', 'somewhere', 'odt', 'Something', '2026-01-05')
+            """
+        )
+
+
+def test_an_author_is_optional_so_the_two_mechanisms_coexist():
+    connection = connect(":memory:")
+    _insert_document(connection, slug="weekly-sync")
+    connection.execute("INSERT INTO attendees (document_id, name) VALUES (1, 'Priya')")
+    connection.execute(
+        """
+        INSERT INTO documents
+            (slug, source_path, source_kind, title, document_date, author)
+        VALUES ('spec', 'somewhere', 'docx', 'Thermal spec', '2026-01-05', 'Devon')
+        """
+    )
+    connection.commit()
+    rows = connection.execute(
+        "SELECT slug, author FROM documents ORDER BY slug"
+    ).fetchall()
+    assert [(row["slug"], row["author"]) for row in rows] == [
+        ("spec", "Devon"),
+        ("weekly-sync", None),
+    ]
+    assert connection.execute("SELECT name FROM attendees").fetchall()
 
 
 def test_an_embedding_carries_the_model_that_made_it():

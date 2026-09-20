@@ -1,8 +1,9 @@
-"""Tests for cutting a transcript into windows of whole turns."""
+"""Tests for reading a transcript and cutting it into windows of turns."""
 
 from __future__ import annotations
 
-from corpus_query.ingest.chunk import TARGET_WORDS, Chunk, chunk_turns, count_words
+from corpus_query.ingest.chunk import TARGET_WORDS, Chunk, count_words
+from corpus_query.ingest.transcripts import chunk_turns
 from corpus_query.transcripts.parse import ParsedTurn, parse_transcript
 from corpus_query.transcripts.render import render_meeting, render_turn
 
@@ -34,7 +35,7 @@ def covered(chunks: list[Chunk]) -> set[int]:
     return {
         index
         for chunk in chunks
-        for index in range(chunk.turn_start, chunk.turn_end + 1)
+        for index in range(chunk.span_start, chunk.span_end + 1)
     }
 
 
@@ -52,7 +53,7 @@ def test_ordinals_run_from_zero_without_gaps():
 def test_a_chunk_never_starts_or_ends_mid_turn():
     turns = make_turns(*[40] * 20)
     for chunk in chunk_turns(turns, target_words=100):
-        span = turns[chunk.turn_start : chunk.turn_end + 1]
+        span = turns[chunk.span_start : chunk.span_end + 1]
         assert chunk.text == "\n".join(turn.line for turn in span)
 
 
@@ -68,7 +69,7 @@ def test_adjacent_windows_share_a_turn():
     chunks = chunk_turns(make_turns(*[40] * 20), target_words=100)
     assert len(chunks) > 1
     for earlier, later in zip(chunks, chunks[1:], strict=False):
-        assert later.turn_start == earlier.turn_end
+        assert later.span_start == earlier.span_end
 
 
 def test_every_adjacent_pair_of_turns_is_whole_in_some_chunk():
@@ -77,7 +78,7 @@ def test_every_adjacent_pair_of_turns_is_whole_in_some_chunk():
     pairs = {
         (index, index + 1)
         for chunk in chunks
-        for index in range(chunk.turn_start, chunk.turn_end)
+        for index in range(chunk.span_start, chunk.span_end)
     }
     assert pairs == {(index, index + 1) for index in range(len(turns) - 1)}
 
@@ -85,8 +86,8 @@ def test_every_adjacent_pair_of_turns_is_whole_in_some_chunk():
 def test_a_turn_longer_than_the_target_becomes_its_own_chunk():
     turns = make_turns(30, 30, 400, 30, 30)
     chunks = chunk_turns(turns, target_words=100)
-    alone = [chunk for chunk in chunks if chunk.turn_start == chunk.turn_end == 2]
-    assert alone, [(chunk.turn_start, chunk.turn_end) for chunk in chunks]
+    alone = [chunk for chunk in chunks if chunk.span_start == chunk.span_end == 2]
+    assert alone, [(chunk.span_start, chunk.span_end) for chunk in chunks]
     assert alone[0].text == turns[2].line
 
 
@@ -94,14 +95,14 @@ def test_a_single_oversized_turn_is_the_whole_document():
     turns = make_turns(400)
     chunks = chunk_turns(turns, target_words=100)
     assert len(chunks) == 1
-    assert (chunks[0].turn_start, chunks[0].turn_end) == (0, 0)
+    assert (chunks[0].span_start, chunks[0].span_end) == (0, 0)
 
 
 def test_a_short_document_is_one_chunk():
     turns = make_turns(10, 10, 10)
     chunks = chunk_turns(turns, target_words=100)
     assert len(chunks) == 1
-    assert (chunks[0].turn_start, chunks[0].turn_end) == (0, 2)
+    assert (chunks[0].span_start, chunks[0].span_end) == (0, 2)
 
 
 def test_no_turns_means_no_chunks():

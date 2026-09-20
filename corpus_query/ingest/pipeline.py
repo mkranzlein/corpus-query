@@ -1,19 +1,25 @@
-"""Reading transcripts and writing them into the document store.
+"""Reading documents and writing them into the document store.
 
-One document is one transaction. A transcript is parsed and chunked in full
-before anything is written, and the write — clearing whatever was there,
-inserting the document, its attendees, and its chunks — either lands whole or
-not at all. A half-ingested document is the worst outcome available: it looks
-like a document, it answers queries, and it is missing the part that mattered.
+The pipeline is format-agnostic. It dispatches on a file's extension to a
+reader, which returns the document's header fields, its people, and its
+chunks; everything after that — clearing whatever was there, inserting the
+rows, keeping the full-text index in step — is the same whatever the file
+was. A transcript is one of the formats it dispatches to rather than the
+shape it assumes.
 
-Ingesting a document that is already in the store replaces it. The slug is the
-document's identity, so re-ingesting a transcript after it has been edited
+One document is one transaction. A file is read and chunked in full before
+anything is written, and the write either lands whole or not at all. A
+half-ingested document is the worst outcome available: it looks like a
+document, it answers queries, and it is missing the part that mattered.
+
+Ingesting a document that is already in the store replaces it. The slug is
+the document's identity, so re-ingesting a document after it has been edited
 brings the store up to date instead of adding a second copy of it. Chunk rows
-are deleted explicitly rather than left to the foreign key cascade, so that the
-triggers keeping ``chunks_fts`` in step are guaranteed to fire.
+are deleted explicitly rather than left to the foreign key cascade, so that
+the triggers keeping ``chunks_fts`` in step are guaranteed to fire.
 
-Nothing here calls a model. Ingestion is deterministic: the same files give the
-same rows.
+Nothing here calls a model. Ingestion is deterministic: the same files give
+the same rows.
 """
 
 from __future__ import annotations
@@ -23,48 +29,86 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from corpus_query.ingest.chunk import CHUNK_KIND, TARGET_WORDS, Chunk, chunk_turns
-from corpus_query.transcripts.parse import (
-    ParsedTranscript,
-    TranscriptError,
-    parse_file,
-)
+from corpus_query.ingest.chunk import TARGET_WORDS, Chunk
+from corpus_query.ingest.reader import IngestError, ReadDocument, Reader
+from corpus_query.ingest.transcripts import TRANSCRIPT_SUFFIX, read_transcript
 
 #: Where transcripts are written, relative to the repository root. The same
 #: directory the generator writes to.
 DEFAULT_TRANSCRIPT_DIR = Path("data/transcripts")
 
-#: The rendered markdown, not the JSON beside it: chunk text has to be
-#: byte-identical to the document a reader opens.
-TRANSCRIPT_SUFFIX = ".md"
+#: What each file extension is read by. A format is added by writing a
+#: reader and naming it here; nothing below this table knows how many
+#: formats there are.
+READERS: dict[str, Reader] = {
+    TRANSCRIPT_SUFFIX: read_transcript,
+}
 
 
 @dataclass(frozen=True)
 class Ingested:
-    """What ingesting one transcript did."""
+    """What ingesting one document did."""
 
     slug: str
     document_id: int
-    turns: int
+    source_kind: str
+    units: int
+    """How many turns, sections, slides, or rows the document held."""
+
+    unit_name: str
+    """What those units are called, for a line of output about the run."""
+
     chunks: int
     replaced: bool
     """Whether a document with this slug was already in the store."""
 
 
-def transcript_paths(directory: Path | str = DEFAULT_TRANSCRIPT_DIR) -> list[Path]:
-    """List the transcripts in a directory.
+def document_paths(directory: Path | str = DEFAULT_TRANSCRIPT_DIR) -> list[Path]:
+    """List the documents in a directory that some reader can read.
+
+    A file whose extension no reader claims is left out rather than reported.
+    A corpus directory holds more than its documents — the JSON a transcript
+    was rendered from, a stray note — and none of that is a failed ingest.
 
     Args:
-        directory: Where transcripts live.
+        directory: Where the documents live.
 
     Returns:
-        Every markdown file in the directory, in name order. Empty when the
+        Every readable file in the directory, in name order. Empty when the
         directory does not exist.
     """
     directory = Path(directory)
     if not directory.is_dir():
         return []
-    return sorted(directory.glob(f"*{TRANSCRIPT_SUFFIX}"))
+    return sorted(
+        path
+        for path in directory.iterdir()
+        if path.is_file() and path.suffix.lower() in READERS
+    )
+
+
+def reader_for(path: Path | str) -> Reader:
+    """Return the reader for a file, chosen by its extension.
+
+    Args:
+        path: The file to read.
+
+    Returns:
+        The reader registered for its extension.
+
+    Raises:
+        IngestError: If no reader claims that extension. Naming a file the
+            pipeline cannot read is worth saying so about, which is why this
+            is an error here and a skip in :func:`document_paths`.
+    """
+    path = Path(path)
+    reader = READERS.get(path.suffix.lower())
+    if reader is None:
+        known = ", ".join(sorted(READERS))
+        raise IngestError(
+            f"There is no reader for {path}. Readable extensions are {known}."
+        )
+    return reader
 
 
 def ingest_file(
@@ -72,51 +116,51 @@ def ingest_file(
     path: Path | str,
     target_words: int = TARGET_WORDS,
 ) -> Ingested:
-    """Parse, chunk, and store one transcript.
+    """Read, chunk, and store one document.
 
     Args:
         connection: An open document store.
-        path: The transcript to ingest.
-        target_words: Words a chunk aims for.
+        path: The document to ingest.
+        target_words: Words a chunk aims for, for a format that chunks by
+            size.
 
     Returns:
         What the ingest did.
 
     Raises:
-        TranscriptError: If the file cannot be read or is not a transcript.
-            Nothing is written in that case.
+        IngestError: If no reader claims the file, or the reader cannot read
+            it. Nothing is written in that case.
     """
     path = Path(path)
-    transcript = parse_file(path)
-    chunks = chunk_turns(transcript.turns, target_words=target_words)
-    return write_document(connection, path.stem, path, transcript, chunks)
+    document = reader_for(path)(path, target_words)
+    return write_document(connection, path.stem, path, document)
 
 
 def ingest_paths(
     connection: sqlite3.Connection,
     paths: Iterable[Path | str],
     target_words: int = TARGET_WORDS,
-) -> tuple[list[Ingested], list[TranscriptError]]:
-    """Ingest several transcripts, one transaction each.
+) -> tuple[list[Ingested], list[IngestError]]:
+    """Ingest several documents, one transaction each.
 
     A file that fails is reported rather than raised, so one unreadable
-    transcript does not strand the rest of a corpus. What it leaves behind is
+    document does not strand the rest of a corpus. What it leaves behind is
     nothing: its own transaction rolled back, and every other file's stands.
 
     Args:
         connection: An open document store.
-        paths: The transcripts to ingest.
+        paths: The documents to ingest.
         target_words: Words a chunk aims for.
 
     Returns:
         What was ingested, and one error per file that could not be.
     """
     done: list[Ingested] = []
-    failures: list[TranscriptError] = []
+    failures: list[IngestError] = []
     for path in paths:
         try:
             done.append(ingest_file(connection, path, target_words=target_words))
-        except TranscriptError as exc:
+        except IngestError as exc:
             failures.append(exc)
     return done, failures
 
@@ -125,19 +169,17 @@ def write_document(
     connection: sqlite3.Connection,
     slug: str,
     source_path: Path | str,
-    transcript: ParsedTranscript,
-    chunks: Sequence[Chunk],
+    document: ReadDocument,
 ) -> Ingested:
-    """Write one parsed and chunked transcript, replacing any earlier copy.
+    """Write one document that a reader has already parsed and chunked.
 
     Args:
         connection: An open document store.
-        slug: The document's identity, normally the transcript's filename
-            without its suffix.
-        source_path: Where the transcript was read from, recorded for
+        slug: The document's identity, normally the file's name without its
+            suffix.
+        source_path: Where the document was read from, recorded for
             provenance.
-        transcript: The parsed transcript.
-        chunks: Its chunks, in order.
+        document: The parsed and chunked document.
 
     Returns:
         What the write did.
@@ -148,14 +190,16 @@ def write_document(
     """
     with connection:
         replaced = _delete_document(connection, slug)
-        document_id = _insert_document(connection, slug, source_path, transcript)
-        _insert_attendees(connection, document_id, transcript.attendees)
-        _insert_chunks(connection, document_id, chunks)
+        document_id = _insert_document(connection, slug, source_path, document)
+        _insert_attendees(connection, document_id, document.attendees)
+        _insert_chunks(connection, document_id, document.chunks)
     return Ingested(
         slug=slug,
         document_id=document_id,
-        turns=len(transcript.turns),
-        chunks=len(chunks),
+        source_kind=document.source_kind,
+        units=document.units,
+        unit_name=document.unit_name,
+        chunks=len(document.chunks),
         replaced=replaced,
     )
 
@@ -191,25 +235,33 @@ def _insert_document(
     connection: sqlite3.Connection,
     slug: str,
     source_path: Path | str,
-    transcript: ParsedTranscript,
+    document: ReadDocument,
 ) -> int:
     """Insert the document row.
 
     Args:
         connection: An open document store.
         slug: The document's identity.
-        source_path: Where the transcript was read from.
-        transcript: The parsed transcript.
+        source_path: Where the document was read from.
+        document: The parsed document.
 
     Returns:
         The new document's id.
     """
     cursor = connection.execute(
         """
-        INSERT INTO documents (slug, source_path, subject, meeting_date)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO documents
+            (slug, source_path, source_kind, title, document_date, author)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (slug, str(source_path), transcript.subject, transcript.date),
+        (
+            slug,
+            str(source_path),
+            document.source_kind,
+            document.title,
+            document.document_date,
+            document.author,
+        ),
     )
     return cursor.lastrowid
 
@@ -219,14 +271,17 @@ def _insert_attendees(
 ) -> None:
     """Insert one row per attendee.
 
-    Attendees come from the header, not from who speaks. Someone who sat
-    through a meeting without saying a word was still in it, and a question
-    about what a person was involved in has to find that meeting.
+    Attendees come from a meeting's header, not from who speaks. Someone who
+    sat through a meeting without saying a word was still in it, and a
+    question about what a person was involved in has to find that meeting. A
+    document with one author has none of these rows and names its author on
+    the document row instead.
 
     Args:
         connection: An open document store.
         document_id: The document these attendees belong to.
-        attendees: Everyone the header lists, in order.
+        attendees: Everyone the header lists, in order. Empty for a document
+            that is not a meeting.
     """
     connection.executemany(
         "INSERT INTO attendees (document_id, name) VALUES (?, ?)",
@@ -247,8 +302,9 @@ def _insert_chunks(
     connection.executemany(
         """
         INSERT INTO chunks
-            (document_id, ordinal, text, word_count, turn_start, turn_end, kind)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+            (document_id, ordinal, text, word_count, location,
+             span_start, span_end, kind)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -256,9 +312,10 @@ def _insert_chunks(
                 chunk.ordinal,
                 chunk.text,
                 chunk.word_count,
-                chunk.turn_start,
-                chunk.turn_end,
-                CHUNK_KIND,
+                chunk.location,
+                chunk.span_start,
+                chunk.span_end,
+                chunk.kind,
             )
             for chunk in chunks
         ],

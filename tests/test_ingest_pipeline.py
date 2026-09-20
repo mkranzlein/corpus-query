@@ -1,4 +1,4 @@
-"""Tests for reading transcripts and writing them into the document store."""
+"""Tests for reading documents and writing them into the document store."""
 
 from __future__ import annotations
 
@@ -6,15 +6,17 @@ import sqlite3
 
 import pytest
 
-from corpus_query.ingest import pipeline
+from corpus_query.ingest import transcripts
 from corpus_query.ingest.chunk import Chunk
 from corpus_query.ingest.pipeline import (
+    document_paths,
     ingest_file,
     ingest_paths,
-    transcript_paths,
+    reader_for,
 )
+from corpus_query.ingest.reader import IngestError
 from corpus_query.store.db import connect
-from corpus_query.transcripts.parse import TranscriptError
+from corpus_query.store.kinds import TRANSCRIPT, TURN_WINDOW
 from corpus_query.transcripts.render import render_meeting
 
 
@@ -47,10 +49,26 @@ def test_a_transcript_becomes_a_document_row(store, write_transcript):
     result = ingest_file(store, write_transcript())
     row = rows(store, "SELECT * FROM documents")[0]
     assert row["slug"] == "rev-b-schedule"
-    assert row["subject"] == "Rev B schedule"
-    assert row["meeting_date"] == "2026-03-04"
+    assert row["source_kind"] == TRANSCRIPT
+    assert row["title"] == "Rev B schedule"
+    assert row["document_date"] == "2026-03-04"
     assert row["id"] == result.document_id
     assert not result.replaced
+
+
+def test_a_transcript_has_no_author_but_has_attendees(store, write_transcript):
+    ingest_file(store, write_transcript())
+    assert rows(store, "SELECT author FROM documents")[0]["author"] is None
+    assert len(rows(store, "SELECT id FROM attendees")) == 3
+
+
+def test_a_transcript_is_ingested_by_the_transcript_reader(write_transcript):
+    assert reader_for(write_transcript()) is transcripts.read_transcript
+
+
+def test_a_file_no_reader_claims_is_an_error(tmp_path):
+    with pytest.raises(IngestError):
+        reader_for(tmp_path / "budget.numbers")
 
 
 def test_the_source_path_is_recorded(store, write_transcript):
@@ -71,10 +89,16 @@ def test_chunks_are_written_as_turn_windows(store, write_transcript):
     assert len(chunks) == result.chunks
     assert [chunk["ordinal"] for chunk in chunks] == list(range(len(chunks)))
     for chunk in chunks:
-        assert chunk["kind"] == "turn_window"
-        assert chunk["turn_start"] is not None
-        assert chunk["turn_end"] is not None
+        assert chunk["kind"] == TURN_WINDOW
+        assert chunk["span_start"] is not None
+        assert chunk["span_end"] is not None
         assert chunk["word_count"] == len(chunk["text"].split())
+
+
+def test_a_chunk_carries_a_citation_label_naming_its_turns(store, write_transcript):
+    ingest_file(store, write_transcript())
+    chunk = rows(store, "SELECT * FROM chunks ORDER BY ordinal")[0]
+    assert chunk["location"] == f"turns {chunk['span_start']}-{chunk['span_end']}"
 
 
 def test_chunk_text_is_byte_identical_to_the_file(store, write_transcript):
@@ -158,7 +182,7 @@ def test_a_file_that_is_not_a_transcript_is_reported_not_raised(
 def test_a_bad_transcript_writes_nothing_at_all(store, tmp_path):
     broken = tmp_path / "notes.md"
     broken.write_text("Just some notes.\n", encoding="utf-8")
-    with pytest.raises(TranscriptError):
+    with pytest.raises(IngestError):
         ingest_file(store, broken)
     assert not rows(store, "SELECT id FROM documents")
 
@@ -173,11 +197,19 @@ def test_a_failure_partway_through_leaves_the_store_as_it_was(
     def bad_chunks(turns, target_words=250):
         """Return chunks that collide on ordinal, so the second insert fails."""
         return [
-            Chunk(ordinal=0, text="one", word_count=1, turn_start=0, turn_end=0),
-            Chunk(ordinal=0, text="two", word_count=1, turn_start=0, turn_end=0),
+            Chunk(
+                ordinal=0,
+                text=text,
+                word_count=1,
+                kind=TURN_WINDOW,
+                location="turn 0",
+                span_start=0,
+                span_end=0,
+            )
+            for text in ("one", "two")
         ]
 
-    monkeypatch.setattr(pipeline, "chunk_turns", bad_chunks)
+    monkeypatch.setattr(transcripts, "chunk_turns", bad_chunks)
     with pytest.raises(sqlite3.IntegrityError):
         ingest_file(store, path)
 
@@ -190,18 +222,18 @@ def test_a_failure_partway_through_leaves_the_store_as_it_was(
     assert len(rows(store, "SELECT id FROM attendees")) == 3
 
 
-def test_transcript_paths_lists_markdown_in_name_order(tmp_path, write_transcript):
+def test_document_paths_lists_readable_files_in_name_order(tmp_path, write_transcript):
     write_transcript("beta")
     write_transcript("alpha")
     (tmp_path / "alpha.json").write_text("{}", encoding="utf-8")
-    assert [path.name for path in transcript_paths(tmp_path)] == [
+    assert [path.name for path in document_paths(tmp_path)] == [
         "alpha.md",
         "beta.md",
     ]
 
 
-def test_transcript_paths_on_a_missing_directory_is_empty(tmp_path):
-    assert transcript_paths(tmp_path / "absent") == []
+def test_document_paths_on_a_missing_directory_is_empty(tmp_path):
+    assert document_paths(tmp_path / "absent") == []
 
 
 def test_ingesting_the_same_file_twice_gives_the_same_chunk_text(

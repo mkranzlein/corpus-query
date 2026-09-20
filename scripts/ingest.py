@@ -1,17 +1,17 @@
-"""Ingest transcripts into the document store.
+"""Ingest documents into the document store.
 
-Reads rendered transcripts, splits them into chunks of whole turns, and writes
-documents, attendees, and chunks. Nothing here calls a model, and nothing costs
-anything: the run is deterministic, so ingesting the same corpus twice leaves
-the store in the same state.
+Reads whatever the pipeline has a reader for, splits each document along its
+own seams, and writes documents, attendees, and chunks. Nothing here calls a
+model, and nothing costs anything: the run is deterministic, so ingesting the
+same corpus twice leaves the store in the same state.
 
 Run it with::
 
     uv run scripts/ingest.py                     # everything on disk
     uv run scripts/ingest.py data/transcripts/rev-b-schedule.md
 
-Re-ingesting a transcript replaces the rows it wrote before rather than adding
-a second copy, so this is also how an edited transcript is brought up to date.
+Re-ingesting a document replaces the rows it wrote before rather than adding a
+second copy, so this is also how an edited document is brought up to date.
 Each document is written in one transaction: a file that fails is reported and
 skipped, and leaves nothing behind.
 """
@@ -25,8 +25,8 @@ from pathlib import Path
 from corpus_query.ingest.pipeline import (
     DEFAULT_TRANSCRIPT_DIR,
     Ingested,
+    document_paths,
     ingest_paths,
-    transcript_paths,
 )
 from corpus_query.store.db import DEFAULT_DATABASE_FILE, SchemaVersionError, connect
 
@@ -41,20 +41,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         The parsed arguments.
     """
     parser = argparse.ArgumentParser(
-        description="Ingest transcripts into the document store.",
+        description="Ingest documents into the document store.",
     )
     parser.add_argument(
         "paths",
         nargs="*",
         type=Path,
-        help="transcripts to ingest (default: every markdown file in --dir)",
+        help="documents to ingest (default: every readable file in --dir)",
     )
     parser.add_argument(
         "--dir",
         type=Path,
         default=DEFAULT_TRANSCRIPT_DIR,
         dest="directory",
-        help=f"where transcripts live (default: {DEFAULT_TRANSCRIPT_DIR})",
+        help=f"where documents live (default: {DEFAULT_TRANSCRIPT_DIR})",
     )
     parser.add_argument(
         "--db",
@@ -66,16 +66,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def describe(result: Ingested) -> str:
-    """Say what ingesting one transcript did.
+    """Say what ingesting one document did.
 
     Args:
         result: What the ingest returned.
 
     Returns:
-        One line, naming the document and what it produced.
+        One line, naming the document and what it produced, counted in
+        whatever unit its format reads in.
     """
     what = "replaced" if result.replaced else "added"
-    return f"  {what} {result.slug}: {result.turns} turns, {result.chunks} chunks"
+    return (
+        f"  {what} {result.slug}: {result.units} {result.unit_name}, "
+        f"{result.chunks} chunks"
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -88,11 +92,11 @@ def main(argv: list[str] | None = None) -> int:
         A process exit code. Non-zero if any file could not be ingested.
     """
     args = parse_args(argv)
-    paths = args.paths or transcript_paths(args.directory)
+    paths = args.paths or document_paths(args.directory)
     if not paths:
         print(
-            f"error: no transcripts found in {args.directory}. Generate some "
-            f"first, or name the files to ingest.",
+            f"error: no readable documents found in {args.directory}. Generate "
+            f"some first, or name the files to ingest.",
             file=sys.stderr,
         )
         return 1
@@ -116,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
 
     chunks = sum(result.chunks for result in done)
     print(
-        f"Ingested {len(done)} of {len(paths)} transcripts, {chunks} chunks, "
+        f"Ingested {len(done)} of {len(paths)} documents, {chunks} chunks, "
         f"into {args.db}."
     )
     return 1 if failures else 0

@@ -11,13 +11,24 @@
 -- is what a citation names and what Chroma will use as its vector id, so it
 -- has to stay stable for the life of the database.
 
--- One row per transcript.
+-- One row per document, whatever it was read out of.
 CREATE TABLE documents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     slug TEXT NOT NULL UNIQUE,
     source_path TEXT NOT NULL,
-    subject TEXT NOT NULL,
-    meeting_date TEXT NOT NULL,
+    -- What the document was read out of. Constrained to the formats the
+    -- ingest pipeline has a reader for, so a document filed under a kind
+    -- nothing knows how to render is rejected at the write.
+    source_kind TEXT NOT NULL CHECK (
+        source_kind IN ('transcript', 'docx', 'pptx', 'xlsx')
+    ),
+    title TEXT NOT NULL,
+    document_date TEXT NOT NULL,
+    -- Who wrote it, for a format that has one author. Null for a
+    -- transcript, whose people are attendees rows instead: a meeting has
+    -- participants rather than an author, and the two coexist rather than
+    -- one standing in for the other.
+    author TEXT,
     -- Written later by enrichment; absent until then.
     summary TEXT,
     -- Derived metadata, also written by enrichment.
@@ -37,7 +48,9 @@ BEGIN
     WHERE id = new.id;
 END;
 
--- Who was at a meeting, as rows rather than a delimited string.
+-- Who was at a meeting, as rows rather than a delimited string. Only a
+-- transcript has these; a single-author document names its author on the
+-- document row.
 CREATE TABLE attendees (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
@@ -66,12 +79,23 @@ CREATE TABLE chunks (
     ordinal INTEGER NOT NULL,
     text TEXT NOT NULL,
     word_count INTEGER NOT NULL,
-    -- The turn range, inclusive, this chunk spans in the source transcript.
-    -- Null for a summary chunk, which is written about the document rather
-    -- than taken from any span of it.
-    turn_start INTEGER,
-    turn_end INTEGER,
-    kind TEXT NOT NULL CHECK (kind IN ('turn_window', 'summary')),
+    -- What a citation shows a reader: the turn range of a transcript
+    -- window, the heading path of a section, a slide number, a sheet and
+    -- row range. What it says is the format's business; storing it is this
+    -- table's.
+    location TEXT NOT NULL,
+    -- The inclusive range this chunk spans in its document, counted in
+    -- whatever unit its kind spans: turns, paragraphs, slides, rows. Null
+    -- for a summary chunk, which is written about the document rather than
+    -- taken from any span of it.
+    span_start INTEGER,
+    span_end INTEGER,
+    kind TEXT NOT NULL CHECK (
+        kind IN (
+            'turn_window', 'docx_section', 'slide', 'row_window',
+            'summary', 'sheet_summary'
+        )
+    ),
     -- Filled in by a later embedding pass; NULL until then.
     embedding BLOB,
     -- What produced the embedding. Recorded per chunk so a change of embedder
@@ -79,11 +103,22 @@ CREATE TABLE chunks (
     embedding_model TEXT,
     embedding_dim INTEGER,
     UNIQUE (document_id, ordinal),
-    -- A turn window spans turns; a summary spans none. Keeping the two in
-    -- step with kind is what stops a summary claiming a range it never had.
+    -- A chunk cut out of a document spans something; one written about a
+    -- document spans nothing. Keeping that in step with kind is what stops
+    -- a summary claiming a range it never had, and a window losing the one
+    -- it has.
     CHECK (
-        (kind = 'turn_window' AND turn_start IS NOT NULL AND turn_end IS NOT NULL)
-        OR (kind = 'summary' AND turn_start IS NULL AND turn_end IS NULL)
+        (
+            kind IN ('turn_window', 'docx_section', 'slide', 'row_window')
+            AND span_start IS NOT NULL
+            AND span_end IS NOT NULL
+            AND span_end >= span_start
+        )
+        OR (
+            kind IN ('summary', 'sheet_summary')
+            AND span_start IS NULL
+            AND span_end IS NULL
+        )
     ),
     -- An embedding without provenance cannot be checked against the model in
     -- use, so the three travel together or not at all.

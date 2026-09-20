@@ -29,6 +29,7 @@ from corpus_query.api.app import (
 )
 from corpus_query.retrieval.search import Confidence, Result, SearchResult
 from corpus_query.store.db import connect
+from corpus_query.store.kinds import TRANSCRIPT
 
 
 def request(app, method: str, url: str, **kwargs: Any) -> httpx.Response:
@@ -93,10 +94,13 @@ def a_result(rank: int = 1, chunk_id: int = 7, score: float = 4.5) -> Result:
         chunk_id=chunk_id,
         text="Marcus: Two weeks out, assuming the connectors land.",
         document_slug="rev-b-schedule",
-        subject="Rev B schedule",
-        meeting_date="2026-03-04",
-        turn_start=0,
-        turn_end=1,
+        source_kind=TRANSCRIPT,
+        title="Rev B schedule",
+        document_date="2026-03-04",
+        author=None,
+        location="turns 0-1",
+        span_start=0,
+        span_end=1,
         topics=["Hardware", "Supply chain"],
         time_sensitivity="near_term",
         business_impact="moderate",
@@ -156,9 +160,12 @@ def test_search_returns_ranked_results_with_provenance(app_factory):
     assert result["chunk_id"] == 7
     assert result["text"].startswith("Marcus:")
     assert result["document_slug"] == "rev-b-schedule"
-    assert result["subject"] == "Rev B schedule"
-    assert result["meeting_date"] == "2026-03-04"
-    assert (result["turn_start"], result["turn_end"]) == (0, 1)
+    assert result["source_kind"] == TRANSCRIPT
+    assert result["title"] == "Rev B schedule"
+    assert result["document_date"] == "2026-03-04"
+    assert result["author"] is None
+    assert result["location"] == "turns 0-1"
+    assert (result["span_start"], result["span_end"]) == (0, 1)
     assert result["topics"] == ["Hardware", "Supply chain"]
     assert result["time_sensitivity"] == "near_term"
     assert result["business_impact"] == "moderate"

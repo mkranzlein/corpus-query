@@ -21,6 +21,7 @@ from corpus_query.enrich.schema import (
     TIME_SENSITIVITY_VALUES,
 )
 from corpus_query.enrich.topics import NO_CATEGORIES
+from corpus_query.store.kinds import TRANSCRIPT
 
 PROMPT_NAMES = ["summary", "topics", "priority", "dedupe"]
 
@@ -31,8 +32,10 @@ def document() -> StoredDocument:
     return StoredDocument(
         id=1,
         slug="rev-b-schedule",
-        subject="Rev B schedule",
-        meeting_date="2026-03-04",
+        source_kind=TRANSCRIPT,
+        title="Rev B schedule",
+        document_date="2026-03-04",
+        author=None,
         attendees=("Priya", "Marcus"),
         text="[Priya]: Where are we on the rev B boards?",
     )
@@ -59,8 +62,8 @@ def test_a_missing_prompt_is_an_error_rather_than_an_empty_one():
 def test_a_document_prompt_carries_the_document(build, document):
     prompt = build(document)
 
-    assert document.subject in prompt
-    assert document.meeting_date in prompt
+    assert document.title in prompt
+    assert document.document_date in prompt
     assert document.text in prompt
     assert "Priya, Marcus" in prompt
     assert "{{" not in prompt
@@ -71,8 +74,10 @@ def test_the_summary_prompt_states_the_length_validation_will_enforce():
         StoredDocument(
             id=1,
             slug="s",
-            subject="s",
-            meeting_date="2026-01-05",
+            source_kind=TRANSCRIPT,
+            title="s",
+            document_date="2026-01-05",
+            author=None,
             attendees=(),
             text="t",
         )

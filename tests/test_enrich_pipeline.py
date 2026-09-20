@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from corpus_query.enrich.documents import SUMMARY
+from corpus_query.store.kinds import SUMMARY
 from corpus_query.enrich.errors import EnrichmentError
 from corpus_query.enrich.pipeline import (
     dedupe_categories,
@@ -81,7 +81,7 @@ def summary_chunks(connection, document_id):
     """Return a document's summary chunks, in order."""
     return connection.execute(
         """
-        SELECT id, text, ordinal, turn_start, turn_end, embedding
+        SELECT id, text, ordinal, location, span_start, span_end, embedding
         FROM chunks WHERE document_id = ? AND kind = ? ORDER BY ordinal
         """,
         (document_id, SUMMARY),
@@ -102,17 +102,16 @@ def test_enriching_writes_the_summary_and_both_priority_fields(
     assert row["business_impact"] == "critical"
 
 
-def test_the_summary_is_also_a_chunk_with_no_turn_range(
-    store, ingest, fake_client, enrich
-):
+def test_the_summary_is_also_a_chunk_with_no_span(store, ingest, fake_client, enrich):
     document_id = ingest(store, "rev-b-schedule")
 
     result = enrich(store, client=fake_client(), document_id=document_id)
 
     [chunk] = summary_chunks(store, document_id)
     assert chunk["text"] == result.summary
-    assert chunk["turn_start"] is None
-    assert chunk["turn_end"] is None
+    assert chunk["span_start"] is None
+    assert chunk["span_end"] is None
+    assert chunk["location"] == "summary"
     assert chunk["embedding"] is not None
 
 
