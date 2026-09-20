@@ -54,11 +54,14 @@ git clone https://github.com/mkranzlein/corpus-query.git
 cd corpus-query
 uv sync --extra models
 
-# 3. Start the service. Needs a corpus at data/corpus.db — see below.
+# 3. Fetch the embedding and reranking weights (~215 MB, once).
+uv run scripts/fetch_models.py
+
+# 4. Start the service. Needs a corpus at data/corpus.db — see below.
 uv run scripts/serve.py
 ```
 
-That third step needs a document store to search, and a fresh clone does not
+That fourth step needs a document store to search, and a fresh clone does not
 come with one: the database is not committed. If you were given one, put it at
 `data/corpus.db` or point `--db` at it. If you were not, you build it yourself,
 which costs money and needs credentials — see [Building a
@@ -72,9 +75,13 @@ rerank the candidates. A plain `uv sync` leaves them out on purpose — ingestio
 the store, and CI have no use for a deep learning stack — but searching
 without them is not possible, and the service will not start.
 
-The first `scripts.serve` takes a minute: it downloads the two models into
-`.cache/` and builds the vector index. Both are caches, so every later start
-is fast.
+`scripts/fetch_models.py` downloads the two models into `.cache/` ahead of
+time, so that cost is an explicit step rather than something the first
+`scripts/serve.py` run stalls on silently. Re-running it against a warm
+cache downloads nothing. Skip it and `scripts/serve.py` still works — it
+fetches whatever is missing itself before it builds the vector index and
+binds the socket — it just means the first start is the one that pays for
+the download.
 
 **You do not build the index yourself.** There is no `build-index` command to
 remember. The index is a copy of embeddings that already live in the database,
