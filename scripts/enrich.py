@@ -9,9 +9,9 @@ together.
 Run it with::
 
     uv sync --extra models                            # once: the embedder
-    uv run python -m scripts.enrich --dry-run         # print the prompts
-    uv run python -m scripts.enrich                   # everything unenriched
-    uv run python -m scripts.enrich rev-b-schedule    # named documents
+    uv run scripts/enrich.py --dry-run         # print the prompts
+    uv run scripts/enrich.py                   # everything unenriched
+    uv run scripts/enrich.py rev-b-schedule    # named documents
 
 The embedding model comes from the ``models`` extra, which a plain
 ``uv sync`` does not install. Without it every other pass would still run and

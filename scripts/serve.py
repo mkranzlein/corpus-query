@@ -10,8 +10,8 @@ service that answers everything with no results.
 Run it with::
 
     uv sync --extra models                     # once: the embedder, reranker
-    uv run python -m scripts.serve             # http://127.0.0.1:8000
-    uv run python -m scripts.serve --port 9000
+    uv run scripts/serve.py             # http://127.0.0.1:8000
+    uv run scripts/serve.py --port 9000
 
 Nothing here calls a hosted model and nothing costs anything: search runs
 locally against the store and the local models.

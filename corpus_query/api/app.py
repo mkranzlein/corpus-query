@@ -106,7 +106,7 @@ def open_resources(
     if not path.exists():
         raise StartupError(
             f"no document store at {path}. Ingest a corpus first: "
-            f"uv run python -m scripts.ingest"
+            f"uv run scripts/ingest.py"
         )
     try:
         connection = connect(path)
@@ -120,7 +120,7 @@ def open_resources(
         if not chunks:
             raise StartupError(
                 f"the document store at {path} holds no chunks. Ingest a "
-                f"corpus first: uv run python -m scripts.ingest"
+                f"corpus first: uv run scripts/ingest.py"
             )
         collection = open_index(connection, index_dir)
         if warm_models:
