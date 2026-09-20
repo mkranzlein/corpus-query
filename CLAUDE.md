@@ -77,6 +77,11 @@ for branch in $merged; do
 done
 
 printf '%s\n' $merged | xargs -r -n1 git branch -D 2>/dev/null
+
+git worktree prune
+git branch --list 'worktree-agent-*' --format='%(refname:short) %(worktreepath)' \
+  | awk 'NF == 1 {print $1}' \
+  | xargs -r -n1 git branch -d
 ```
 
 The worktrees have to go first: git refuses to delete a branch that is
@@ -90,6 +95,18 @@ pristine — a stray `__pycache__` is enough for `git worktree remove` to
 refuse. Discarding it is safe for the same reason force-deleting the branch
 is: the pull request is merged, so anything still sitting there is either
 already in `main` or was never wanted.
+
+The last step exists because a background agent's worktree starts on an
+auto-generated `worktree-agent-<id>` branch, which the agent then switches
+away from to its real `feat/…` branch. That placeholder is never a pull
+request's head, so GitHub never reports it as merged and the sweep above
+never sees it. Left alone they accumulate, one per dispatch.
+
+Two details keep this safe. `%(worktreepath)` is empty only for a branch no
+worktree has checked out, so a live agent's placeholder is filtered out rather
+than deleted underneath it. And the delete is `-d`, not `-D`: a placeholder
+points at the commit the worktree branched from and has nothing unique on it,
+so `-d` removes it, while anything carrying real work is refused and kept.
 
 GitHub is asked which branches were merged because `git branch --merged`
 cannot tell: the squash commit is a new commit with no ancestry link back to
