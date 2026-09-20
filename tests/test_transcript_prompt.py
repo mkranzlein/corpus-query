@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from corpus_query.transcripts.length import TRANSCRIPT_WORDS_PER_MINUTE
 from corpus_query.transcripts.prompt import (
     PROMPT_FILE,
     PromptError,
@@ -54,10 +53,10 @@ def test_the_prompt_asks_for_a_spread_around_the_target(people):
     assert "2,250" in prompt
 
 
-def test_the_prompt_states_the_words_to_minutes_rate(people):
+def test_the_prompt_asks_for_no_duration(people):
     prompt = build_prompt(count=5, words=1500, people=people)
-    assert f"{TRANSCRIPT_WORDS_PER_MINUTE} transcript words" in prompt
-    assert "60-minute meeting" in prompt
+    assert "Do not state a duration" in prompt
+    assert "minute meeting" not in prompt
 
 
 def test_the_prompt_names_everyone_on_the_roster(people):

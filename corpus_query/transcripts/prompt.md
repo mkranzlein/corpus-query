@@ -30,8 +30,6 @@ named however you like. Only people inside the company come from the roster.
   something out; some are four or five; at least one across a full corpus is
   most of the company. Draw the attendee list from who would plausibly care:
   a firmware bug is not a meeting the general counsel sits in on.
-- **Length.** How long the meeting ran, in minutes, and it has to match how
-  much gets said. See the length rules below.
 - **Turns.** What was said, in order, each turn attributed to one attendee.
   Not everyone present has to speak.
 - **Decisions.** What the meeting settled, if anything. A meeting that settles
@@ -52,7 +50,7 @@ contract review, the marketing launch plan, the quarterly numbers, a support
 backlog, a compliance certification. Meetings can be scheduled or ad hoc, and
 they can be tense as easily as cordial.
 
-## Length
+## How much gets said
 
 These are *cleaned-up* transcripts, not verbatim speech. Filler, false starts,
 crosstalk, and repetition have already been removed. Write what a tidy
@@ -61,13 +59,10 @@ speaking in prose.
 
 - Target about {{words}} transcript words per meeting, counting only the words
   inside turns. Subject, date, attendees, decisions, and action items do not
-  count toward it.
+  count toward it. Do not state a duration anywhere; a transcript records what
+  was said, not how long the room was booked for.
 - Do not land every meeting on the target. Spread the batch from roughly
   {{min_words}} to {{max_words}} words, so the set averages near the target.
-- State the length in minutes at about {{words_per_minute}} transcript words
-  per minute: {{words}} words is a {{minutes}}-minute meeting, {{min_words}}
-  words is a {{min_minutes}}-minute one. Round to a length someone would
-  actually book.
 - Turns vary. A short reply of four words and a two-hundred-word explanation
   belong in the same meeting.
 

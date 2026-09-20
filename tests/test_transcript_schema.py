@@ -9,11 +9,10 @@ from corpus_query.transcripts.roster import first_names, read_roster
 from corpus_query.transcripts.schema import Meeting, Meetings, normalize_line
 
 
-def test_a_meeting_carries_the_seven_things_that_describe_it(make_meeting):
+def test_a_meeting_carries_the_six_things_that_describe_it(make_meeting):
     meeting = make_meeting()
     assert meeting.subject == "Rev B schedule"
     assert meeting.date == "2026-03-04"
-    assert meeting.length_minutes == 30
     assert meeting.attendees == ["Priya", "Marcus", "Sofia"]
     assert [turn.speaker for turn in meeting.turns] == ["Priya", "Marcus"]
     assert meeting.turns[0].text == "Where are we on the rev B boards?"
@@ -64,8 +63,6 @@ def test_normalize_line_collapses_every_kind_of_whitespace():
         {"subject": "   "},
         {"date": "March 4, 2026"},
         {"date": "2026-02-30"},
-        {"length_minutes": 0},
-        {"length_minutes": -30},
         {"attendees": []},
         {"attendees": ["Priya", "Priya"]},
         {"attendees": ["Pri]ya"]},

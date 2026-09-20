@@ -20,7 +20,6 @@ from scripts.generate_transcripts import (
     COLD_TEMPERATURE,
     WARM_TEMPERATURE,
     MeetingBatch,
-    check_lengths,
     check_roster,
     describe_validation_error,
     existing_slugs,
@@ -194,7 +193,7 @@ def test_a_meeting_is_written_as_json_and_markdown(run, batch_of, tmp_path):
     assert (out_dir / "rev-b-schedule.md").read_text().startswith("# Rev B schedule")
     written = json.loads((out_dir / "rev-b-schedule.json").read_text())
     assert written["subject"] == "Rev B schedule"
-    assert written["length_minutes"] == 30
+    assert written["date"] == "2026-03-04"
 
 
 def test_a_run_appends_rather_than_replacing(run, batch_of, tmp_path):
@@ -269,19 +268,6 @@ def test_a_name_off_the_roster_fails_the_run_and_writes_nothing(
     assert "Dana is not on the roster" in capsys.readouterr().err
 
 
-def test_a_header_that_disagrees_with_the_transcript_fails_the_run(
-    run, make_meeting, tmp_path, capsys
-):
-    padded = make_meeting(
-        length_minutes=90, turns=[{"speaker": "Priya", "text": "Hi."}]
-    )
-    exit_code = run(FakeClient(MeetingBatch(meetings=[padded])), "--count", "1")
-
-    assert exit_code == 1
-    assert not (tmp_path / "transcripts").exists()
-    assert "length_minutes says 90" in capsys.readouterr().err
-
-
 def test_a_response_with_no_parsed_output_fails_the_run(run, capsys):
     assert run(FakeClient(None), "--count", "1") == 1
     assert "did not include parsed" in capsys.readouterr().err
@@ -339,13 +325,21 @@ def test_checking_the_roster_accepts_the_real_cast(make_meeting, roster_path):
     assert check_roster([make_meeting()], roster) == []
 
 
-def test_checking_lengths_accepts_a_consistent_meeting(make_meeting):
-    words = " ".join(["word"] * 750)
-    meeting = make_meeting(
-        length_minutes=30, turns=[{"speaker": "Priya", "text": words}]
-    )
+def test_a_short_batch_is_reported_rather_than_rejected(
+    run, batch_of, tmp_path, capsys
+):
+    """A batch that undershoots the word target is a judgment call, not an error."""
+    exit_code = run(FakeClient(batch_of({})), "--count", "1", "--words", "1500")
+
+    assert exit_code == 0
+    assert (tmp_path / "transcripts" / "rev-b-schedule.json").is_file()
+    out = capsys.readouterr().out
+    assert "Asked for about 1,500 words a meeting; averaged 750." in out
+
+
+def test_the_report_counts_only_spoken_words(make_meeting):
+    meeting = make_meeting(turns=conversation(750))
     assert transcript_words(meeting) == 750
-    assert check_lengths([meeting]) == []
 
 
 def test_existing_slugs_are_read_from_the_json_files(tmp_path: Path):

@@ -33,10 +33,7 @@ from pathlib import Path
 from openai import OpenAI
 from pydantic import BaseModel, Field, ValidationError
 
-from corpus_query.transcripts.length import (
-    length_disagreement,
-    transcript_words,
-)
+from corpus_query.transcripts.length import transcript_words
 from corpus_query.transcripts.prompt import PromptError, build_prompt
 from corpus_query.transcripts.render import render_meeting
 from corpus_query.transcripts.roster import (
@@ -271,22 +268,6 @@ def check_roster(meetings: Meetings, roster: tuple[str, ...]) -> list[str]:
     return problems
 
 
-def check_lengths(meetings: Meetings) -> list[str]:
-    """Check that each stated length matches what was said.
-
-    Args:
-        meetings: The generated batch.
-
-    Returns:
-        One line per meeting whose header does not match its transcript.
-    """
-    problems = []
-    for index, meeting in enumerate(meetings, start=1):
-        if complaint := length_disagreement(meeting):
-            problems.append(f"meeting {index} ({meeting.subject!r}): {complaint}")
-    return problems
-
-
 def build_client(env: dict[str, str]) -> OpenAI:
     """Build the OpenAI client pointed at the Bedrock endpoint.
 
@@ -363,8 +344,8 @@ def report(meetings: Meetings, slugs: list[str], words: int) -> None:
     counts = [transcript_words(meeting) for meeting in meetings]
     for meeting, slug, count in zip(meetings, slugs, counts, strict=True):
         print(
-            f"  {slug}: {count:,} words, {meeting.length_minutes} minutes, "
-            f"{len(meeting.attendees)} attendees"
+            f"  {slug}: {count:,} words, {len(meeting.attendees)} attendees, "
+            f"{len(meeting.turns)} turns"
         )
     average = sum(counts) // len(counts)
     print(f"Asked for about {words:,} words a meeting; averaged {average:,}.")
@@ -451,7 +432,6 @@ def main(
         return 1
 
     problems = check_roster(batch.meetings, first_names(people))
-    problems += check_lengths(batch.meetings)
     if problems:
         print("error: the batch was rejected; nothing was written.", file=sys.stderr)
         for line in problems:

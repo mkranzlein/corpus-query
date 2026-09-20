@@ -15,10 +15,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from corpus_query.transcripts.length import (
-    TRANSCRIPT_WORDS_PER_MINUTE,
-    minutes_for_words,
-)
 from corpus_query.transcripts.roster import Person, describe_roster
 from corpus_query.transcripts.summaries import PriorMeeting, describe_prior_meetings
 
@@ -115,9 +111,6 @@ def build_prompt(
             "words": f"{words:,}",
             "min_words": f"{low:,}",
             "max_words": f"{high:,}",
-            "minutes": str(minutes_for_words(words)),
-            "min_minutes": str(minutes_for_words(low)),
-            "words_per_minute": str(TRANSCRIPT_WORDS_PER_MINUTE),
             "roster": describe_roster(people),
             "prior": describe_prior_meetings(prior),
         },
