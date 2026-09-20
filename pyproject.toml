@@ -25,5 +25,12 @@ build-backend = "uv_build"
 module-name = "infra"
 module-root = ""
 
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+upload_to_vcs_release = false
+
+[tool.semantic_release.branches.main]
+match = "main"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
