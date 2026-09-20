@@ -346,3 +346,52 @@ def test_candidates_is_a_parameter_that_bounds_the_fused_pool(connection, tmp_pa
     # candidates=3 caps each half's contribution; fused pool can be larger
     # than 3 when the two halves disagree, but bounded well under all 10.
     assert len(result.results) <= 6
+
+
+def test_results_equal_to_zero_returns_no_results(connection, tmp_path):
+    document_id = _insert_document(connection, "meeting-1")
+    _insert_chunk(connection, document_id, 0, "connector lead time", _vector(0))
+    collection = index_module.build_index(connection, tmp_path / "chroma")
+
+    result = search(
+        connection,
+        collection,
+        "connector lead time",
+        results=0,
+        embed=_fake_embed(_vector(0)),
+        rerank=_score_by_shared_words,
+    )
+
+    assert result.results == []
+
+
+def test_the_default_embed_and_rerank_are_the_projects(
+    connection, tmp_path, monkeypatch
+):
+    """Cover the default wiring without installing torch.
+
+    :mod:`corpus_query.retrieval.search` imports both lazily through
+    :mod:`corpus_query.retrieval.dense` and its own ``_project_rerank``, so
+    stand-in modules in ``sys.modules`` prove the wiring without needing the
+    real models loaded.
+    """
+    import sys
+    import types
+
+    document_id = _insert_document(connection, "meeting-1")
+    _insert_chunk(connection, document_id, 0, "connector lead time", _vector(0))
+    collection = index_module.build_index(connection, tmp_path / "chroma")
+
+    embedder_module = types.ModuleType("corpus_query.models.embedder")
+    embedder_module.embed_queries = lambda texts: np.array(
+        [_vector(0) for _ in texts], dtype=np.float32
+    )
+    reranker_module = types.ModuleType("corpus_query.models.reranker")
+    reranker_module.score = lambda query, documents: [1.0 for _ in documents]
+    monkeypatch.setitem(sys.modules, "corpus_query.models.embedder", embedder_module)
+    monkeypatch.setitem(sys.modules, "corpus_query.models.reranker", reranker_module)
+
+    result = search(connection, collection, "connector lead time")
+
+    assert len(result.results) == 1
+    assert result.results[0].rerank_score == pytest.approx(1.0)

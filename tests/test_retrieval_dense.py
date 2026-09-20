@@ -138,3 +138,32 @@ def test_embed_receives_the_bare_query_text(connection, tmp_path):
     search_dense(collection, "supplier delays", embed=embed)
 
     assert seen == ["supplier delays"]
+
+
+def test_the_default_embed_is_the_projects_query_side_embedder(
+    connection, tmp_path, monkeypatch
+):
+    """Cover the default path without installing torch.
+
+    :mod:`corpus_query.retrieval.dense` imports the embedder lazily, so a
+    stand-in module put in ``sys.modules`` proves it reaches for the
+    query-side function without needing the real one loaded.
+    """
+    import sys
+    import types
+
+    document_id = _insert_document(connection)
+    _insert_chunk(
+        connection, document_id, 0, np.array([1.0, 0.0, 0.0], dtype=np.float32)
+    )
+    collection = index_module.build_index(connection, tmp_path / "chroma")
+
+    module = types.ModuleType("corpus_query.models.embedder")
+    module.embed_queries = lambda texts: np.array(
+        [[1.0, 0.0, 0.0] for _ in texts], dtype=np.float32
+    )
+    monkeypatch.setitem(sys.modules, "corpus_query.models.embedder", module)
+
+    hits = search_dense(collection, "supplier delays")
+
+    assert len(hits) == 1

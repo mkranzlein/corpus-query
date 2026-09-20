@@ -84,6 +84,15 @@ def test_empty_result_is_not_an_error(connection):
     assert hits == []
 
 
+def test_a_query_with_no_searchable_term_is_an_empty_result_not_an_error(connection):
+    document_id = _insert_document(connection)
+    _insert_chunk(connection, document_id, 0, "connector lead time")
+
+    hits = search_lexical(connection, '*** "" ^^^')
+
+    assert hits == []
+
+
 def test_limit_bounds_the_number_of_hits(connection):
     document_id = _insert_document(connection)
     for ordinal in range(5):
