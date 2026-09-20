@@ -48,7 +48,10 @@ jobs:
       # the lock a version behind and break the next pull request.
       - run: uv sync --locked
 
-      - run: uv run --frozen pytest --cov --cov-report=xml
+      # -m "not slow" keeps the torch-backed model tests out of CI. They
+      # stub the models rather than loading them, but importing the module
+      # under test imports torch, and that is the whole expense.
+      - run: uv run --frozen pytest -m "not slow" --cov --cov-report=xml
 
       # fail_ci_if_error is on because a silent upload failure is worse than a
       # red build: the badge and the status checks would go on reporting the

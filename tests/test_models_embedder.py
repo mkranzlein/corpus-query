@@ -21,6 +21,12 @@ from corpus_query.models.embedder import (
 )
 
 
+#: Importing this module imports sentence-transformers, and with it
+#: torch. That is the cost this mark exists to keep out of CI, so it
+#: applies to the whole file rather than only the real-load test.
+pytestmark = pytest.mark.slow
+
+
 class FakeEmbeddingModel:
     """Stands in for a :class:`sentence_transformers.SentenceTransformer`."""
 
@@ -91,7 +97,6 @@ def test_load_embedder_is_cached(monkeypatch):
     load_embedder.cache_clear()
 
 
-@pytest.mark.slow
 def test_real_embedder_load_and_prefix_behavior(monkeypatch):
     from huggingface_hub.errors import LocalEntryNotFoundError
 

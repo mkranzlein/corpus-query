@@ -17,3 +17,11 @@ coverage:
 comment:
   layout: "condensed_header, diff, files"
   require_changes: true
+
+# These two are exercised only by tests marked slow, which CI deselects
+# because importing them imports torch. Measuring them here would report a
+# number that reflects where the tests run rather than whether they exist —
+# they are covered, locally, by the suite that loads the model stack.
+ignore:
+  - "corpus_query/models/embedder.py"
+  - "corpus_query/models/reranker.py"

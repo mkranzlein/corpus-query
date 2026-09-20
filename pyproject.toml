@@ -14,6 +14,9 @@ dependencies = [
     "pydantic>=2.13.5",
     "python-dotenv>=1.2.3",
     "sentence-transformers>=6.1.0",
+    # Declared explicitly, though it arrives through sentence-transformers,
+    # because [tool.uv.sources] below only applies to direct dependencies.
+    "torch>=2.14.0",
 ]
 
 [dependency-groups]
@@ -25,6 +28,18 @@ dev = [
 [build-system]
 requires = ["uv_build>=0.12,<0.13"]
 build-backend = "uv_build"
+
+# torch resolves to the CUDA build on Linux by default, which drags in fifteen
+# nvidia-* packages and triton for a project that runs the models on CPU by
+# design. Pointing Linux at PyTorch's CPU index keeps the install to what is
+# actually used. macOS is left on PyPI, where the wheel is already CPU-only.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
 [tool.uv.build-backend]
 module-name = ["infra", "corpus_query"]
@@ -45,7 +60,7 @@ match = "main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-    "slow: exercises a real model load; skipped when weights are not cached.",
+    "slow: pulls in torch through sentence-transformers. Deselected in CI,\n     which has no reason to install a deep learning stack to check that a\n     stub was called with the right arguments.",
 ]
 
 # Coverage is measured over the application, the infrastructure definitions,
