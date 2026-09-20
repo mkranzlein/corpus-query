@@ -11,8 +11,8 @@ Run it with::
     uv run scripts/generate_transcripts.py --dry-run   # print the prompt
     uv run scripts/generate_transcripts.py             # generate a batch
 
-Settings come from ``.env``: ``OPENAI_API_KEY``, ``OPENAI_BASE_URL``, and
-``OPENAI_PROJECT``.
+Settings come from ``.env``: ``AWS_BEARER_TOKEN_BEDROCK`` and
+``AWS_REGION``.
 
 Every run without ``--dry-run`` makes a real, billed inference call. Do not run
 this without asking first — see CLAUDE.md.
@@ -30,7 +30,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from openai import OpenAI
+from anthropic import AnthropicBedrock
 from pydantic import BaseModel, Field, ValidationError
 
 from corpus_query.transcripts.length import transcript_words
@@ -47,12 +47,20 @@ from corpus_query.transcripts.slugs import unique_slug
 from corpus_query.transcripts.summaries import DEFAULT_DATABASE_FILE, read_summaries
 from infra.config import ConfigError, load_env, require
 
-#: Environment file this script reads, holding the OpenAI-compatible client
+#: Environment file this script reads, holding the inference client's
 #: settings rather than the AWS provisioning ones.
 ENV_FILE = ".env"
 
-#: A plain Bedrock model id, not a ``us.``-prefixed inference profile.
-MODEL = "openai.gpt-5.6-sol"
+#: The US cross-region inference profile for Claude Sonnet 4.6, which is how
+#: the model is offered rather than as a plain foundation-model id: a call is
+#: routed to whichever US region has capacity for it.
+MODEL = "us.anthropic.claude-sonnet-4-6"
+
+#: Ceiling on one batch. A batch is the largest thing this project asks for —
+#: several meetings of transcript in a single response — so the ceiling is
+#: generous and the request is streamed. Left well above what a batch needs,
+#: because a response cut off part way through is thrown away whole.
+MAX_TOKENS = 32_000
 
 #: Meetings one run asks for. Small enough that a bad batch is cheap to throw
 #: away, and that the response fits comfortably in one call.
@@ -268,32 +276,42 @@ def check_roster(meetings: Meetings, roster: tuple[str, ...]) -> list[str]:
     return problems
 
 
-def build_client(env: dict[str, str]) -> OpenAI:
-    """Build the OpenAI client pointed at the Bedrock endpoint.
+def build_client(env: dict[str, str]) -> AnthropicBedrock:
+    """Build the Anthropic client pointed at Bedrock Runtime.
 
     Args:
         env: Settings as returned by :func:`infra.config.load_env`.
 
     Returns:
-        A client configured with the key, endpoint, and project from ``env``.
+        A client configured with the key and region from ``env``.
 
     Raises:
         ConfigError: If a required setting is missing.
     """
-    return OpenAI(
-        api_key=require(env, "OPENAI_API_KEY"),
-        base_url=require(env, "OPENAI_BASE_URL"),
-        project=require(env, "OPENAI_PROJECT"),
+    return AnthropicBedrock(
+        api_key=require(env, "AWS_BEARER_TOKEN_BEDROCK"),
+        aws_region=require(env, "AWS_REGION"),
     )
 
 
 def request_batch(
-    client: OpenAI, model: str, prompt: str, temperature: float
+    client: AnthropicBedrock, model: str, prompt: str, temperature: float
 ) -> MeetingBatch | None:
     """Ask for one batch of meetings.
 
+    The request is streamed because the response is long: the SDK refuses a
+    non-streamed request whose ceiling implies more than ten minutes of
+    generation, and a batch of transcripts is exactly that. Nothing is shown
+    as it arrives — the batch is only useful once it has all validated — so
+    the stream is drained and the finished message taken from it.
+
+    ``temperature`` goes through ``extra_body`` because the SDK dropped it
+    from its typed parameters: the models released after this one reject
+    sampling controls outright. Sonnet 4.6 still honours it, and variety
+    across batches is the whole reason this script has a temperature at all.
+
     Args:
-        client: A configured OpenAI client.
+        client: A configured client.
         model: The model id to call.
         prompt: The assembled prompt.
         temperature: What to sample at.
@@ -302,13 +320,14 @@ def request_batch(
         The parsed batch, or ``None`` if the response carried no parsed
         structured output.
     """
-    response = client.responses.parse(
+    with client.messages.stream(
         model=model,
-        input=prompt,
-        text_format=MeetingBatch,
-        temperature=temperature,
-    )
-    return response.output_parsed
+        max_tokens=MAX_TOKENS,
+        messages=[{"role": "user", "content": prompt}],
+        output_format=MeetingBatch,
+        extra_body={"temperature": temperature},
+    ) as stream:
+        return stream.get_final_message().parsed_output
 
 
 def write_meeting(meeting: Meeting, out_dir: Path, taken: set[str]) -> str:
@@ -364,7 +383,7 @@ def announce_progress(existing: int, count: int, target: int) -> None:
 
 def main(
     argv: list[str] | None = None,
-    client_factory: Callable[[dict[str, str]], OpenAI] = build_client,
+    client_factory: Callable[[dict[str, str]], AnthropicBedrock] = build_client,
 ) -> int:
     """Run the script.
 

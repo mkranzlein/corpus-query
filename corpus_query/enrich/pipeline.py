@@ -100,7 +100,7 @@ def enrich_document(
 
     Args:
         connection: An open document store.
-        client: An OpenAI-compatible client.
+        client: A configured client.
         model: The model id to call.
         document_id: The document to enrich.
         recompute_embeddings: Re-embed chunks that already have a vector.
@@ -161,7 +161,7 @@ def enrich_documents(
 
     Args:
         connection: An open document store.
-        client: An OpenAI-compatible client.
+        client: A configured client.
         model: The model id to call.
         document_ids: The documents to enrich, in the order to enrich them.
         recompute_embeddings: Re-embed chunks that already have a vector.
@@ -206,7 +206,7 @@ def dedupe_categories(
 
     Args:
         connection: An open document store.
-        client: An OpenAI-compatible client.
+        client: A configured client.
         model: The model id to call.
 
     Returns:

@@ -1,9 +1,14 @@
 """Fixtures shared by the tests.
 
 The enrichment fixtures here never reach a model. ``fake_client`` stands in
-for the OpenAI-compatible client, records what it was asked, and answers with
+for the Bedrock client, records what it was asked, and answers with
 already-valid structured output, so a test asserts on the request that would
 have been sent and on what is done with the response.
+
+It answers both ways the project asks a question: ``messages.parse`` for the
+short passes, and ``messages.stream`` for the one response long enough to
+need streaming. Both hand back the same fake message, since what a caller
+does with it is the same either way.
 """
 
 from __future__ import annotations
@@ -84,13 +89,15 @@ class Call:
 
     model: str
     prompt: str
-    text_format: type
+    output_format: type
+    max_tokens: int
     temperature: float | None
+    streamed: bool
 
 
 @dataclass
 class FakeClient:
-    """Stands in for the OpenAI-compatible client, without a network.
+    """Stands in for the Bedrock client, without a network.
 
     ``respond`` is given the prompt and the response type and returns what
     the model would have parsed, or ``None`` for a response that carried no
@@ -98,40 +105,84 @@ class FakeClient:
     """
 
     respond: Callable[[str, type], Any]
+    stop_reason: str = "end_turn"
     calls: list[Call] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        self.responses = _FakeResponses(self)
+        self.messages = _FakeMessages(self)
 
-    def prompts(self, text_format: type) -> list[str]:
+    def prompts(self, output_format: type) -> list[str]:
         """Return the prompts sent for one response type, in order."""
-        return [call.prompt for call in self.calls if call.text_format is text_format]
+        return [
+            call.prompt for call in self.calls if call.output_format is output_format
+        ]
 
 
 @dataclass
-class _FakeResponses:
-    """The ``client.responses`` namespace, with just ``parse`` on it."""
+class _FakeMessages:
+    """The ``client.messages`` namespace, with the two calls in use on it."""
 
     client: FakeClient
 
-    def parse(self, model, input, text_format, temperature=None, **kwargs):  # noqa: A002
+    def parse(self, *, model, max_tokens, messages, output_format, **kwargs):
         """Record the request and answer it from the client's responder."""
+        return self._record(
+            model, max_tokens, messages, output_format, kwargs, streamed=False
+        )
+
+    def stream(self, *, model, max_tokens, messages, output_format, **kwargs):
+        """Do the same, behind the context manager a stream is used through."""
+        return _FakeStream(
+            self._record(
+                model, max_tokens, messages, output_format, kwargs, streamed=True
+            )
+        )
+
+    def _record(self, model, max_tokens, messages, output_format, kwargs, streamed):
+        """Log one request and build the message that answers it."""
+        prompt = messages[-1]["content"]
         self.client.calls.append(
             Call(
                 model=model,
-                prompt=input,
-                text_format=text_format,
-                temperature=temperature,
+                prompt=prompt,
+                output_format=output_format,
+                max_tokens=max_tokens,
+                temperature=(kwargs.get("extra_body") or {}).get("temperature"),
+                streamed=streamed,
             )
         )
-        return _FakeResponse(self.client.respond(input, text_format))
+        return _FakeMessage(
+            parsed_output=self.client.respond(prompt, output_format),
+            model=model,
+            stop_reason=self.client.stop_reason,
+        )
 
 
 @dataclass
-class _FakeResponse:
-    """What ``responses.parse`` hands back."""
+class _FakeMessage:
+    """What a request hands back, parsed."""
 
-    output_parsed: Any
+    parsed_output: Any
+    model: str = "us.anthropic.claude-sonnet-4-6"
+    stop_reason: str = "end_turn"
+    id: str = "msg_fake123"
+
+
+@dataclass
+class _FakeStream:
+    """The context manager ``messages.stream`` is used through."""
+
+    message: _FakeMessage
+
+    def __enter__(self) -> _FakeStream:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        return None
+
+    def get_final_message(self) -> _FakeMessage:
+        """Return the finished message, as draining a real stream would."""
+        return self.message
 
 
 def canned(
@@ -154,20 +205,20 @@ def canned(
         A responder for :class:`FakeClient`.
     """
 
-    def respond(prompt: str, text_format: type) -> Any:
-        if text_format is DocumentSummary:
+    def respond(prompt: str, output_format: type) -> Any:
+        if output_format is DocumentSummary:
             text = summary(prompt) if callable(summary) else summary
             return DocumentSummary(summary=text)
-        if text_format is TopicAssignment:
+        if output_format is TopicAssignment:
             chosen = topics(prompt) if callable(topics) else topics
             return TopicAssignment(topics=list(chosen))
-        if text_format is PriorityAssessment:
+        if output_format is PriorityAssessment:
             return PriorityAssessment(
                 time_sensitivity=time_sensitivity, business_impact=business_impact
             )
-        if text_format is TopicMerges:
+        if output_format is TopicMerges:
             return TopicMerges(merges=list(merges))
-        raise AssertionError(f"unexpected response type {text_format}")
+        raise AssertionError(f"unexpected response type {output_format}")
 
     return respond
 

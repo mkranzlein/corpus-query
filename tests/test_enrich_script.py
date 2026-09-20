@@ -199,10 +199,10 @@ def test_a_failed_document_is_reported_and_the_run_fails(
 ):
     path = corpus("first", "second")
 
-    def fail_the_first(prompt, text_format):
-        if "Meeting 0" in prompt and text_format is DocumentSummary:
+    def fail_the_first(prompt, output_format):
+        if "Meeting 0" in prompt and output_format is DocumentSummary:
             return None
-        return canned()(prompt, text_format)
+        return canned()(prompt, output_format)
 
     assert run(["--db", str(path)], fake_client(fail_the_first)) == 1
 
@@ -299,25 +299,20 @@ def test_the_defaults_are_the_committed_paths():
 def test_the_client_is_built_from_the_environment(monkeypatch):
     built = {}
 
-    class FakeOpenAI:
+    class FakeAnthropicBedrock:
         def __init__(self, **kwargs):
             built.update(kwargs)
 
-    monkeypatch.setattr("scripts.enrich.OpenAI", FakeOpenAI)
+    monkeypatch.setattr("scripts.enrich.AnthropicBedrock", FakeAnthropicBedrock)
 
     build_client(
         {
-            "OPENAI_API_KEY": "key",
-            "OPENAI_BASE_URL": "https://example.invalid",
-            "OPENAI_PROJECT": "project",
+            "AWS_BEARER_TOKEN_BEDROCK": "key",
+            "AWS_REGION": "us-east-1",
         }
     )
 
-    assert built == {
-        "api_key": "key",
-        "base_url": "https://example.invalid",
-        "project": "project",
-    }
+    assert built == {"api_key": "key", "aws_region": "us-east-1"}
 
 
 def test_a_missing_model_extra_is_named_with_the_command_that_fixes_it(monkeypatch):

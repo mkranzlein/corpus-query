@@ -1,8 +1,11 @@
 """Tests for the transcript generator.
 
-Nothing here talks to a real endpoint. The OpenAI client is replaced by a fake
-that records the request it was handed and returns a canned batch, so the tests
+Nothing here talks to a real endpoint. The client is replaced by a fake that
+records the request it was handed and returns a canned batch, so the tests
 assert on what would have been sent and on what happens to what comes back.
+
+The fake answers ``messages.stream``, which is how this script asks: a batch
+of transcripts is long enough that the SDK will not wait for it in one piece.
 """
 
 from __future__ import annotations
@@ -18,6 +21,8 @@ from corpus_query.transcripts.length import transcript_words
 from corpus_query.transcripts.summaries import NO_PRIOR_MEETINGS
 from scripts.generate_transcripts import (
     COLD_TEMPERATURE,
+    MAX_TOKENS,
+    MODEL,
     WARM_TEMPERATURE,
     MeetingBatch,
     check_roster,
@@ -30,30 +35,47 @@ from scripts.generate_transcripts import (
 from tests.conftest import REPO_ROOT
 
 SETTINGS = {
-    "OPENAI_API_KEY": "sk-fake",
-    "OPENAI_BASE_URL": "https://example.invalid/v1",
-    "OPENAI_PROJECT": "proj-fake",
+    "AWS_BEARER_TOKEN_BEDROCK": "bedrock-api-key-fake",
+    "AWS_REGION": "us-east-1",
 }
 
 
-class FakeParsedResponse:
-    """Stands in for the SDK's ``ParsedResponse``."""
+class FakeMessage:
+    """Stands in for the SDK's ``ParsedMessage``."""
 
     def __init__(self, parsed: MeetingBatch | None):
-        self.output_parsed = parsed
+        self.parsed_output = parsed
+        self.stop_reason = "end_turn"
 
 
-class FakeResponses:
+class FakeStream:
+    """The context manager a streamed request is used through."""
+
+    def __init__(self, parsed: MeetingBatch | None, error: Exception | None):
+        self._parsed = parsed
+        self._error = error
+
+    def __enter__(self) -> FakeStream:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        return None
+
+    def get_final_message(self) -> FakeMessage:
+        if self._error is not None:
+            raise self._error
+        return FakeMessage(self._parsed)
+
+
+class FakeMessages:
     def __init__(self, parsed: MeetingBatch | None, error: Exception | None):
         self._parsed = parsed
         self._error = error
         self.calls: list[dict[str, Any]] = []
 
-    def parse(self, **kwargs: Any) -> FakeParsedResponse:
+    def stream(self, **kwargs: Any) -> FakeStream:
         self.calls.append(kwargs)
-        if self._error is not None:
-            raise self._error
-        return FakeParsedResponse(self._parsed)
+        return FakeStream(self._parsed, self._error)
 
 
 class FakeClient:
@@ -62,7 +84,7 @@ class FakeClient:
     def __init__(
         self, parsed: MeetingBatch | None = None, error: Exception | None = None
     ):
-        self.responses = FakeResponses(parsed, error)
+        self.messages = FakeMessages(parsed, error)
 
 
 @pytest.fixture
@@ -141,7 +163,7 @@ def test_a_dry_run_prints_the_prompt_and_calls_nothing(run, capsys):
     exit_code = run(client, "--dry-run")
 
     assert exit_code == 0
-    assert client.responses.calls == []
+    assert client.messages.calls == []
     out = capsys.readouterr().out
     assert "Write 5 meetings" in out
     assert NO_PRIOR_MEETINGS in out
@@ -161,23 +183,24 @@ def test_the_request_carries_the_prompt_schema_model_and_temperature(
 
     assert run(client, "--count", "1") == 0
 
-    [call] = client.responses.calls
-    assert call["model"] == "openai.gpt-5.6-sol"
-    assert call["text_format"] is MeetingBatch
-    assert call["temperature"] == COLD_TEMPERATURE
-    assert "Write 1 meeting." in call["input"]
+    [call] = client.messages.calls
+    assert call["model"] == MODEL
+    assert call["output_format"] is MeetingBatch
+    assert call["extra_body"] == {"temperature": COLD_TEMPERATURE}
+    assert call["max_tokens"] == MAX_TOKENS
+    assert "Write 1 meeting." in call["messages"][0]["content"]
 
 
 def test_one_run_makes_exactly_one_request(run, batch_of):
     client = FakeClient(batch_of({}, {"subject": "Pricing review"}))
     run(client, "--count", "2")
-    assert len(client.responses.calls) == 1
+    assert len(client.messages.calls) == 1
 
 
 def test_a_temperature_flag_overrides_the_default(run, batch_of):
     client = FakeClient(batch_of({}))
     run(client, "--count", "1", "--temperature", "0.3")
-    assert client.responses.calls[0]["temperature"] == 0.3
+    assert client.messages.calls[0]["extra_body"] == {"temperature": 0.3}
 
 
 def test_a_first_batch_is_colder_than_one_steered_by_summaries():
@@ -234,14 +257,14 @@ def test_a_batch_that_would_exceed_the_target_is_refused(run, batch_of, capsys):
     exit_code = run(client, "--count", "5", "--target", "3")
 
     assert exit_code == 1
-    assert client.responses.calls == []
+    assert client.messages.calls == []
     assert "3 left" in capsys.readouterr().err
 
 
 def test_force_generates_past_the_target(run, batch_of):
     client = FakeClient(batch_of({}))
     assert run(client, "--count", "1", "--target", "0", "--force") == 0
-    assert len(client.responses.calls) == 1
+    assert len(client.messages.calls) == 1
 
 
 def test_the_report_compares_what_came_back_with_what_was_asked_for(
@@ -367,7 +390,7 @@ def test_a_missing_setting_stops_the_run_before_any_call(
     for key in SETTINGS:
         monkeypatch.delenv(key, raising=False)
     env_file = tmp_path / ".env"
-    env_file.write_text("OPENAI_API_KEY=sk-fake\n", encoding="utf-8")
+    env_file.write_text("AWS_BEARER_TOKEN_BEDROCK=fake\n", encoding="utf-8")
     monkeypatch.setattr("scripts.generate_transcripts.ENV_FILE", str(env_file))
 
     from scripts.generate_transcripts import build_client
@@ -385,7 +408,7 @@ def test_a_missing_setting_stops_the_run_before_any_call(
     )
 
     assert exit_code == 1
-    assert "OPENAI_BASE_URL is not set" in capsys.readouterr().err
+    assert "AWS_REGION is not set" in capsys.readouterr().err
 
 
 def test_a_missing_roster_stops_the_run(tmp_path: Path, env_file: Path, capsys):
