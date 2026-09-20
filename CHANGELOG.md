@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v2.4.0 (2026-09-20)
+
+### Documentation
+
+- Allow Ollama-backed runs without asking first
+  ([#64](https://github.com/mkranzlein/corpus-query/pull/64),
+  [`eb15b56`](https://github.com/mkranzlein/corpus-query/commit/eb15b56a0ad779adb3b6a08ccd7e67c06fc00b16))
+
+### Features
+
+- Commit the generated corpus so a clone can query without generating one
+  ([#63](https://github.com/mkranzlein/corpus-query/pull/63),
+  [`519d5b9`](https://github.com/mkranzlein/corpus-query/commit/519d5b9e7229a958eb7b77a44419519270d07bd8))
+
+
 ## v2.3.0 (2026-09-20)
 
 ### Documentation
