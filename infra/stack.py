@@ -23,6 +23,13 @@ from infra.config import PROJECT_TAG_KEY, read_number, require
 #: the same ``bedrock-mantle`` namespace as the project ARN.
 INFERENCE_ACTION = "bedrock-mantle:CreateInference"
 
+#: Action that permits presenting a Bedrock API key at all. It authorizes the
+#: credential rather than the call, which is why it is evaluated against ``*``
+#: rather than against a project: an identity holding this and nothing else
+#: can still run no inference anywhere. Inference stays scoped by
+#: :data:`INFERENCE_ACTION` on the project ARN.
+BEARER_TOKEN_ACTION = "bedrock-mantle:CallWithBearerToken"
+
 #: Percentage of the budget at which spend so far raises an alert.
 ACTUAL_ALERT_THRESHOLD = 80
 
@@ -80,7 +87,13 @@ class CorpusQueryStack(Stack):
                     effect=iam.Effect.ALLOW,
                     actions=[INFERENCE_ACTION],
                     resources=[project_arn],
-                )
+                ),
+                iam.PolicyStatement(
+                    sid="UseApiKey",
+                    effect=iam.Effect.ALLOW,
+                    actions=[BEARER_TOKEN_ACTION],
+                    resources=["*"],
+                ),
             ],
         )
 

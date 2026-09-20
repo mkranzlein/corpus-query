@@ -33,6 +33,13 @@ def template() -> Template:
 
 
 def test_policy_allows_inference_on_the_project_and_nothing_else(template: Template):
+    """Two statements, and the one on ``*`` cannot run inference by itself.
+
+    Using an API key needs the credential authorized as well as the call, and
+    the credential half is not scoped to a project. The literal statement list
+    is asserted rather than matched loosely, so a third statement — or a
+    widened resource on the inference half — fails here.
+    """
     template.resource_count_is("AWS::IAM::ManagedPolicy", 1)
     template.has_resource_properties(
         "AWS::IAM::ManagedPolicy",
@@ -45,7 +52,13 @@ def test_policy_allows_inference_on_the_project_and_nothing_else(template: Templ
                             "Effect": "Allow",
                             "Resource": PROJECT_ARN,
                             "Sid": "RunInferenceInProject",
-                        }
+                        },
+                        {
+                            "Action": "bedrock-mantle:CallWithBearerToken",
+                            "Effect": "Allow",
+                            "Resource": "*",
+                            "Sid": "UseApiKey",
+                        },
                     ]
                 }
             )
