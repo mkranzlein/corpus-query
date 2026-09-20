@@ -16,6 +16,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.3.0",
+    "pytest-cov>=7.1.0",
 ]
 
 [build-system]
@@ -40,3 +41,14 @@ match = "main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# Coverage is measured over the application, the infrastructure definitions,
+# and the entry points under scripts/, since the tests drive those directly.
+# --cov is not in addopts: the local hook runs the suite on every commit and
+# there is no reason to pay for measurement there. CI asks for it explicitly.
+[tool.coverage.run]
+source = ["corpus_query", "infra", "scripts"]
+branch = true
+
+[tool.coverage.report]
+exclude_also = ["if TYPE_CHECKING:"]

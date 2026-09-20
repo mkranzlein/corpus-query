@@ -48,4 +48,13 @@ jobs:
       # the lock a version behind and break the next pull request.
       - run: uv sync --locked
 
-      - run: uv run --frozen pytest
+      - run: uv run --frozen pytest --cov --cov-report=xml
+
+      # fail_ci_if_error is on because a silent upload failure is worse than a
+      # red build: the badge and the status checks would go on reporting the
+      # last successful run as though it were current.
+      - uses: codecov/codecov-action@v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: true
