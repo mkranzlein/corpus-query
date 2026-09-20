@@ -64,11 +64,22 @@ Before creating a feature branch, get back to a clean main:
 ```bash
 git switch main
 git pull --prune
+for branch in $(gh pr list --state merged --json headRefName -q '.[].headRefName'); do
+  worktree=$(git worktree list --porcelain \
+    | awk -v b="refs/heads/$branch" '/^worktree /{w=$2} /^branch /{if ($2==b) print w}')
+  [ -n "$worktree" ] && git worktree remove "$worktree"
+done
 gh pr list --state merged --json headRefName -q '.[].headRefName' \
   | xargs -r -n1 git branch -D 2>/dev/null
 ```
 
-The last step is needed because `git branch --merged` does not detect
+The worktrees have to go first: git refuses to delete a branch that is
+checked out in a worktree, so if a background agent's worktree for a merged
+branch is still around, `git branch -D` fails for that branch and
+`2>/dev/null` swallows the error, leaving it behind with no indication
+anything was skipped.
+
+The `git branch --merged` check is skipped because it does not detect
 squash-merged branches — the squash commit is a new commit with no ancestry
 link back to the branch, so git cannot tell it was merged. GitHub can, so ask
 it. Force-delete is safe here for exactly that reason: the PR is confirmed

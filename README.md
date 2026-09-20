@@ -103,10 +103,10 @@ describe the stack.
 
 ### Notes
 
-- The SigV4 signing service name (`bedrock-mantle`) is inferred from the ARN
-  namespace in the AWS documentation rather than confirmed against a live
-  call. If it is wrong, the first real run fails with a signing error that
-  names the expected service.
+- The SigV4 signing service name (`bedrock-mantle`) is confirmed against a
+  live call: the project creation script ran successfully against the real
+  endpoint, which also validated the request body shape and the response
+  field names.
 - The budget covers account spend rather than filtering on the `Project` tag.
   Tag-scoped filtering needs the cost allocation tag to be activated in
   Billing, which is console-only; account-wide is what catches runaway spend
