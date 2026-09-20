@@ -2,6 +2,45 @@
 
 <!-- version list -->
 
+## v1.5.0 (2026-09-20)
+
+### Bug Fixes
+
+- Keep a dry run read-only rather than seeding categories
+  ([#40](https://github.com/mkranzlein/corpus-query/pull/40),
+  [`6985422`](https://github.com/mkranzlein/corpus-query/commit/6985422ee06765a0bf229037f647dc8ff0c4d739))
+
+- Leave the dedupe prompt out of a dry run that skips the pass
+  ([#40](https://github.com/mkranzlein/corpus-query/pull/40),
+  [`6985422`](https://github.com/mkranzlein/corpus-query/commit/6985422ee06765a0bf229037f647dc8ff0c4d739))
+
+### Documentation
+
+- Note that enrichment is billed and needs the models extra
+  ([#40](https://github.com/mkranzlein/corpus-query/pull/40),
+  [`6985422`](https://github.com/mkranzlein/corpus-query/commit/6985422ee06765a0bf229037f647dc8ff0c4d739))
+
+### Features
+
+- Add the enrichment passes and their prompts
+  ([#40](https://github.com/mkranzlein/corpus-query/pull/40),
+  [`6985422`](https://github.com/mkranzlein/corpus-query/commit/6985422ee06765a0bf229037f647dc8ff0c4d739))
+
+- Enrich ingested documents with summaries, topics, priority, and embeddings
+  ([#40](https://github.com/mkranzlein/corpus-query/pull/40),
+  [`6985422`](https://github.com/mkranzlein/corpus-query/commit/6985422ee06765a0bf229037f647dc8ff0c4d739))
+
+### Testing
+
+- Cover the enrichment pipeline and entry point
+  ([#40](https://github.com/mkranzlein/corpus-query/pull/40),
+  [`6985422`](https://github.com/mkranzlein/corpus-query/commit/6985422ee06765a0bf229037f647dc8ff0c4d739))
+
+- Cover the enrichment schema, prompts, topics, dedupe, and embedding
+  ([#40](https://github.com/mkranzlein/corpus-query/pull/40),
+  [`6985422`](https://github.com/mkranzlein/corpus-query/commit/6985422ee06765a0bf229037f647dc8ff0c4d739))
+
+
 ## v1.4.0 (2026-09-20)
 
 ### Continuous Integration
