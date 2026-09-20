@@ -7,33 +7,38 @@ What it is told comes from the ``documents`` table that ingestion fills.
 
 A missing database is the normal case rather than an error — it is exactly what
 the first batch sees, and the first batch has to work before ingestion exists
-at all. So is a database that has no ``documents`` table yet. Both read as "no
-prior meetings".
+at all. So is a database that exists but has not been brought up to schema
+yet. Both read as "no prior meetings".
 
-This module opens the database read-only and asks it one question. It is
-deliberately the smallest read that answers it, so the generator does not wait
-on the store. Once the store package lands, this should be reconciled with it
-rather than kept as a second way of opening the same file.
+This module asks the store one question, through the same ``connect`` helper
+everything else that opens the document store uses, so there is exactly one
+place that knows how a document store is opened and what its columns are
+named.
 """
 
 from __future__ import annotations
 
-import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
-#: Where the document store is expected to live, relative to the repository
-#: root.
-DEFAULT_DATABASE_FILE = Path("data/corpus.db")
+from corpus_query.store.db import DEFAULT_DATABASE_FILE, connect
+
+__all__ = [
+    "DEFAULT_DATABASE_FILE",
+    "NO_PRIOR_MEETINGS",
+    "PriorMeeting",
+    "describe_prior_meetings",
+    "read_summaries",
+]
 
 #: Stand-in for the summaries section when there are none.
 NO_PRIOR_MEETINGS = "None yet. This is the first batch."
 
 _QUERY = """
-    SELECT subject, date, summary
+    SELECT subject, meeting_date, summary
     FROM documents
     WHERE summary IS NOT NULL AND TRIM(summary) <> ''
-    ORDER BY date, subject
+    ORDER BY meeting_date, subject
 """
 
 
@@ -56,17 +61,21 @@ def read_summaries(
 
     Returns:
         One entry per summarized document, oldest first. Empty when the
-        database does not exist, has no ``documents`` table, or holds nothing
-        that has been summarized yet.
+        database does not exist or has not been ingested into yet.
+
+    Raises:
+        SchemaVersionError: If the database's recorded schema version is not
+            the one this code knows how to work with — a real incompatibility,
+            not the normal "nothing ingested yet" case.
     """
     path = Path(path)
     if not path.is_file():
         return ()
+    connection = connect(path)
     try:
-        with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as connection:
-            rows = connection.execute(_QUERY).fetchall()
-    except sqlite3.Error:
-        return ()
+        rows = connection.execute(_QUERY).fetchall()
+    finally:
+        connection.close()
     return tuple(PriorMeeting(*row) for row in rows)
 
 
