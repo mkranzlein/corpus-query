@@ -2,6 +2,35 @@
 
 <!-- version list -->
 
+## v1.7.0 (2026-09-20)
+
+### Bug Fixes
+
+- Close the store when the API refuses to start
+  ([#43](https://github.com/mkranzlein/corpus-query/pull/43),
+  [`22036f8`](https://github.com/mkranzlein/corpus-query/commit/22036f8af39b0e1c50aa3b4644fb5f0a5a093429))
+
+### Documentation
+
+- Rewrite the README for someone querying the corpus
+  ([#43](https://github.com/mkranzlein/corpus-query/pull/43),
+  [`22036f8`](https://github.com/mkranzlein/corpus-query/commit/22036f8af39b0e1c50aa3b4644fb5f0a5a093429))
+
+- Say the database is not committed before the start command
+  ([#43](https://github.com/mkranzlein/corpus-query/pull/43),
+  [`22036f8`](https://github.com/mkranzlein/corpus-query/commit/22036f8af39b0e1c50aa3b4644fb5f0a5a093429))
+
+### Features
+
+- Add a serve entry point for the query API
+  ([#43](https://github.com/mkranzlein/corpus-query/pull/43),
+  [`22036f8`](https://github.com/mkranzlein/corpus-query/commit/22036f8af39b0e1c50aa3b4644fb5f0a5a093429))
+
+- Add the /search API over hybrid retrieval
+  ([#43](https://github.com/mkranzlein/corpus-query/pull/43),
+  [`22036f8`](https://github.com/mkranzlein/corpus-query/commit/22036f8af39b0e1c50aa3b4644fb5f0a5a093429))
+
+
 ## v1.6.0 (2026-09-20)
 
 ### Features
