@@ -2,6 +2,39 @@
 
 <!-- version list -->
 
+## v1.1.0 (2026-09-20)
+
+### Documentation
+
+- Confirm signing service verification and fix worktree cleanup order
+  ([#22](https://github.com/mkranzlein/corpus-query/pull/22),
+  [`2fb254e`](https://github.com/mkranzlein/corpus-query/commit/2fb254e9d0173cbe2bed02447afcb2e9999740b4))
+
+- Fix README provisioning note and branch-cleanup convention
+  ([#22](https://github.com/mkranzlein/corpus-query/pull/22),
+  [`2fb254e`](https://github.com/mkranzlein/corpus-query/commit/2fb254e9d0173cbe2bed02447afcb2e9999740b4))
+
+- Force worktree removal and tighten the cleanup snippet
+  ([#22](https://github.com/mkranzlein/corpus-query/pull/22),
+  [`2fb254e`](https://github.com/mkranzlein/corpus-query/commit/2fb254e9d0173cbe2bed02447afcb2e9999740b4))
+
+### Features
+
+- Reject a meeting that names someone who was not there
+  ([#23](https://github.com/mkranzlein/corpus-query/pull/23),
+  [`3bb3972`](https://github.com/mkranzlein/corpus-query/commit/3bb397206576cab7d4d3bd9452fd6c4d96683889))
+
+- **transcripts**: Add meeting schema, markdown renderer, and roster loader
+  ([#23](https://github.com/mkranzlein/corpus-query/pull/23),
+  [`3bb3972`](https://github.com/mkranzlein/corpus-query/commit/3bb397206576cab7d4d3bd9452fd6c4d96683889))
+
+### Testing
+
+- **transcripts**: Cover the schema, the renderer, and the roster loader
+  ([#23](https://github.com/mkranzlein/corpus-query/pull/23),
+  [`3bb3972`](https://github.com/mkranzlein/corpus-query/commit/3bb397206576cab7d4d3bd9452fd6c4d96683889))
+
+
 ## v1.0.1 (2026-09-20)
 
 ### Bug Fixes
