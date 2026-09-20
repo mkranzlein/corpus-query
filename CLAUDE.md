@@ -64,13 +64,16 @@ Before creating a feature branch, get back to a clean main:
 ```bash
 git switch main
 git pull --prune
-for branch in $(gh pr list --state merged --json headRefName -q '.[].headRefName'); do
+
+merged=$(gh pr list --state merged --json headRefName -q '.[].headRefName')
+
+for branch in $merged; do
   worktree=$(git worktree list --porcelain \
-    | awk -v b="refs/heads/$branch" '/^worktree /{w=$2} /^branch /{if ($2==b) print w}')
-  [ -n "$worktree" ] && git worktree remove "$worktree"
+    | awk -v b="branch refs/heads/$branch" '/^worktree /{w=$2} $0==b{print w}')
+  [ -n "$worktree" ] && git worktree remove --force "$worktree"
 done
-gh pr list --state merged --json headRefName -q '.[].headRefName' \
-  | xargs -r -n1 git branch -D 2>/dev/null
+
+printf '%s\n' $merged | xargs -r -n1 git branch -D 2>/dev/null
 ```
 
 The worktrees have to go first: git refuses to delete a branch that is
@@ -79,8 +82,12 @@ branch is still around, `git branch -D` fails for that branch and
 `2>/dev/null` swallows the error, leaving it behind with no indication
 anything was skipped.
 
-The `git branch --merged` check is skipped because it does not detect
-squash-merged branches — the squash commit is a new commit with no ancestry
-link back to the branch, so git cannot tell it was merged. GitHub can, so ask
-it. Force-delete is safe here for exactly that reason: the PR is confirmed
-merged.
+`--force` is needed on the removal because an agent's worktree is rarely
+pristine — a stray `__pycache__` is enough for `git worktree remove` to
+refuse. Discarding it is safe for the same reason force-deleting the branch
+is: the pull request is merged, so anything still sitting there is either
+already in `main` or was never wanted.
+
+GitHub is asked which branches were merged because `git branch --merged`
+cannot tell: the squash commit is a new commit with no ancestry link back to
+the branch. GitHub knows, so ask it.
