@@ -11,7 +11,7 @@ application depends on.
 
 Run it with::
 
-    uv run python -m scripts.bedrock_smoke_test
+    uv run scripts/bedrock_smoke_test.py
 
 Settings come from ``.env`` (not ``.env.admin``, which the provisioning
 scripts use): ``OPENAI_API_KEY``, ``OPENAI_BASE_URL``, and ``OPENAI_PROJECT``.

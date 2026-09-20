@@ -8,8 +8,8 @@ twenty variations of the same status meeting.
 
 Run it with::
 
-    uv run python -m scripts.generate_transcripts --dry-run   # print the prompt
-    uv run python -m scripts.generate_transcripts             # generate a batch
+    uv run scripts/generate_transcripts.py --dry-run   # print the prompt
+    uv run scripts/generate_transcripts.py             # generate a batch
 
 Settings come from ``.env``: ``OPENAI_API_KEY``, ``OPENAI_BASE_URL``, and
 ``OPENAI_PROJECT``.

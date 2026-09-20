@@ -101,7 +101,7 @@ def test_a_missing_store_is_reported_and_nothing_is_served(tmp_path, capsys):
     assert server.calls == []
     error = capsys.readouterr().err
     assert "no document store" in error
-    assert "scripts.ingest" in error
+    assert "scripts/ingest.py" in error
 
 
 def test_an_empty_store_is_reported(tmp_path, capsys):

@@ -7,8 +7,8 @@ the store in the same state.
 
 Run it with::
 
-    uv run python -m scripts.ingest                     # everything on disk
-    uv run python -m scripts.ingest data/transcripts/rev-b-schedule.md
+    uv run scripts/ingest.py                     # everything on disk
+    uv run scripts/ingest.py data/transcripts/rev-b-schedule.md
 
 Re-ingesting a transcript replaces the rows it wrote before rather than adding
 a second copy, so this is also how an edited transcript is brought up to date.

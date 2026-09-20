@@ -55,7 +55,7 @@ cd corpus-query
 uv sync --extra models
 
 # 3. Start the service. Needs a corpus at data/corpus.db — see below.
-uv run python -m scripts.serve
+uv run scripts/serve.py
 ```
 
 That third step needs a document store to search, and a fresh clone does not
@@ -171,7 +171,7 @@ If the database is missing, or is there but holds no chunks, the service says
 so and exits:
 
 ```
-error: no document store at data/corpus.db. Ingest a corpus first: uv run python -m scripts.ingest
+error: no document store at data/corpus.db. Ingest a corpus first: uv run scripts/ingest.py
 ```
 
 That is deliberate. A search service with no corpus behind it answers every
@@ -196,9 +196,9 @@ endpoint, and enrichment calls one several times per document. Settings come
 from `.env`: `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_PROJECT`.
 
 ```bash
-uv run python -m scripts.generate_transcripts   # billed; --dry-run prints the prompt
-uv run python -m scripts.ingest                 # free, offline, deterministic
-uv run python -m scripts.enrich                 # billed; --dry-run prints the prompts
+uv run scripts/generate_transcripts.py   # billed; --dry-run prints the prompt
+uv run scripts/ingest.py                 # free, offline, deterministic
+uv run scripts/enrich.py                 # billed; --dry-run prints the prompts
 ```
 
 Ingestion splits transcripts into chunks of whole turns and writes documents,
