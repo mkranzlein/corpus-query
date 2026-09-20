@@ -26,3 +26,14 @@ repos:
       - id: check-added-large-files
       - id: no-commit-to-branch
         args: [--branch, main]
+
+  # Kept last so the fast checks report first. Skipped in CI's lint job, which
+  # has no uv; the test job there runs pytest directly.
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: uv run pytest -q
+        language: system
+        types: [python]
+        pass_filenames: false

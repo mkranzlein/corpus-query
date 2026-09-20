@@ -26,7 +26,26 @@ jobs:
 
       # no-commit-to-branch guards against committing while main is checked
       # out. CI always has main checked out and is not making a commit, so the
-      # hook can only ever fail here.
+      # hook can only ever fail here. pytest is skipped because this job has no
+      # uv and no installed dependencies; the test job below runs it instead.
       - run: pre-commit run --show-diff-on-failure --color=always --all-files
         env:
-          SKIP: no-commit-to-branch
+          SKIP: no-commit-to-branch,pytest
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      # Deliberately not --locked. semantic-release bumps project.version in
+      # pyproject.toml without touching uv.lock, so after every release the
+      # lock records the previous version and --locked would fail here on the
+      # next unrelated pull request. uv sync still installs from the lock.
+      - run: uv sync
+
+      - run: uv run pytest
