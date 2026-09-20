@@ -8,14 +8,23 @@ from __future__ import annotations
 
 import pytest
 
-from corpus_query.models import reranker
-from corpus_query.models.reranker import RERANKER_MODEL_ID, load_reranker, score
+#: Importing the module under test imports sentence-transformers, and
+#: with it torch. Skip the whole file when the models extra is not
+#: installed, which is how CI runs it — without this the import below
+#: would fail at collection, before the slow mark could deselect
+#: anything.
+pytest.importorskip("sentence_transformers")
 
-
-#: Importing this module imports sentence-transformers, and with it
-#: torch. That is the cost this mark exists to keep out of CI, so it
-#: applies to the whole file rather than only the real-load test.
+#: Marked at module scope rather than on the real-load test alone: the
+#: stubs are cheap, but importing torch to run them is not.
 pytestmark = pytest.mark.slow
+
+from corpus_query.models import reranker  # noqa: E402
+from corpus_query.models.reranker import (  # noqa: E402
+    RERANKER_MODEL_ID,
+    load_reranker,
+    score,
+)
 
 
 class FakeCrossEncoder:

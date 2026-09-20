@@ -11,20 +11,25 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from corpus_query.models import embedder
-from corpus_query.models.embedder import (
+#: Importing the module under test imports sentence-transformers, and
+#: with it torch. Skip the whole file when the models extra is not
+#: installed, which is how CI runs it — without this the import below
+#: would fail at collection, before the slow mark could deselect
+#: anything.
+pytest.importorskip("sentence_transformers")
+
+#: Marked at module scope rather than on the real-load test alone: the
+#: stubs are cheap, but importing torch to run them is not.
+pytestmark = pytest.mark.slow
+
+from corpus_query.models import embedder  # noqa: E402
+from corpus_query.models.embedder import (  # noqa: E402
     EMBEDDING_DIM,
     EMBEDDING_MODEL_ID,
     embed_documents,
     embed_queries,
     load_embedder,
 )
-
-
-#: Importing this module imports sentence-transformers, and with it
-#: torch. That is the cost this mark exists to keep out of CI, so it
-#: applies to the whole file rather than only the real-load test.
-pytestmark = pytest.mark.slow
 
 
 class FakeEmbeddingModel:

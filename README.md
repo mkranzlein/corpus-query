@@ -19,6 +19,18 @@ uv run pytest          # tests
 pre-commit run --all-files
 ```
 
+The embedding and reranking models are an optional extra, because they bring
+torch with them and most of the system does not need it:
+
+```bash
+uv sync --extra models     # adds sentence-transformers and torch
+uv run pytest -m slow      # the tests that load them
+```
+
+Anything that embeds or reranks needs that extra installed. Without it those
+tests skip and the modules that import them raise on import, which is the
+intended signal rather than a failure to diagnose.
+
 Hooks run ruff, gitleaks, and a Conventional Commits check. Install them once
 with `pre-commit install` and `pre-commit install --hook-type commit-msg`.
 

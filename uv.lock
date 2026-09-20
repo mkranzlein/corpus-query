@@ -485,6 +485,10 @@ dependencies = [
     { name = "openai" },
     { name = "pydantic" },
     { name = "python-dotenv" },
+]
+
+[package.optional-dependencies]
+models = [
     { name = "sentence-transformers" },
     { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
     { name = "torch", version = "2.14.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
@@ -506,10 +510,11 @@ requires-dist = [
     { name = "openai", specifier = ">=3.16.2" },
     { name = "pydantic", specifier = ">=2.13.5" },
     { name = "python-dotenv", specifier = ">=1.2.3" },
-    { name = "sentence-transformers", specifier = ">=6.1.0" },
-    { name = "torch", marker = "sys_platform != 'linux'", specifier = ">=2.14.0" },
-    { name = "torch", marker = "sys_platform == 'linux'", specifier = ">=2.14.0", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "sentence-transformers", marker = "extra == 'models'", specifier = ">=6.1.0" },
+    { name = "torch", marker = "sys_platform == 'linux' and extra == 'models'", specifier = ">=2.14.0", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torch", marker = "sys_platform != 'linux' and extra == 'models'", specifier = ">=2.14.0" },
 ]
+provides-extras = ["models"]
 
 [package.metadata.requires-dev]
 dev = [

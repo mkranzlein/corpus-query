@@ -13,9 +13,18 @@ dependencies = [
     "openai>=3.16.2",
     "pydantic>=2.13.5",
     "python-dotenv>=1.2.3",
+]
+
+# The model stack is optional at install time. Embedding and reranking need
+# it; ingestion, the store, and the vector index do not, and neither does CI,
+# which would otherwise install a deep learning stack to run tests that stub
+# it. Anything that loads a model needs `uv sync --extra models` first.
+# torch is named here as well as reached through sentence-transformers,
+# because [tool.uv.sources] below only applies to dependencies declared
+# directly.
+[project.optional-dependencies]
+models = [
     "sentence-transformers>=6.1.0",
-    # Declared explicitly, though it arrives through sentence-transformers,
-    # because [tool.uv.sources] below only applies to direct dependencies.
     "torch>=2.14.0",
 ]
 
