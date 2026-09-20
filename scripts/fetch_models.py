@@ -33,16 +33,9 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from corpus_query.models.hf_home import ensure_hf_home
+from corpus_query.models.hf_home import WEIGHTS_FILE, ensure_hf_home, is_cached
 
 ensure_hf_home()
-
-from huggingface_hub import try_to_load_from_cache  # noqa: E402
-
-#: What a model is probed for to decide whether it is already cached. Both
-#: models ship their weights under this name, and it is the largest file in
-#: either repo — so it is the last to land and the one worth asking about.
-WEIGHTS_FILE = "model.safetensors"
 
 
 @dataclass(frozen=True)
@@ -76,29 +69,6 @@ def default_model_specs() -> list[ModelSpec]:
         ModelSpec(EMBEDDING_MODEL_ID, "127 MB", WEIGHTS_FILE, load_embedder),
         ModelSpec(RERANKER_MODEL_ID, "87 MB", WEIGHTS_FILE, load_reranker),
     ]
-
-
-def is_cached(repo_id: str, filename: str) -> bool:
-    """Report whether a model is already in the local Hugging Face cache.
-
-    The file to probe with is the weights rather than anything smaller.
-    Config and tokenizer files are fetched first and are a few hundred bytes
-    each, so a download interrupted part way leaves them on disk with the
-    weights still missing. Probing one of those would call that cache warm
-    and skip the model, handing the rest of the download back to the first
-    caller that loads it — which is the stall this script exists to take on
-    itself.
-
-    Args:
-        repo_id: The Hugging Face repo to check.
-        filename: The file to look for, as a stand-in for the whole model
-            being cached. See :data:`WEIGHTS_FILE`.
-
-    Returns:
-        True if the file is already on disk, meaning loading the model
-        would not need the network.
-    """
-    return isinstance(try_to_load_from_cache(repo_id, filename), str)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

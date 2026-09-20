@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+import types
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -24,6 +25,7 @@ import pytest
 from corpus_query.api.app import (
     Resources,
     StartupError,
+    _warm_models,
     create_app,
     open_resources,
 )
@@ -355,6 +357,43 @@ def test_startup_says_how_to_install_the_models(tmp_path, ingest, monkeypatch):
 
     with pytest.raises(StartupError, match="uv sync --extra models"):
         open_resources(database, tmp_path / "chroma")
+
+
+def test_warm_models_prefers_offline_before_loading(monkeypatch):
+    """Startup gives the cache a chance to skip hub revalidation.
+
+    Both loaders are faked here, so nothing imports torch — the same
+    sys.modules seeding the "models extra missing" test above uses, just
+    populated instead of cleared.
+    """
+    calls: list[object] = []
+
+    embedder_module = types.ModuleType("corpus_query.models.embedder")
+    embedder_module.EMBEDDING_MODEL_ID = "fake/embedder"
+    embedder_module.load_embedder = lambda: calls.append("load_embedder")
+
+    reranker_module = types.ModuleType("corpus_query.models.reranker")
+    reranker_module.RERANKER_MODEL_ID = "fake/reranker"
+    reranker_module.load_reranker = lambda: calls.append("load_reranker")
+
+    monkeypatch.setitem(sys.modules, "corpus_query.models.embedder", embedder_module)
+    monkeypatch.setitem(sys.modules, "corpus_query.models.reranker", reranker_module)
+
+    def fake_prefer_offline(repo_ids):
+        calls.append(("prefer_offline", tuple(repo_ids)))
+        return True
+
+    monkeypatch.setattr(
+        "corpus_query.models.hf_home.prefer_offline", fake_prefer_offline
+    )
+
+    _warm_models()
+
+    assert calls == [
+        ("prefer_offline", ("fake/embedder", "fake/reranker")),
+        "load_embedder",
+        "load_reranker",
+    ]
 
 
 def test_open_resources_opens_the_store_and_the_index(tmp_path, ingest):

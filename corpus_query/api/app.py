@@ -243,6 +243,12 @@ def _warm_models() -> None:
     same pattern :mod:`corpus_query.retrieval.dense` and
     :mod:`corpus_query.retrieval.search` use.
 
+    Before either loader runs, :func:`corpus_query.models.hf_home.
+    prefer_offline` checks whether both models are already fully cached. A
+    warm cache skips the hub round trip a load would otherwise make to
+    revalidate files it already has; a cold or partially cached one is left
+    to download whatever is missing, exactly as before.
+
     Raises:
         StartupError: If the models extra is not installed. Searching
             without it is not possible, so it is reported here with the
@@ -250,13 +256,17 @@ def _warm_models() -> None:
             a startup hook.
     """
     try:
-        from corpus_query.models.embedder import load_embedder
-        from corpus_query.models.reranker import load_reranker
+        from corpus_query.models.embedder import EMBEDDING_MODEL_ID, load_embedder
+        from corpus_query.models.reranker import RERANKER_MODEL_ID, load_reranker
     except ImportError as exc:
         raise StartupError(
             f"the embedding and reranking models are not installed ({exc}). "
             f"Run `uv sync --extra models` and try again."
         ) from exc
+
+    from corpus_query.models.hf_home import prefer_offline
+
+    prefer_offline([EMBEDDING_MODEL_ID, RERANKER_MODEL_ID])
 
     load_embedder()
     load_reranker()
