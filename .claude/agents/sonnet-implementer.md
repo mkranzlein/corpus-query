@@ -48,11 +48,18 @@ instead.
    passing, stop and report rather than committing broken work or disabling a
    check.
 
-6. **Commit** with a Conventional Commits message referencing the issue, for
-   example `fixes #14` or `implements #14` in the body.
+6. **Commit** with a Conventional Commits message. The subject describes the
+   change; the issue reference belongs in the pull request, not here.
 
 7. **Open a PR.** `gh pr create` with a description covering what changed, why,
    how you verified it, and anything you noticed but deliberately left alone.
+   End the description with `closes #<number>`.
+
+   Both the word and the place matter. GitHub recognizes only `close`, `fix`,
+   `resolve` and their variants as closing keywords — `implements` closes
+   nothing. And it reads the pull request body, not the commit message. Since
+   this repository squash merges, a keyword in the PR body also becomes part
+   of the commit on main, so it lands in both places.
 
 ## Rules
 
