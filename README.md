@@ -110,10 +110,13 @@ curl -s localhost:8000/search \
       "chunk_id": 412,
       "text": "Priya: Where are we on the rev B boards?\nMarcus: Two weeks out, assuming the connectors land. I'll confirm the lead time with Devon before we commit to the date.",
       "document_slug": "rev-b-schedule",
-      "subject": "Rev B schedule",
-      "meeting_date": "2026-03-04",
-      "turn_start": 0,
-      "turn_end": 1,
+      "source_kind": "transcript",
+      "title": "Rev B schedule",
+      "document_date": "2026-03-04",
+      "author": null,
+      "location": "turns 0-1",
+      "span_start": 0,
+      "span_end": 1,
       "topics": ["Hardware", "Supply chain"],
       "time_sensitivity": "near_term",
       "business_impact": "moderate",
@@ -217,8 +220,9 @@ uv run scripts/ingest.py                 # free, offline, deterministic
 uv run scripts/enrich.py                 # billed; --dry-run prints the prompts
 ```
 
-Ingestion splits transcripts into chunks of whole turns and writes documents,
-attendees, and chunks. Enrichment adds a summary, topics, a time sensitivity,
+Ingestion reads each document with the reader for its format — a transcript is
+split into chunks of whole turns — and writes documents, attendees, and
+chunks. Enrichment adds a summary, topics, a time sensitivity,
 a business impact, and an embedding per chunk. Querying reads what those three
 leave behind and calls nothing.
 
