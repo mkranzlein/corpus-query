@@ -297,10 +297,17 @@ cdk synth
 cdk deploy
 ```
 
-It creates a customer-managed IAM policy allowing
-`bedrock-mantle:CreateInference` on that project ARN alone, and a monthly cost
-budget that alerts at 80% of actual spend and at a forecast of 100%. The
-policy's ARN is a stack output.
+It creates a customer-managed IAM policy and a monthly cost budget that alerts
+at 80% of actual spend and at a forecast of 100%. The policy's ARN is a stack
+output.
+
+The policy carries two statements, because calling with an API key needs the
+credential authorized as well as the call. `bedrock-mantle:CreateInference` is
+scoped to that project ARN alone, and that is what keeps inference confined to
+this project. `bedrock-mantle:CallWithBearerToken` is what permits presenting
+the key at all; it is evaluated against `*` rather than against a project,
+because it authorizes the credential rather than any particular call. An
+identity holding only the second one can run no inference anywhere.
 
 #### 3. Mint the API key
 
