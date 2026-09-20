@@ -39,10 +39,11 @@ def test_the_four_sections_appear_in_order(make_meeting):
     ]
 
 
-def test_the_header_carries_subject_date_and_attendees(make_meeting):
+def test_the_header_carries_subject_date_length_and_attendees(make_meeting):
     rendered = render_meeting(make_meeting())
     assert rendered.startswith("# Rev B schedule\n")
     assert "- **Date:** 2026-03-04" in rendered
+    assert "- **Length:** 30 minutes" in rendered
     assert "- **Attendees:** Priya, Marcus, Sofia" in rendered
 
 

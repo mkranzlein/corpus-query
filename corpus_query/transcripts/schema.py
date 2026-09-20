@@ -136,6 +136,12 @@ class Meeting(BaseModel):
 
     subject: str = Field(description="What the meeting was about, as a short title.")
     date: str = Field(description="The date the meeting happened, as YYYY-MM-DD.")
+    length_minutes: int = Field(
+        description=(
+            "How long the meeting ran, in minutes. Has to match the amount "
+            "that gets said: people speak at roughly 125 words a minute."
+        )
+    )
     attendees: list[str] = Field(
         description="First names of everyone present, from the roster."
     )
@@ -168,6 +174,14 @@ class Meeting(BaseModel):
             raise ValueError(
                 f"date must be a calendar date written as YYYY-MM-DD, not {value!r}"
             ) from None
+
+    @field_validator("length_minutes")
+    @classmethod
+    def _check_length_minutes(cls, value: int) -> int:
+        """Reject a meeting of no length, or of one that ran backwards."""
+        if value <= 0:
+            raise ValueError(f"length_minutes must be positive, not {value}")
+        return value
 
     @field_validator("attendees")
     @classmethod

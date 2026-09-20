@@ -56,6 +56,7 @@ def render_meeting(meeting: Meeting) -> str:
         f"# {meeting.subject}",
         "",
         f"- **Date:** {meeting.date}",
+        f"- **Length:** {meeting.length_minutes} minutes",
         f"- **Attendees:** {', '.join(meeting.attendees)}",
         "",
         "## Transcript",

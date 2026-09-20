@@ -16,6 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 _MEETING: dict[str, Any] = {
     "subject": "Rev B schedule",
     "date": "2026-03-04",
+    "length_minutes": 30,
     "attendees": ["Priya", "Marcus", "Sofia"],
     "turns": [
         {"speaker": "Priya", "text": "Where are we on the rev B boards?"},
