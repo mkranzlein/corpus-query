@@ -31,7 +31,9 @@ node_modules/
 data/transcripts/
 data/*.db
 
-# Model caches kept inside the project
+# Model weights and the vector index built from them, both kept inside the
+# project instead of a user's home directory. Rebuilt on demand; see
+# corpus_query/models/hf_home.py and corpus_query/retrieval/index.py.
 .cache/
 
 # Claude Code worktrees

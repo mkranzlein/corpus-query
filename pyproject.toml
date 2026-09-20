@@ -7,10 +7,13 @@ requires-python = ">=3.14"
 dependencies = [
     "aws-cdk-lib>=2.170.0",
     "boto3>=1.35.0",
+    "chromadb>=1.5.9",
     "constructs>=10.0.0,<11.0.0",
+    "numpy>=2.5.3",
     "openai>=3.16.2",
     "pydantic>=2.13.5",
     "python-dotenv>=1.2.3",
+    "sentence-transformers>=6.1.0",
 ]
 
 [dependency-groups]
@@ -41,6 +44,9 @@ match = "main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: exercises a real model load; skipped when weights are not cached.",
+]
 
 # Coverage is measured over the application, the infrastructure definitions,
 # and the entry points under scripts/, since the tests drive those directly.
