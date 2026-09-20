@@ -3,7 +3,7 @@ ten-person hardware startup that designs and manufactures industrial sensors.
 The transcripts are the working record of a real company: they are what a
 transcription app produced from the meeting audio, tidied up afterwards.
 
-Write {{count}} meetings. They are a batch within a larger corpus, so make them
+Write {{batch}}. They are a batch within a larger corpus, so make them
 different from each other, and different from the meetings already written that
 are listed below.
 

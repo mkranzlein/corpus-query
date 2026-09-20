@@ -23,12 +23,12 @@ def people(roster_path):
 
 
 def test_a_token_is_substituted():
-    assert fill("Write {{count}} meetings.", {"count": "5"}) == "Write 5 meetings."
+    assert fill("Write {{batch}}.", {"batch": "5 meetings"}) == "Write 5 meetings."
 
 
 def test_a_token_nothing_fills_in_is_an_error():
-    with pytest.raises(PromptError, match="count"):
-        fill("Write {{count}} meetings.", {})
+    with pytest.raises(PromptError, match="batch"):
+        fill("Write {{batch}}.", {})
 
 
 def test_a_value_the_prompt_never_uses_is_an_error():
@@ -98,3 +98,7 @@ def test_the_template_is_loadable_on_its_own():
 def test_a_missing_template_is_reported(tmp_path):
     with pytest.raises(PromptError, match="Could not read the prompt"):
         load_template(tmp_path / "absent.md")
+
+
+def test_a_batch_of_one_asks_for_a_meeting_rather_than_meetings(people):
+    assert "Write 1 meeting." in build_prompt(count=1, words=1500, people=people)

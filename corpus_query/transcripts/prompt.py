@@ -111,7 +111,7 @@ def build_prompt(
     return fill(
         load_template() if template is None else template,
         {
-            "count": str(count),
+            "batch": f"{count} meeting{'' if count == 1 else 's'}",
             "words": f"{words:,}",
             "min_words": f"{low:,}",
             "max_words": f"{high:,}",

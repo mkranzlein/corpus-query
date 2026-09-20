@@ -166,7 +166,7 @@ def test_the_request_carries_the_prompt_schema_model_and_temperature(
     assert call["model"] == "openai.gpt-5.6-sol"
     assert call["text_format"] is MeetingBatch
     assert call["temperature"] == COLD_TEMPERATURE
-    assert "Write 1 meetings" in call["input"]
+    assert "Write 1 meeting." in call["input"]
 
 
 def test_one_run_makes_exactly_one_request(run, batch_of):
