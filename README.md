@@ -297,6 +297,15 @@ It creates a customer-managed IAM policy, attaches it to `AWS_INFERENCE_USER`,
 and creates a monthly cost budget that alerts at 80% of actual spend and at a
 forecast of 100%. The policy's ARN is a stack output.
 
+At 100% of actual spend the budget also acts: it attaches a second managed
+policy, which denies every `bedrock:*` action, to `AWS_INFERENCE_USER`. An
+explicit deny outranks the inference grant, so the key stops working until
+the deny policy is detached. The stack creates that policy but never attaches
+it, and the execution role it hands to the budget can attach or detach that one
+policy on that one user and nothing else. AWS reports cost with a delay of
+several hours, so this bounds spend rather than stopping it at the exact
+dollar.
+
 The policy carries two statements. The first allows `bedrock:InvokeModel` and
 `bedrock:InvokeModelWithResponseStream` on two ARNs and nothing else: the
 inference profile the scripts name, and the foundation model behind it. The

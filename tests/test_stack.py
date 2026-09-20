@@ -71,7 +71,7 @@ def test_policy_allows_inference_on_one_model_and_nothing_else(template: Templat
     statement — or a widened resource on the inference half, which is the
     whole point of scoping it to a profile — fails here.
     """
-    template.resource_count_is("AWS::IAM::ManagedPolicy", 1)
+    template.resource_count_is("AWS::IAM::ManagedPolicy", 2)
     template.has_resource_properties(
         "AWS::IAM::ManagedPolicy",
         {
@@ -120,8 +120,8 @@ def test_the_policy_name_is_left_to_cloudformation(template: Template):
     collides with the original — and both of those fields can only change by
     replacement. Naming it is therefore a one-way door, so it is not named.
     """
-    (policy,) = template.find_resources("AWS::IAM::ManagedPolicy").values()
-    assert "ManagedPolicyName" not in policy["Properties"]
+    for policy in template.find_resources("AWS::IAM::ManagedPolicy").values():
+        assert "ManagedPolicyName" not in policy["Properties"]
 
 
 def test_stack_refuses_to_synthesize_without_an_identity_to_attach_to():
@@ -191,6 +191,48 @@ def test_budget_also_alerts_on_the_forecast(template: Template):
         for entry in budget["Properties"]["NotificationsWithSubscribers"]
     ]
     assert types == ["ACTUAL", "FORECASTED"]
+
+
+def test_going_over_budget_attaches_a_deny_policy_to_the_user(template: Template):
+    template.has_resource_properties(
+        "AWS::Budgets::BudgetsAction",
+        {
+            "BudgetName": "corpus-query-monthly",
+            "NotificationType": "ACTUAL",
+            "ActionType": "APPLY_IAM_POLICY",
+            "ActionThreshold": {"Type": "PERCENTAGE", "Value": 100},
+            "ApprovalModel": "AUTOMATIC",
+            "Definition": {
+                "IamActionDefinition": Match.object_like(
+                    {"Users": ["corpus-query-inference"]}
+                )
+            },
+        },
+    )
+
+
+def test_cutoff_policy_denies_bedrock_and_is_not_attached_by_the_stack(
+    template: Template,
+):
+    template.has_resource_properties(
+        "AWS::IAM::ManagedPolicy",
+        {
+            "PolicyDocument": Match.object_like(
+                {
+                    "Statement": [
+                        Match.object_like(
+                            {
+                                "Effect": "Deny",
+                                "Action": "bedrock:*",
+                                "Resource": "*",
+                            }
+                        )
+                    ]
+                }
+            ),
+            "Users": Match.absent(),
+        },
+    )
 
 
 def test_budget_limit_defaults_when_unset():

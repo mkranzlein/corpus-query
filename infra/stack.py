@@ -55,6 +55,11 @@ ACTUAL_ALERT_THRESHOLD = 80
 #: Percentage of the budget at which the month's forecast raises an alert.
 FORECAST_ALERT_THRESHOLD = 100
 
+#: Percentage of the budget at which spend so far cuts off inference. Alerts
+#: only tell someone; at this point the stack attaches a policy that denies
+#: every Bedrock action to the inference user, so the key stops working.
+CUTOFF_THRESHOLD = 100
+
 _DEFAULT_BUDGET_LIMIT_USD = 20.0
 
 
@@ -144,6 +149,50 @@ class CorpusQueryStack(Stack):
             ],
         )
 
+        # An explicit deny outranks the allow above, so attaching this to the
+        # user is enough to stop all Bedrock calls without touching the
+        # inference policy. It is deliberately not attached here: the budget
+        # action attaches it when spend crosses the limit, and detaching it
+        # is how access is restored.
+        self.cutoff_policy = iam.ManagedPolicy(
+            self,
+            "CutoffPolicy",
+            description=f"Deny all Bedrock access to {project_name} once over budget.",
+            statements=[
+                iam.PolicyStatement(
+                    sid="DenyBedrockOverBudget",
+                    effect=iam.Effect.DENY,
+                    actions=["bedrock:*"],
+                    resources=["*"],
+                )
+            ],
+        )
+
+        cutoff_role = iam.Role(
+            self,
+            "CutoffRole",
+            assumed_by=iam.ServicePrincipal("budgets.amazonaws.com"),
+            description="Lets the budget action attach the cutoff policy.",
+        )
+        cutoff_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["iam:AttachUserPolicy", "iam:DetachUserPolicy"],
+                resources=[
+                    self.format_arn(
+                        service="iam",
+                        region="",
+                        resource="user",
+                        resource_name=inference_user,
+                    )
+                ],
+                conditions={
+                    "ArnEquals": {
+                        "iam:PolicyARN": self.cutoff_policy.managed_policy_arn
+                    }
+                },
+            )
+        )
+
         self.budget = budgets.CfnBudget(
             self,
             "SpendBudget",
@@ -168,6 +217,31 @@ class CorpusQueryStack(Stack):
                 ),
             ],
         )
+
+        cutoff = budgets.CfnBudgetsAction(
+            self,
+            "CutoffAction",
+            budget_name=f"{project_name}-monthly",
+            notification_type="ACTUAL",
+            action_type="APPLY_IAM_POLICY",
+            action_threshold=budgets.CfnBudgetsAction.ActionThresholdProperty(
+                type="PERCENTAGE", value=CUTOFF_THRESHOLD
+            ),
+            definition=budgets.CfnBudgetsAction.DefinitionProperty(
+                iam_action_definition=budgets.CfnBudgetsAction.IamActionDefinitionProperty(
+                    policy_arn=self.cutoff_policy.managed_policy_arn,
+                    users=[inference_user],
+                )
+            ),
+            execution_role_arn=cutoff_role.role_arn,
+            approval_model="AUTOMATIC",
+            subscribers=[
+                budgets.CfnBudgetsAction.SubscriberProperty(
+                    address=notification_email, type="EMAIL"
+                )
+            ],
+        )
+        cutoff.node.add_dependency(self.budget)
 
         CfnOutput(
             self,
