@@ -1,0 +1,42 @@
+[project]
+name = "corpus-query"
+version = "0.1.0"
+description = "Corpus query application and its AWS infrastructure."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "aws-cdk-lib>=2.170.0",
+    "boto3>=1.35.0",
+    "constructs>=10.0.0,<11.0.0",
+    "python-dotenv>=1.2.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "infra"
+module-root = ""
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "D", "ANN", "RUF"]
+ignore = ["D203", "D213"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D100", "D103", "ANN"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
