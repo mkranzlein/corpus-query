@@ -1,0 +1,163 @@
+{
+  "subject": "Support Backlog and Ticket SLA Review",
+  "date": "2026-06-02",
+  "attendees": [
+    "Priya",
+    "Theo",
+    "Elena",
+    "Renata"
+  ],
+  "turns": [
+    {
+      "speaker": "Theo",
+      "text": "So I wanted to get this on the calendar because the numbers have gotten to a point where I'm not comfortable sitting on them. I'll just — let me share what I'm looking at. End of May, we closed out with 47 open tickets. That's up from 31 at the end of April and 22 at the end of March. The trend is not good."
+    },
+    {
+      "speaker": "Priya",
+      "text": "What's driving the increase? Is it volume of new tickets, slower resolution, or both?"
+    },
+    {
+      "speaker": "Theo",
+      "text": "Both, honestly, but the resolution side is the bigger problem right now. New ticket volume is up maybe 20% quarter over quarter, which is actually expected given we've shipped more units. But our median time-to-resolution has gone from 4.2 days in Q1 to 7.1 days so far in Q2. We're supposed to be at 5 days or under per our published SLA."
+    },
+    {
+      "speaker": "Elena",
+      "text": "Are customers noticing? Have we had any complaints specifically about support response times?"
+    },
+    {
+      "speaker": "Theo",
+      "text": "Two in writing that I know of. Carver Automation — their engineering lead sent a fairly sharp email last week about a ticket that sat for nine days without a substantive response. And there's a note in the Hendricks Chemical account history, though that one was more of a verbal comment on a call, not a formal complaint."
+    },
+    {
+      "speaker": "Elena",
+      "text": "Carver is an active sales prospect right now. A nine-day ticket on their account is — that's a real problem."
+    },
+    {
+      "speaker": "Theo",
+      "text": "I know. I personally resolved that ticket the same day I saw the email. But the damage may already be done."
+    },
+    {
+      "speaker": "Priya",
+      "text": "What's causing the resolution slowdown? Is it your team's capacity, or is it tickets that require engineering input to close?"
+    },
+    {
+      "speaker": "Theo",
+      "text": "Mostly the second one. Out of the 47 open tickets right now, I'd say about 19 of them are sitting waiting for input from Marcus or Sofia. Firmware questions, calibration edge cases, things I can't answer without their guidance. And I understand they're stretched — I'm not criticizing them — but it creates a bottleneck that I have no way to clear on my own."
+    },
+    {
+      "speaker": "Priya",
+      "text": "Is there a defined escalation path for tickets that need engineering input? Like, a target turnaround time on Marcus or Sofia's end?"
+    },
+    {
+      "speaker": "Theo",
+      "text": "There isn't, formally. We have the Priority 1 escalation process for critical issues, but for the kind of mid-level technical questions that make up most of these 19 tickets, there's no SLA on the engineering response side. It's informal."
+    },
+    {
+      "speaker": "Renata",
+      "text": "What's the cost implication if we miss SLA at scale? Do our service contracts have penalty clauses?"
+    },
+    {
+      "speaker": "Theo",
+      "text": "I checked. Most of our current service contracts have a response-time commitment but the remedy is limited to service credit — a pro-rated day of contract value per day of SLA miss, capped at ten percent of the contract value. So it's not catastrophic financially, but it's not nothing, and more importantly it affects renewal probability."
+    },
+    {
+      "speaker": "Renata",
+      "text": "What's the total exposure if we're currently missing SLA on those 19 tickets?"
+    },
+    {
+      "speaker": "Theo",
+      "text": "I haven't calculated the exact credit exposure. I can do that and come back to you. My rough sense is it's probably a few thousand dollars, but the renewal risk is the bigger number."
+    },
+    {
+      "speaker": "Elena",
+      "text": "The renewal risk is real. If Carver is watching how we handle their support tickets during the evaluation period, and we're slow, that affects whether they buy. And for existing customers, support experience is the number one factor I hear about in renewal conversations."
+    },
+    {
+      "speaker": "Priya",
+      "text": "Theo, what would actually fix this? What do you need?"
+    },
+    {
+      "speaker": "Theo",
+      "text": "A few things. First, a formal engineering response SLA — something like 24 hours for a first response on tickets that need engineering input, with Priority 1 being four hours. That doesn't mean they have to resolve it in 24 hours, just acknowledge it and give me a timeline. Second, I want to build a technical knowledge base so that for recurring question types I can resolve them myself without pulling Marcus or Sofia every time. I've been meaning to do this for months but I don't have the bandwidth to do it alone. Third, honestly, an additional support resource. Even a part-time contractor who can handle tier-one tickets would let me focus on the escalations."
+    },
+    {
+      "speaker": "Priya",
+      "text": "On the engineering SLA, I can talk to Marcus and get that formalized. That seems like a quick win. On the knowledge base, what would it take to build it?"
+    },
+    {
+      "speaker": "Theo",
+      "text": "If I had dedicated time from Sofia for, let's say, two half-days over the next three weeks, we could document the top fifteen or twenty recurring question types. That would probably cover 60% of the tickets that currently bounce to engineering."
+    },
+    {
+      "speaker": "Priya",
+      "text": "That's a reasonable ask. I'll set that up with Marcus. On the contractor question, Renata, what does that look like budget-wise?"
+    },
+    {
+      "speaker": "Renata",
+      "text": "A part-time technical support contractor, maybe 20 hours a week, is probably $2,500 to $3,500 per month depending on the skill level. That's within the range we could approve operationally without a board amendment, but it would need to come from somewhere. What's the current support budget headroom?"
+    },
+    {
+      "speaker": "Theo",
+      "text": "I genuinely don't know the budget number off the top of my head. I'd have to look."
+    },
+    {
+      "speaker": "Renata",
+      "text": "I can pull the Q2 actuals against the support line and see what the headroom is. Give me a day or two."
+    },
+    {
+      "speaker": "Priya",
+      "text": "Let's get that number and make a decision quickly. The backlog isn't going to fix itself. Theo, what's your read on whether the 47 open tickets continue to grow in June if we don't change anything?"
+    },
+    {
+      "speaker": "Theo",
+      "text": "Yes. New unit shipments are up, customer base is growing, and Sofia is going to be — I assume she's going to be busy with other things this quarter. Without intervention, I'd expect to be at 60-plus by end of June."
+    },
+    {
+      "speaker": "Elena",
+      "text": "One thing I want to flag that's maybe a separate conversation but related — are we capturing ticket themes in a way that feeds back to product development? Because if there are recurring issues that show up in support that Engineering doesn't know about, that's a missed loop."
+    },
+    {
+      "speaker": "Theo",
+      "text": "We track ticket categories, but I don't think there's a regular review of that data by Engineering. I share a monthly summary with Marcus but I don't know how much it gets used."
+    },
+    {
+      "speaker": "Elena",
+      "text": "It might be worth making that more formal. But I agree that's a separate conversation."
+    },
+    {
+      "speaker": "Priya",
+      "text": "Let's table that one and come back to it. For today, let's be clear on what we're walking out with. Theo, I'll get you the engineering response SLA formalized with Marcus this week. Renata will pull the budget headroom on the contractor question. And I want you and Sofia to connect on the knowledge base sprint as soon as Marcus and I align on freeing up her time. Does that cover the immediate needs?"
+    },
+    {
+      "speaker": "Theo",
+      "text": "That covers it for now, yes. The Carver situation is the one I'd ask you to keep an eye on from the sales side — I don't want that relationship to be damaged by something that happened on my end."
+    },
+    {
+      "speaker": "Elena",
+      "text": "I'll reach out to their engineering lead personally this week. Frame it as a check-in, make sure they feel heard."
+    }
+  ],
+  "decisions": [
+    "A formal engineering response SLA will be established, targeting 24-hour first response on tickets requiring engineering input and 4-hour response for Priority 1 issues.",
+    "Sofia will spend approximately two half-days with Theo over the next three weeks to build a technical knowledge base covering the top recurring ticket types.",
+    "Renata will assess budget headroom for a part-time technical support contractor before a hiring decision is made."
+  ],
+  "action_items": [
+    {
+      "assignee": "Priya",
+      "task": "Formalize the engineering response SLA with Marcus and communicate it to Theo this week."
+    },
+    {
+      "assignee": "Renata",
+      "task": "Pull Q2 support budget actuals and assess headroom for a part-time contractor, reporting back within two days."
+    },
+    {
+      "assignee": "Elena",
+      "task": "Reach out personally to Carver Automation's engineering lead this week to check in on their experience and address the delayed ticket."
+    },
+    {
+      "assignee": "Theo",
+      "task": "Calculate the current service credit exposure from open SLA-miss tickets and report back to Renata."
+    }
+  ]
+}

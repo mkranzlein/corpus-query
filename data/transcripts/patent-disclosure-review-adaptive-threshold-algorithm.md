@@ -1,0 +1,50 @@
+# Patent Disclosure Review – Adaptive Threshold Algorithm
+
+- **Date:** 2026-04-23
+- **Attendees:** Priya, Marcus, Sofia, Callum
+
+## Transcript
+
+[Callum]: Thanks for pulling this together quickly. I got Sofia's disclosure form last Thursday and I've had a chance to read through it. Before I give you my preliminary read, it would help to hear from Sofia directly about what the invention actually does, in plain terms, so we're all starting from the same place.
+[Sofia]: Sure. So the background is that our sensors have always used a fixed detection threshold — you set a trigger level at calibration and the unit fires when the signal crosses it. The problem is that in real industrial environments, background noise isn't constant. You get drift over time, you get interference from nearby equipment, temperature changes the baseline. So fixed thresholds either miss events because they're set too high, or they false-trigger because the baseline has crept up into the threshold band. What I built is an algorithm that continuously updates the threshold based on a rolling statistical model of recent signal history. It adapts in real time to the actual noise floor the sensor is seeing, so the detection window stays consistent relative to background rather than relative to an absolute value set at calibration.
+[Marcus]: The practical result is about a 40% reduction in false positives in our field testing, and we've seen improved sensitivity at the low end of the detection range.
+[Callum]: Okay. And this is implemented purely in firmware?
+[Sofia]: Purely firmware, yes. No hardware changes required. It runs on the existing processor in the XT-9.
+[Callum]: That's relevant because it affects what type of claim we'd pursue. When did you first reduce this to practice — meaning when did it first run on actual hardware and produce those results?
+[Sofia]: The first successful bench test was February 11th. I have lab notes with timestamps.
+[Callum]: Good, keep those. That date matters. Now, the question I have to ask before we go any further: have you discussed this algorithm with anyone outside the company? In any form — conference, paper, email, a conversation with a customer?
+[Sofia]: No. I mentioned to Marcus that I was working on it, but that was internal. Nothing external.
+[Callum]: Marcus, same question from your side — have you described this to anyone outside the company?
+[Marcus]: Not the algorithm specifically. I've told customers in general terms that we're working on improving detection reliability, but nothing that would describe the mechanism.
+[Callum]: That's fine. General roadmap language doesn't create a disclosure problem. Okay, so here's my preliminary read. The adaptive threshold concept in signal processing is not new — there's substantial prior art in academic literature and in patents held by larger players, some going back fifteen-plus years. The question is whether Sofia's specific implementation — the particular statistical model, the update cadence, the way it integrates with the sensor's existing signal chain — is differentiated enough from what's already out there to support a patentable claim. I can't answer that without a prior art search, which I'd want to commission from our patent counsel. But my instinct, based on reading the disclosure, is that there's something here worth searching.
+[Priya]: What's the cost of the prior art search?
+[Callum]: Typically $3,000 to $5,000 for a competent search and preliminary opinion. If the search comes back favorable and we decide to file, a provisional application is another $8,000 to $12,000 in legal fees on top of the USPTO filing fee. So you're looking at $12,000 to $18,000 all-in to get to a provisional filing.
+[Priya]: And the value of getting there is what, exactly? What does a patent on this actually do for us?
+[Callum]: A few things. It's a defensive asset — if a larger competitor develops something similar and tries to assert against us, having a patent in this space gives us a cross-licensing argument. It's a commercial differentiator — we can market the product as incorporating a patented detection algorithm, which has value in procurement conversations, particularly with customers who care about IP robustness. And if the technology turns out to be broadly applicable, it's a potential licensing revenue stream, though I wouldn't plan around that.
+[Marcus]: I want to flag something. We've been thinking about whether to license this algorithm to OEM partners rather than keeping it exclusive to our own product line. If we do that, the patent is basically a prerequisite — you can't license something you don't own.
+[Priya]: Is the OEM licensing path something we've actually decided on, or is it still speculative?
+[Marcus]: Still speculative, but the conversation has come up with at least one potential partner.
+[Callum]: If there's a live partner conversation happening, I'd strongly advise against describing the algorithm in any detail to that partner until we've at least filed a provisional. A provisional establishes a priority date and gives us twelve months to decide whether to file a full application. We'd be protected during any licensing negotiation.
+[Sofia]: How long does the full patent process take if we do decide to file the full application?
+[Callum]: Software and firmware patents in the US are averaging three to four years from filing to grant right now. So you'd have the provisional protection during the licensing window, but the granted patent is a long-term asset.
+[Priya]: I want to move on this. Callum, commission the prior art search. Let's see what comes back before we make the filing decision, but I don't want to lose the priority date window by being slow. What's the timeline on the search?
+[Callum]: I can have patent counsel engaged by end of this week. A thorough search usually takes three to four weeks. So we'd have the opinion by late May.
+[Priya]: Do it. Sofia, please make sure your lab notes from February 11th onward are preserved and organized somewhere I can access them if needed.
+[Sofia]: Already backed up in two places. I'll put together a clean summary document as well.
+[Callum]: One more thing — until the search comes back and we've made a filing decision, please treat this algorithm as confidential. No presentations, no papers, nothing in external marketing materials. If the OEM partner conversation progresses, route it through me first and we'll get an NDA in place.
+[Marcus]: Understood. Should I also hold off on including any reference to the algorithm in the XT-9 product roadmap materials?
+[Callum]: Yes. Keep it out of any document that might go external. Internal roadmaps are fine as long as distribution is controlled.
+[Priya]: Are there any other recent firmware developments that haven't gone through a disclosure review? I want to make sure we're not leaving IP on the table elsewhere.
+[Sofia]: Nothing that I think rises to this level. There are some incremental improvements to our calibration routines, but I wouldn't characterize them as novel in the same way.
+[Marcus]: I'd second that. This one stood out to me as potentially patentable when Sofia described it. The rest is solid engineering but not the same category.
+
+## Decisions
+
+- Callum will commission a patent prior art search for Sofia's adaptive threshold algorithm, targeting engagement of patent counsel by end of the week.
+- The algorithm will be treated as confidential until after a filing decision is made; it will not appear in any external materials.
+- The OEM partner conversation must be routed through Callum and preceded by an NDA before any technical details of the algorithm are shared.
+
+## Action items
+
+- **Callum:** Engage patent counsel to conduct a prior art search on the adaptive threshold algorithm, targeting a search opinion by late May.
+- **Sofia:** Prepare a clean summary document of lab notes and test results from February 11th onward and ensure they are preserved and accessible.

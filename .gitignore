@@ -26,10 +26,10 @@ node_modules/
 .env.*
 !.env.example
 
-# Generated corpus. Transcripts are produced by hand with
-# scripts/generate_transcripts.py and are not committed.
-data/transcripts/
-data/*.db
+# The generated corpus (data/transcripts/ and data/corpus.db) is committed so
+# a clone can query without generating or enriching anything. Only the
+# working files under data/ that aren't part of the corpus stay ignored here;
+# see scripts/generate_transcripts.py to build a corpus of your own.
 
 # Model weights and the vector index built from them, both kept inside the
 # project instead of a user's home directory. Rebuilt on demand; see

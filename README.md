@@ -57,17 +57,16 @@ uv sync --extra models
 # 3. Fetch the embedding and reranking weights (~215 MB, once).
 uv run scripts/fetch_models.py
 
-# 4. Start the service. Needs a corpus at data/corpus.db — see below.
+# 4. Start the service. The committed corpus at data/corpus.db is ready to query.
 uv run scripts/serve.py
 ```
 
-That fourth step needs a document store to search, and a fresh clone does not
-come with one: the database is not committed. If you were given one, put it at
-`data/corpus.db` or point `--db` at it. If you were not, you build it yourself,
-which costs money and needs credentials — see [Building a
-corpus](#building-a-corpus). Either way the service says so and exits rather
-than starting empty; [What has to be in place](#what-has-to-be-in-place) has
-the exact message.
+That fourth step needs a document store to search, and the one committed at
+`data/corpus.db` is ready as-is — nothing to build, no credentials needed. If
+you want to query a corpus of your own instead, see [Building a
+corpus](#building-a-corpus). Either way, if the database is ever missing or
+empty, the service says so and exits rather than starting empty;
+[What has to be in place](#what-has-to-be-in-place) has the exact message.
 
 `--extra models` is required here, unlike elsewhere in the project. It
 installs sentence-transformers and torch, which are what embed your query and
@@ -189,9 +188,9 @@ question with an empty result list, which looks exactly like a question the
 corpus cannot answer — a failure at startup is worth more than a hundred
 plausible-looking empty responses.
 
-The database is not committed to this repository, so a fresh clone does not
-have one. Either use one you were given, at `data/corpus.db` or wherever you
-like with `--db`, or build your own.
+The database ships with this repository, so a fresh clone already has one at
+`data/corpus.db`. Point `--db` elsewhere to use a different store, or build
+your own — see [Building a corpus](#building-a-corpus).
 
 ---
 
