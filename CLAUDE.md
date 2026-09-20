@@ -70,6 +70,10 @@ Two details worth knowing:
 - `scripts/generate_transcripts.py` generates a batch of meeting transcripts,
   which is also a real, billed call. Ask before running it. `--dry-run` prints
   the assembled prompt and calls nothing.
+- `scripts/enrich.py` summarizes, files, and assesses every ingested
+  document, which is several real, billed calls per document. Ask before
+  running it. `--dry-run` prints the prompts and calls nothing. The embedding
+  it also does needs the models extra: `uv sync --extra models`.
 
 ## Starting new work
 
