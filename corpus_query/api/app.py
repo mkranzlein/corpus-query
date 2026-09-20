@@ -113,15 +113,21 @@ def open_resources(
         (chunks,) = connection.execute("SELECT count(*) FROM chunks").fetchone()
     except sqlite3.Error as exc:
         raise StartupError(f"cannot read the document store at {path}: {exc}") from exc
-    if not chunks:
-        raise StartupError(
-            f"the document store at {path} holds no chunks. Ingest a corpus "
-            f"first: uv run python -m scripts.ingest"
-        )
-
-    collection = open_index(connection, index_dir)
-    if warm_models:
-        _warm_models()
+    # Anything that goes wrong from here on leaves the service refusing to
+    # start, so the connection is closed on the way out rather than left to
+    # the garbage collector.
+    try:
+        if not chunks:
+            raise StartupError(
+                f"the document store at {path} holds no chunks. Ingest a "
+                f"corpus first: uv run python -m scripts.ingest"
+            )
+        collection = open_index(connection, index_dir)
+        if warm_models:
+            _warm_models()
+    except BaseException:
+        connection.close()
+        raise
     return Resources(connection=connection, collection=collection)
 
 
