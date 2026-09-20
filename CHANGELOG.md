@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v2.5.0 (2026-09-20)
+
+### Documentation
+
+- Move provisioning to its own page and shorten the README
+  ([#66](https://github.com/mkranzlein/corpus-query/pull/66),
+  [`4933fed`](https://github.com/mkranzlein/corpus-query/commit/4933fedd00337dc32b6bbd11c28a6cd4b62e0938))
+
+### Features
+
+- Add the office document generation inputs
+  ([#68](https://github.com/mkranzlein/corpus-query/pull/68),
+  [`91d750b`](https://github.com/mkranzlein/corpus-query/commit/91d750bc8b5d4b9954a2a56739bc3708ad06a475))
+
+
 ## v2.4.0 (2026-09-20)
 
 ### Documentation
