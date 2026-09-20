@@ -27,7 +27,7 @@ of is later work too. Until then, `curl` is the interface.
 
 ## Querying needs no AWS account
 
-Search runs entirely on your machine: the committed SQLite database, a local
+Search runs entirely on your machine: a SQLite document store on disk, a local
 embedding model, and a local reranking model. **No AWS account, no Bedrock
 endpoint, and no API key are involved in answering a query.** Nothing about
 `POST /search` reaches a network service, and it costs nothing to run.
@@ -54,9 +54,17 @@ git clone https://github.com/mkranzlein/corpus-query.git
 cd corpus-query
 uv sync --extra models
 
-# 3. Start the service.
+# 3. Start the service. Needs a corpus at data/corpus.db — see below.
 uv run python -m scripts.serve
 ```
+
+That third step needs a document store to search, and a fresh clone does not
+come with one: the database is not committed. If you were given one, put it at
+`data/corpus.db` or point `--db` at it. If you were not, you build it yourself,
+which costs money and needs credentials — see [Building a
+corpus](#building-a-corpus). Either way the service says so and exits rather
+than starting empty; [What has to be in place](#what-has-to-be-in-place) has
+the exact message.
 
 `--extra models` is required here, unlike elsewhere in the project. It
 installs sentence-transformers and torch, which are what embed your query and
