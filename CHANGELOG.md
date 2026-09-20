@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v1.4.0 (2026-09-20)
+
+### Continuous Integration
+
+- Keep torch out of CI runs ([#39](https://github.com/mkranzlein/corpus-query/pull/39),
+  [`118b2aa`](https://github.com/mkranzlein/corpus-query/commit/118b2aa5b2d92b6978a2af0bb81bd0832dcd5983))
+
+- Make the model stack an optional extra ([#39](https://github.com/mkranzlein/corpus-query/pull/39),
+  [`118b2aa`](https://github.com/mkranzlein/corpus-query/commit/118b2aa5b2d92b6978a2af0bb81bd0832dcd5983))
+
+### Features
+
+- Add embedding, reranking models and the vector index
+  ([#39](https://github.com/mkranzlein/corpus-query/pull/39),
+  [`118b2aa`](https://github.com/mkranzlein/corpus-query/commit/118b2aa5b2d92b6978a2af0bb81bd0832dcd5983))
+
+
 ## v1.3.1 (2026-09-20)
 
 ### Bug Fixes
