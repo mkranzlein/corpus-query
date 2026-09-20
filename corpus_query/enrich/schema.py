@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from typing import Literal, get_args
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # Plain assignments rather than PEP 695 ``type`` aliases: pydantic renders a
 # named alias as a ``$ref`` into ``$defs``, and an alias used once is clearer
@@ -166,6 +166,20 @@ class TopicMerge(BaseModel):
             raise ValueError("a merge has to name at least one category to fold in")
         _reject_repeats(names, "category")
         return names
+
+    @model_validator(mode="after")
+    def _check_keep_is_not_merged_into_itself(self) -> TopicMerge:
+        """Reject a group that folds the surviving category into itself.
+
+        Returns:
+            The merge, unchanged.
+
+        Raises:
+            ValueError: If ``keep`` also appears in ``merge``.
+        """
+        if self.keep.casefold() in {name.casefold() for name in self.merge}:
+            raise ValueError(f"{self.keep!r} cannot be merged into itself")
+        return self
 
 
 class TopicMerges(BaseModel):

@@ -105,8 +105,6 @@ def _apply(connection: sqlite3.Connection, merge: TopicMerge) -> Merged:
     merged, repointed, collapsed = [], 0, 0
     for name in merge.merge:
         topic_id, stored = _lookup(connection, name)
-        if topic_id == keep_id:
-            continue
         moved, dropped = _repoint(connection, topic_id, keep_id)
         connection.execute("DELETE FROM topics WHERE id = ?", (topic_id,))
         merged.append(stored)
