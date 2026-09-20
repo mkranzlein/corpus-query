@@ -7,10 +7,25 @@ requires-python = ">=3.14"
 dependencies = [
     "aws-cdk-lib>=2.170.0",
     "boto3>=1.35.0",
+    "chromadb>=1.5.9",
     "constructs>=10.0.0,<11.0.0",
+    "numpy>=2.5.3",
     "openai>=3.16.2",
     "pydantic>=2.13.5",
     "python-dotenv>=1.2.3",
+]
+
+# The model stack is optional at install time. Embedding and reranking need
+# it; ingestion, the store, and the vector index do not, and neither does CI,
+# which would otherwise install a deep learning stack to run tests that stub
+# it. Anything that loads a model needs `uv sync --extra models` first.
+# torch is named here as well as reached through sentence-transformers,
+# because [tool.uv.sources] below only applies to dependencies declared
+# directly.
+[project.optional-dependencies]
+models = [
+    "sentence-transformers>=6.1.0",
+    "torch>=2.14.0",
 ]
 
 [dependency-groups]
@@ -22,6 +37,18 @@ dev = [
 [build-system]
 requires = ["uv_build>=0.12,<0.13"]
 build-backend = "uv_build"
+
+# torch resolves to the CUDA build on Linux by default, which drags in fifteen
+# nvidia-* packages and triton for a project that runs the models on CPU by
+# design. Pointing Linux at PyTorch's CPU index keeps the install to what is
+# actually used. macOS is left on PyPI, where the wheel is already CPU-only.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
 [tool.uv.build-backend]
 module-name = ["infra", "corpus_query"]
@@ -41,6 +68,9 @@ match = "main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: pulls in torch through sentence-transformers. Deselected in CI,\n     which has no reason to install a deep learning stack to check that a\n     stub was called with the right arguments.",
+]
 
 # Coverage is measured over the application, the infrastructure definitions,
 # and the entry points under scripts/, since the tests drive those directly.
