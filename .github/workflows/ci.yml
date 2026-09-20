@@ -42,10 +42,10 @@ jobs:
           python-version: "3.14"
           enable-cache: true
 
-      # Deliberately not --locked. semantic-release bumps project.version in
-      # pyproject.toml without touching uv.lock, so after every release the
-      # lock records the previous version and --locked would fail here on the
-      # next unrelated pull request. uv sync still installs from the lock.
-      - run: uv sync
+      # --locked fails rather than re-resolving, so the tests run against the
+      # versions the lock pins and a pyproject.toml edit that was never locked
+      # is caught here. The release relocks, so a version bump does not strand
+      # the lock a version behind and break the next pull request.
+      - run: uv sync --locked
 
-      - run: uv run pytest
+      - run: uv run --frozen pytest
