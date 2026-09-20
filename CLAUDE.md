@@ -78,6 +78,14 @@ Two details worth knowing:
   running it. `--dry-run` prints the prompts and calls nothing. The embedding
   it also does needs the models extra: `uv sync --extra models`.
 
+Anything that answers against a local model served by Ollama needs no
+approval and can be run at will. It calls nothing hosted, bills nothing, and
+costs only the time and the laptop's battery, so treat it the way you treat
+running the tests. The rule above is about spending money, not about calling a
+model — where the same code path can be pointed at either backend, the local
+one is the default for trying something out, and the billed one is what you
+ask about.
+
 ## Starting new work
 
 Before creating a feature branch, get back to a clean main:
