@@ -70,13 +70,13 @@ git pull --prune
 
 merged=$(gh pr list --state merged --json headRefName -q '.[].headRefName')
 
-for branch in $merged; do
+while IFS= read -r branch; do
+  [ -n "$branch" ] || continue
   worktree=$(git worktree list --porcelain \
     | awk -v b="branch refs/heads/$branch" '/^worktree /{w=$2} $0==b{print w}')
   [ -n "$worktree" ] && git worktree remove --force "$worktree"
-done
-
-printf '%s\n' $merged | xargs -r -n1 git branch -D 2>/dev/null
+  git branch -D "$branch" 2>/dev/null
+done <<< "$merged"
 
 git worktree prune
 git branch --list 'worktree-agent-*' --format='%(refname:short) %(worktreepath)' \
@@ -84,11 +84,27 @@ git branch --list 'worktree-agent-*' --format='%(refname:short) %(worktreepath)'
   | xargs -r -n1 git branch -d
 ```
 
-The worktrees have to go first: git refuses to delete a branch that is
-checked out in a worktree, so if a background agent's worktree for a merged
-branch is still around, `git branch -D` fails for that branch and
-`2>/dev/null` swallows the error, leaving it behind with no indication
-anything was skipped.
+A branch's worktree has to go before the branch does: git refuses to delete a
+branch that is checked out in a worktree, so if a background agent's worktree
+for a merged branch is still around, `git branch -D` fails for that branch and
+`2>/dev/null` swallows the error, leaving it behind with no indication anything
+was skipped. Handling both in one pass per branch keeps that order.
+
+The loop reads `$merged` line by line rather than iterating `for branch in
+$merged`, because the two shells disagree about the latter. Bash splits an
+unquoted expansion on `IFS`, newline included, and iterates once per branch;
+zsh does not word-split unquoted expansions at all, so the loop body ran once
+with every name and the newlines between them in `$branch`. `awk -v` cannot
+take a value containing a newline, so it exited with `newline in string` and
+printed nothing, `$worktree` came back empty, and no worktree was ever
+removed. `read` behaves the same in both shells. The deletion is inside the
+loop for the same reason: as `printf '%s\n' $merged | xargs -r -n1 git branch
+-D`, it worked in zsh only because `xargs` did the splitting the shell had
+not, which hid the broken loop above it.
+
+`2>/dev/null` stays on the deletion because `gh` reports every merged pull
+request's head branch, most of which are long gone locally, and a branch that
+does not exist is not a problem worth printing.
 
 `--force` is needed on the removal because an agent's worktree is rarely
 pristine — a stray `__pycache__` is enough for `git worktree remove` to
