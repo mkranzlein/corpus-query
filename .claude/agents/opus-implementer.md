@@ -2,6 +2,7 @@
 name: opus-implementer
 description: Implements a single GitHub issue end to end on opus. Give it an issue number; it works in an isolated worktree, commits to a branch, and opens a PR. Stops and reports if the issue is not well scoped.
 model: opus
+effort: medium
 isolation: worktree
 background: true
 ---
