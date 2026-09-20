@@ -13,10 +13,10 @@ def _insert_document(connection: sqlite3.Connection, slug: str = "meeting-1") ->
     """Insert a minimal document row and return its id."""
     cursor = connection.execute(
         """
-        INSERT INTO documents (slug, source_path, subject, meeting_date, length_minutes)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO documents (slug, source_path, subject, meeting_date)
+        VALUES (?, ?, ?, ?)
         """,
-        (slug, f"transcripts/{slug}.md", "Weekly sync", "2026-01-05", 30),
+        (slug, f"transcripts/{slug}.md", "Weekly sync", "2026-01-05"),
     )
     connection.commit()
     return cursor.lastrowid
@@ -199,3 +199,78 @@ def test_document_slug_uniqueness_is_enforced():
     _insert_document(connection, slug="meeting-1")
     with pytest.raises(sqlite3.IntegrityError):
         _insert_document(connection, slug="meeting-1")
+
+
+def test_a_summary_chunk_has_no_turn_range():
+    connection = connect(":memory:")
+    document_id = _insert_document(connection)
+    cursor = connection.execute(
+        """
+        INSERT INTO chunks (document_id, ordinal, text, word_count, kind)
+        VALUES (?, ?, ?, ?, 'summary')
+        """,
+        (document_id, 99, "The team held the rev B date.", 6),
+    )
+    connection.commit()
+    row = connection.execute(
+        "SELECT turn_start, turn_end FROM chunks WHERE id = ?", (cursor.lastrowid,)
+    ).fetchone()
+    assert row["turn_start"] is None
+    assert row["turn_end"] is None
+
+
+def test_a_summary_chunk_may_not_claim_a_turn_range():
+    connection = connect(":memory:")
+    document_id = _insert_document(connection)
+    with pytest.raises(sqlite3.IntegrityError):
+        connection.execute(
+            """
+            INSERT INTO chunks
+                (document_id, ordinal, text, word_count, turn_start, turn_end, kind)
+            VALUES (?, ?, ?, ?, ?, ?, 'summary')
+            """,
+            (document_id, 99, "A summary.", 2, 0, 4),
+        )
+
+
+def test_a_turn_window_needs_a_turn_range():
+    connection = connect(":memory:")
+    document_id = _insert_document(connection)
+    with pytest.raises(sqlite3.IntegrityError):
+        connection.execute(
+            """
+            INSERT INTO chunks (document_id, ordinal, text, word_count, kind)
+            VALUES (?, ?, ?, ?, 'turn_window')
+            """,
+            (document_id, 1, "Something said.", 2),
+        )
+
+
+def test_an_embedding_carries_the_model_that_made_it():
+    connection = connect(":memory:")
+    document_id = _insert_document(connection)
+    chunk_id = _insert_chunk(connection, document_id)
+    connection.execute(
+        """
+        UPDATE chunks
+        SET embedding = ?, embedding_model = ?, embedding_dim = ?
+        WHERE id = ?
+        """,
+        (b"\x00\x01", "BAAI/bge-small-en-v1.5", 384, chunk_id),
+    )
+    connection.commit()
+    row = connection.execute(
+        "SELECT embedding_model, embedding_dim FROM chunks WHERE id = ?", (chunk_id,)
+    ).fetchone()
+    assert row["embedding_model"] == "BAAI/bge-small-en-v1.5"
+    assert row["embedding_dim"] == 384
+
+
+def test_an_embedding_without_its_model_is_rejected():
+    connection = connect(":memory:")
+    document_id = _insert_document(connection)
+    chunk_id = _insert_chunk(connection, document_id)
+    with pytest.raises(sqlite3.IntegrityError):
+        connection.execute(
+            "UPDATE chunks SET embedding = ? WHERE id = ?", (b"\x00\x01", chunk_id)
+        )

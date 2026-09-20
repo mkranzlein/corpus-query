@@ -18,7 +18,6 @@ CREATE TABLE documents (
     source_path TEXT NOT NULL,
     subject TEXT NOT NULL,
     meeting_date TEXT NOT NULL,
-    length_minutes INTEGER NOT NULL,
     -- Written later by enrichment; absent until then.
     summary TEXT,
     -- Derived metadata, also written by enrichment.
@@ -68,12 +67,31 @@ CREATE TABLE chunks (
     text TEXT NOT NULL,
     word_count INTEGER NOT NULL,
     -- The turn range, inclusive, this chunk spans in the source transcript.
-    turn_start INTEGER NOT NULL,
-    turn_end INTEGER NOT NULL,
+    -- Null for a summary chunk, which is written about the document rather
+    -- than taken from any span of it.
+    turn_start INTEGER,
+    turn_end INTEGER,
     kind TEXT NOT NULL CHECK (kind IN ('turn_window', 'summary')),
     -- Filled in by a later embedding pass; NULL until then.
     embedding BLOB,
-    UNIQUE (document_id, ordinal)
+    -- What produced the embedding. Recorded per chunk so a change of embedder
+    -- is detectable rather than silently mixing vector spaces in one index.
+    embedding_model TEXT,
+    embedding_dim INTEGER,
+    UNIQUE (document_id, ordinal),
+    -- A turn window spans turns; a summary spans none. Keeping the two in
+    -- step with kind is what stops a summary claiming a range it never had.
+    CHECK (
+        (kind = 'turn_window' AND turn_start IS NOT NULL AND turn_end IS NOT NULL)
+        OR (kind = 'summary' AND turn_start IS NULL AND turn_end IS NULL)
+    ),
+    -- An embedding without provenance cannot be checked against the model in
+    -- use, so the three travel together or not at all.
+    CHECK (
+        (embedding IS NULL AND embedding_model IS NULL AND embedding_dim IS NULL)
+        OR (embedding IS NOT NULL AND embedding_model IS NOT NULL
+            AND embedding_dim IS NOT NULL)
+    )
 );
 
 CREATE INDEX idx_chunks_document_id ON chunks (document_id);
