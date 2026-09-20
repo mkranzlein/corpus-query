@@ -27,3 +27,20 @@
 - Pull requests are squash merged. The squash commit message is what ends up
   in history and in the CHANGELOG, so it has to be a valid conventional
   commit — the individual commits on the branch don't.
+
+## Starting new work
+
+Before creating a feature branch, get back to a clean main:
+
+```bash
+git switch main
+git pull --prune
+gh pr list --state merged --json headRefName -q '.[].headRefName' \
+  | xargs -r -n1 git branch -D 2>/dev/null
+```
+
+The last step is needed because `git branch --merged` does not detect
+squash-merged branches — the squash commit is a new commit with no ancestry
+link back to the branch, so git cannot tell it was merged. GitHub can, so ask
+it. Force-delete is safe here for exactly that reason: the PR is confirmed
+merged.
