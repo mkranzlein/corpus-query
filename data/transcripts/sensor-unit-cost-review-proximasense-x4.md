@@ -1,0 +1,40 @@
+# Sensor Unit Cost Review – ProximaSense X4
+
+- **Date:** 2026-01-14
+- **Attendees:** Priya, Marcus, Renata, Devon
+
+## Transcript
+
+[Priya]: Thanks for making time on short notice. Renata flagged some numbers from the last manufacturing run that I want us to work through together before we go back to the board.
+[Renata]: Right. So the landed cost per unit on the X4 came in at forty-seven dollars and change. That's about nine dollars over what we modeled when we set the product price, and it basically wipes out the margin on the Delvecchio order.
+[Devon]: The overage is mostly in two places. The pressure housing castings came in higher than the quote because Hartwell Metals revised their tooling surcharge mid-run — we didn't catch that until the invoice arrived. And then yield on the ultrasonic transducer sub-assembly was worse than expected. We had about a twelve percent reject rate, which is double what we planned for.
+[Marcus]: The transducer yield problem is something Sofia and I have been looking at on the firmware side as well. The calibration routine is sensitive to a tolerance stack in the housing, and when the casting dimensions drift even a little the firmware can't compensate fully. We think we can tighten the calibration window in software, but it won't help the units that are already built.
+[Priya]: How many units are already built and affected?
+[Devon]: Four hundred and twelve finished units passed final test, so those are fine. We scrapped sixty-one. Another thirty-eight are in a hold status because they're borderline — they pass functional test but they're at the edge of spec.
+[Renata]: Those thirty-eight are what I'm most concerned about from a cost standpoint. If we ship them and they come back under warranty, the cost per return is going to hurt a lot more than just scrapping them now.
+[Marcus]: I'd rather scrap them. I don't want to ship anything I'm not confident in.
+[Devon]: Agreed in principle, but can we at least see if the firmware fix Marcus mentioned would bring them into safe territory before we make that call?
+[Marcus]: That's fair. We can run the updated calibration on those thirty-eight and see what the re-test numbers look like. I'd want Sofia in the loop on that.
+[Priya]: Let's do that. Renata, on the Hartwell situation — is there any recourse on the tooling surcharge?
+[Renata]: Callum is reviewing the purchase order terms. The surcharge may not have been properly authorized under the contract. I don't want to get ahead of that review, but there's a possibility we can recover some of it.
+[Devon]: For future runs, I've already reached out to two alternative casting suppliers. I should have comparison quotes by the end of next week. Even if Hartwell is cheaper on base price, the surprise surcharges make them hard to plan around.
+[Priya]: Good. I want to see those quotes when they come in. What's the realistic path to getting the landed cost down to something that works?
+[Renata]: If we can get the casting cost down by four dollars and get yield back to six percent rejects or below, we land around forty-one dollars. That's still above the original model but it's a margin we can defend, especially if volume goes up.
+[Marcus]: Six percent reject rate is achievable if the firmware fix does what we think it will. The casting tolerance is the bigger variable.
+[Devon]: I'll push the alternative suppliers on tolerance specs specifically. If we can tighten the incoming inspection criteria and put it in the purchase agreement, that should help.
+[Priya]: Okay. Devon gets quotes and tightens the spec language. Marcus and Sofia run the firmware calibration test on the thirty-eight hold units. Renata, keep me posted on the Hartwell contract review. I want a decision on those thirty-eight units within two weeks.
+[Renata]: One more thing — for the board update, how do we want to characterize the margin situation on X4? Do we flag it as a known issue with a remediation plan, or do we wait until we have the fix confirmed?
+[Priya]: We flag it. I'd rather explain a problem with a plan than have them find out later we knew and didn't say anything.
+[Renata]: Agreed. I'll draft the language and send it to you before the deck goes out.
+
+## Decisions
+
+- The thirty-eight hold-status units will be re-tested after the firmware calibration update before any disposition decision is made.
+- The margin issue will be disclosed to the board with a remediation plan rather than withheld pending the fix.
+- Devon will pursue alternative casting suppliers to reduce cost and eliminate surprise surcharges.
+
+## Action items
+
+- **Devon:** Obtain comparison casting quotes from at least two alternative suppliers, with tolerance specs included in the RFQ.
+- **Marcus:** Work with Sofia to run the updated calibration firmware on the thirty-eight hold-status units and report re-test results.
+- **Renata:** Draft board update language characterizing the X4 margin issue and remediation plan for Priya's review.
