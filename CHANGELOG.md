@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v1.6.0 (2026-09-20)
+
+### Features
+
+- Add hybrid retrieval with RRF fusion and reranking
+  ([#41](https://github.com/mkranzlein/corpus-query/pull/41),
+  [`14dc0e5`](https://github.com/mkranzlein/corpus-query/commit/14dc0e564ab26585eb6fa5881f21b2ccaa1faff0))
+
+### Testing
+
+- Cover the default embedder and reranker wiring
+  ([#41](https://github.com/mkranzlein/corpus-query/pull/41),
+  [`14dc0e5`](https://github.com/mkranzlein/corpus-query/commit/14dc0e564ab26585eb6fa5881f21b2ccaa1faff0))
+
+
 ## v1.5.0 (2026-09-20)
 
 ### Bug Fixes
