@@ -4,12 +4,20 @@ These models are the contract. Every field a caller could want is generated
 into the OpenAPI schema from here rather than described in prose somewhere
 else, so what ``/docs`` says and what the endpoint returns cannot drift apart.
 
-The response shape grows by addition. A field that exists keeps its name and
-its meaning; something new gets a new field, and a field that stops being
-produced goes null rather than being reused for something else. Later work
-reads this shape — the agent that synthesizes an answer out of these results
-is written against it — and the price of that discipline is a field or two
-nobody reads yet, which is far cheaper than a silent change of meaning.
+The contract starts at this shape. From here it grows by addition: a field
+that exists keeps its name and its meaning; something new gets a new field,
+and a field that stops being produced goes null rather than being reused for
+something else. Later work reads this shape — the agent that synthesizes an
+answer out of these results is written against it — and the price of that
+discipline is a field or two nobody reads yet, which is far cheaper than a
+silent change of meaning.
+
+It starts here rather than earlier because generalizing the store past
+transcripts renamed two of these fields, while nothing consumed the endpoint
+yet. A ``meeting_date`` on a spec document would have been a field whose
+meaning had already drifted, which is exactly what the rule above exists to
+prevent; renaming it once, before there was a caller, was the cheaper of the
+two.
 """
 
 from __future__ import annotations
@@ -66,14 +74,31 @@ class SearchResultModel(BaseModel):
 
     rank: int = Field(description="1-indexed position, best first.")
     chunk_id: int = Field(description="Row id of the chunk in the store.")
-    text: str = Field(description="The chunk's transcript text.")
-    document_slug: str = Field(description="Slug of the transcript it came from.")
-    subject: str = Field(description="The meeting's subject.")
-    meeting_date: str = Field(description="The meeting's date, ISO 8601.")
-    turn_start: int | None = Field(
-        description="First transcript turn the chunk covers."
+    text: str = Field(description="The chunk's text.")
+    document_slug: str = Field(description="Slug of the document it came from.")
+    source_kind: str = Field(
+        description="What the document was read out of: transcript, docx, "
+        "pptx, or xlsx."
     )
-    turn_end: int | None = Field(description="Last transcript turn the chunk covers.")
+    title: str = Field(description="The document's title, or a meeting's subject.")
+    document_date: str = Field(description="The document's date, ISO 8601.")
+    author: str | None = Field(
+        description="Who wrote it, or null for a transcript, which has "
+        "attendees rather than an author."
+    )
+    location: str = Field(
+        description="Where in the document the chunk sits, as a citation "
+        "shows it: a turn range, a heading path, a slide number, a sheet and "
+        "row range."
+    )
+    span_start: int | None = Field(
+        description="First unit the chunk covers, counted in whatever its "
+        "format counts in. Null for a chunk written about the document "
+        "rather than cut out of it."
+    )
+    span_end: int | None = Field(
+        description="Last unit the chunk covers, inclusive. Null alongside span_start."
+    )
     topics: list[str] = Field(description="Topics assigned to the document.")
     time_sensitivity: str | None = Field(
         description="How time sensitive the document is, as enrichment judged it."
@@ -101,10 +126,13 @@ class SearchResultModel(BaseModel):
             chunk_id=result.chunk_id,
             text=result.text,
             document_slug=result.document_slug,
-            subject=result.subject,
-            meeting_date=result.meeting_date,
-            turn_start=result.turn_start,
-            turn_end=result.turn_end,
+            source_kind=result.source_kind,
+            title=result.title,
+            document_date=result.document_date,
+            author=result.author,
+            location=result.location,
+            span_start=result.span_start,
+            span_end=result.span_end,
             topics=list(result.topics),
             time_sensitivity=result.time_sensitivity,
             business_impact=result.business_impact,

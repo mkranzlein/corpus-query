@@ -24,7 +24,7 @@ def make_store(path: Path, rows: list[tuple[str, str, str, str | None]]) -> Path
 
     Args:
         path: Where to write the database.
-        rows: ``(slug, subject, meeting_date, summary)`` per document.
+        rows: ``(slug, title, document_date, summary)`` per document.
 
     Returns:
         The path written.
@@ -33,8 +33,9 @@ def make_store(path: Path, rows: list[tuple[str, str, str, str | None]]) -> Path
     try:
         connection.executemany(
             """
-            INSERT INTO documents (slug, source_path, subject, meeting_date, summary)
-            VALUES (?, 'transcripts/x.md', ?, ?, ?)
+            INSERT INTO documents
+                (slug, source_path, source_kind, title, document_date, summary)
+            VALUES (?, 'transcripts/x.md', 'transcript', ?, ?, ?)
             """,
             rows,
         )

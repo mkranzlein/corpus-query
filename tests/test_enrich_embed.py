@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from corpus_query.enrich.documents import SUMMARY
+from corpus_query.store.kinds import SUMMARY
 from corpus_query.enrich.embed import embed_document
 from corpus_query.retrieval.blobs import blob_to_vector
 
@@ -34,8 +34,9 @@ def add_summary_chunk(connection, document_id, text="A summary."):
     connection.execute(
         """
         INSERT INTO chunks
-            (document_id, ordinal, text, word_count, turn_start, turn_end, kind)
-        VALUES (?, ?, ?, 2, NULL, NULL, ?)
+            (document_id, ordinal, text, word_count, location,
+             span_start, span_end, kind)
+        VALUES (?, ?, ?, 2, 'summary', NULL, NULL, ?)
         """,
         (document_id, highest + 1, text, SUMMARY),
     )

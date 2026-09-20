@@ -26,7 +26,7 @@ from pathlib import Path
 
 from corpus_query.enrich import passes
 from corpus_query.enrich.dedupe import Merged, apply_merges
-from corpus_query.enrich.documents import SUMMARY, StoredDocument, read_document
+from corpus_query.enrich.documents import StoredDocument, read_document
 from corpus_query.enrich.embed import Embed, Embedded, embed_document
 from corpus_query.enrich.errors import EnrichmentError
 from corpus_query.enrich.prompts import PromptError
@@ -39,6 +39,12 @@ from corpus_query.enrich.topics import (
     seed_categories,
 )
 from corpus_query.ingest.chunk import count_words
+from corpus_query.store.kinds import SUMMARY
+
+
+#: What a citation shows for the summary chunk. It stands for the whole
+#: document rather than any part of it, and says so.
+SUMMARY_LOCATION = "summary"
 
 
 @dataclass(frozen=True)
@@ -261,11 +267,11 @@ def _write_summary_chunk(
 ) -> int:
     """Write the summary as a chunk of its own.
 
-    A question about a whole meeting — what it was about, what it settled —
-    has nothing to match in any single window of the conversation. The
-    summary chunk is what it matches. It is indexed and embedded like any
-    other chunk, and carries no turn range, because it is written about the
-    document rather than taken from a span of it.
+    A question about a whole document — what it was about, what it settled —
+    has nothing to match in any single window of it. The summary chunk is
+    what it matches. It is indexed and embedded like any other chunk, and
+    carries no span, because it is written about the document rather than
+    taken from a part of it.
 
     Any summary chunk from an earlier enrichment is deleted first, so
     re-running replaces it instead of leaving two.
@@ -288,14 +294,16 @@ def _write_summary_chunk(
     cursor = connection.execute(
         """
         INSERT INTO chunks
-            (document_id, ordinal, text, word_count, turn_start, turn_end, kind)
-        VALUES (?, ?, ?, ?, NULL, NULL, ?)
+            (document_id, ordinal, text, word_count, location,
+             span_start, span_end, kind)
+        VALUES (?, ?, ?, ?, ?, NULL, NULL, ?)
         """,
         (
             document_id,
             0 if highest is None else highest + 1,
             summary,
             count_words(summary),
+            SUMMARY_LOCATION,
             SUMMARY,
         ),
     )

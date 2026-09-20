@@ -44,10 +44,22 @@ class Result:
     chunk_id: int
     text: str
     document_slug: str
-    subject: str
-    meeting_date: str
-    turn_start: int | None
-    turn_end: int | None
+    source_kind: str
+    """What the document was read out of, from
+    :mod:`corpus_query.store.kinds`."""
+
+    title: str
+    document_date: str
+    author: str | None
+    """Who wrote it, or ``None`` for a transcript, whose people are its
+    attendees."""
+
+    location: str
+    """What a citation shows a reader: a turn range, a heading path, a slide
+    number."""
+
+    span_start: int | None
+    span_end: int | None
     topics: list[str]
     time_sensitivity: str | None
     business_impact: str | None
@@ -157,10 +169,13 @@ def search(
             chunk_id=chunk_id,
             text=metadata[chunk_id].text,
             document_slug=metadata[chunk_id].document_slug,
-            subject=metadata[chunk_id].subject,
-            meeting_date=metadata[chunk_id].meeting_date,
-            turn_start=metadata[chunk_id].turn_start,
-            turn_end=metadata[chunk_id].turn_end,
+            source_kind=metadata[chunk_id].source_kind,
+            title=metadata[chunk_id].title,
+            document_date=metadata[chunk_id].document_date,
+            author=metadata[chunk_id].author,
+            location=metadata[chunk_id].location,
+            span_start=metadata[chunk_id].span_start,
+            span_end=metadata[chunk_id].span_end,
             topics=metadata[chunk_id].topics,
             time_sensitivity=metadata[chunk_id].time_sensitivity,
             business_impact=metadata[chunk_id].business_impact,
@@ -194,10 +209,13 @@ class _ChunkMetadata:
 
     text: str
     document_slug: str
-    subject: str
-    meeting_date: str
-    turn_start: int | None
-    turn_end: int | None
+    source_kind: str
+    title: str
+    document_date: str
+    author: str | None
+    location: str
+    span_start: int | None
+    span_end: int | None
     topics: list[str]
     time_sensitivity: str | None
     business_impact: str | None
@@ -244,12 +262,15 @@ def _chunk_metadata(
         SELECT
             chunks.id AS chunk_id,
             chunks.text AS text,
-            chunks.turn_start AS turn_start,
-            chunks.turn_end AS turn_end,
+            chunks.location AS location,
+            chunks.span_start AS span_start,
+            chunks.span_end AS span_end,
             documents.id AS document_id,
             documents.slug AS document_slug,
-            documents.subject AS subject,
-            documents.meeting_date AS meeting_date,
+            documents.source_kind AS source_kind,
+            documents.title AS title,
+            documents.document_date AS document_date,
+            documents.author AS author,
             documents.time_sensitivity AS time_sensitivity,
             documents.business_impact AS business_impact
         FROM chunks
@@ -265,10 +286,13 @@ def _chunk_metadata(
         row["chunk_id"]: _ChunkMetadata(
             text=row["text"],
             document_slug=row["document_slug"],
-            subject=row["subject"],
-            meeting_date=row["meeting_date"],
-            turn_start=row["turn_start"],
-            turn_end=row["turn_end"],
+            source_kind=row["source_kind"],
+            title=row["title"],
+            document_date=row["document_date"],
+            author=row["author"],
+            location=row["location"],
+            span_start=row["span_start"],
+            span_end=row["span_end"],
             topics=topics_by_document.get(row["document_id"], []),
             time_sensitivity=row["time_sensitivity"],
             business_impact=row["business_impact"],

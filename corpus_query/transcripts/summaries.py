@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from corpus_query.store.db import DEFAULT_DATABASE_FILE, connect
+from corpus_query.store.kinds import TRANSCRIPT
 
 __all__ = [
     "DEFAULT_DATABASE_FILE",
@@ -34,11 +35,15 @@ __all__ = [
 #: Stand-in for the summaries section when there are none.
 NO_PRIOR_MEETINGS = "None yet. This is the first batch."
 
-_QUERY = """
-    SELECT subject, meeting_date, summary
+#: Only transcripts. The generator is being told what meetings it has
+#: already written, and a document of some other kind is not one of those,
+#: however well it was summarized.
+_QUERY = f"""
+    SELECT title, document_date, summary
     FROM documents
-    WHERE summary IS NOT NULL AND TRIM(summary) <> ''
-    ORDER BY meeting_date, subject
+    WHERE source_kind = '{TRANSCRIPT}'
+      AND summary IS NOT NULL AND TRIM(summary) <> ''
+    ORDER BY document_date, title
 """
 
 

@@ -14,13 +14,16 @@ import pytest
 from corpus_query.retrieval import index as index_module
 from corpus_query.retrieval.blobs import vector_to_blob
 from corpus_query.retrieval.search import search
+from corpus_query.store.kinds import DOCX, TRANSCRIPT
 
 
 def _insert_document(
     connection: sqlite3.Connection,
     slug: str,
-    subject: str = "Weekly sync",
-    meeting_date: str = "2026-01-05",
+    title: str = "Weekly sync",
+    document_date: str = "2026-01-05",
+    source_kind: str = TRANSCRIPT,
+    author: str | None = None,
     time_sensitivity: str | None = "near_term",
     business_impact: str | None = "moderate",
     topics: list[str] = (),
@@ -28,15 +31,17 @@ def _insert_document(
     cursor = connection.execute(
         """
         INSERT INTO documents
-            (slug, source_path, subject, meeting_date, time_sensitivity,
-             business_impact)
-        VALUES (?, ?, ?, ?, ?, ?)
+            (slug, source_path, source_kind, title, document_date, author,
+             time_sensitivity, business_impact)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             slug,
             f"transcripts/{slug}.md",
-            subject,
-            meeting_date,
+            source_kind,
+            title,
+            document_date,
+            author,
             time_sensitivity,
             business_impact,
         ),
@@ -60,23 +65,25 @@ def _insert_chunk(
     ordinal: int,
     text: str,
     embedding: np.ndarray,
-    turn_start: int = 0,
-    turn_end: int = 0,
+    span_start: int = 0,
+    span_end: int = 0,
 ) -> int:
     cursor = connection.execute(
         """
         INSERT INTO chunks
-            (document_id, ordinal, text, word_count, turn_start, turn_end, kind,
+            (document_id, ordinal, text, word_count, location,
+             span_start, span_end, kind,
              embedding, embedding_model, embedding_dim)
-        VALUES (?, ?, ?, ?, ?, ?, 'turn_window', ?, 'test-model', ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'turn_window', ?, 'test-model', ?)
         """,
         (
             document_id,
             ordinal,
             text,
             len(text.split()),
-            turn_start,
-            turn_end,
+            f"turns {span_start}-{span_end}",
+            span_start,
+            span_end,
             vector_to_blob(embedding),
             len(embedding),
         ),
@@ -117,8 +124,8 @@ def test_returns_full_metadata_for_each_result(connection, tmp_path):
     document_id = _insert_document(
         connection,
         "meeting-1",
-        subject="Rev B schedule",
-        meeting_date="2026-03-04",
+        title="Rev B schedule",
+        document_date="2026-03-04",
         time_sensitivity="urgent",
         business_impact="critical",
         topics=["Firmware", "Supply chain"],
@@ -129,8 +136,8 @@ def test_returns_full_metadata_for_each_result(connection, tmp_path):
         0,
         "The connector lead time slipped two weeks.",
         _vector(0),
-        turn_start=2,
-        turn_end=4,
+        span_start=2,
+        span_end=4,
     )
     collection = index_module.build_index(connection, tmp_path / "chroma")
 
@@ -146,15 +153,49 @@ def test_returns_full_metadata_for_each_result(connection, tmp_path):
     assert only.chunk_id == chunk_id
     assert only.text == "The connector lead time slipped two weeks."
     assert only.document_slug == "meeting-1"
-    assert only.subject == "Rev B schedule"
-    assert only.meeting_date == "2026-03-04"
-    assert only.turn_start == 2
-    assert only.turn_end == 4
+    assert only.source_kind == TRANSCRIPT
+    assert only.title == "Rev B schedule"
+    assert only.document_date == "2026-03-04"
+    assert only.author is None
+    assert only.location == "turns 2-4"
+    assert only.span_start == 2
+    assert only.span_end == 4
     assert set(only.topics) == {"Firmware", "Supply chain"}
     assert only.time_sensitivity == "urgent"
     assert only.business_impact == "critical"
     assert only.rank == 1
     assert only.rerank_score == pytest.approx(3.0)
+
+
+def test_a_single_author_document_reports_its_kind_and_author(connection, tmp_path):
+    document_id = _insert_document(
+        connection,
+        "thermal-review",
+        title="Thermal review",
+        source_kind=DOCX,
+        author="Devon",
+    )
+    _insert_chunk(
+        connection,
+        document_id,
+        0,
+        "The connector lead time slipped two weeks.",
+        _vector(0),
+    )
+    collection = index_module.build_index(connection, tmp_path / "chroma")
+
+    result = search(
+        connection,
+        collection,
+        "connector lead time",
+        embed=_fake_embed(_vector(0)),
+        rerank=_score_by_shared_words,
+    )
+
+    [only] = result.results
+    assert only.source_kind == DOCX
+    assert only.author == "Devon"
+    assert only.title == "Thermal review"
 
 
 def test_result_count_defaults_to_five_and_is_a_parameter(connection, tmp_path):

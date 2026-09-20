@@ -29,8 +29,8 @@ from corpus_query.enrich.schema import (
     TopicMerge,
     TopicMerges,
 )
-from corpus_query.ingest.chunk import chunk_turns
 from corpus_query.ingest.pipeline import write_document
+from corpus_query.ingest.transcripts import as_document
 from corpus_query.store.db import connect
 from corpus_query.transcripts.parse import parse_transcript
 from corpus_query.transcripts.render import render_meeting
@@ -274,9 +274,11 @@ def ingest(make_meeting) -> Callable[..., int]:
         meeting = make_meeting(**overrides)
         markdown = render_meeting(meeting)
         transcript = parse_transcript(markdown, source=f"{slug}.md")
-        chunks = chunk_turns(transcript.turns)
         result = write_document(
-            connection, slug, f"data/transcripts/{slug}.md", transcript, chunks
+            connection,
+            slug,
+            f"data/transcripts/{slug}.md",
+            as_document(transcript),
         )
         return result.document_id
 
