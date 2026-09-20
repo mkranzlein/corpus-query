@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v1.7.1 (2026-09-20)
+
+### Bug Fixes
+
+- **infra**: Allow the API key to present itself
+  ([#47](https://github.com/mkranzlein/corpus-query/pull/47),
+  [`facbbd4`](https://github.com/mkranzlein/corpus-query/commit/facbbd4b1111a87765c2b10e13ab87d815b2fe7a))
+
+### Documentation
+
+- Invoke scripts by path rather than as modules
+  ([#46](https://github.com/mkranzlein/corpus-query/pull/46),
+  [`785ced2`](https://github.com/mkranzlein/corpus-query/commit/785ced2b464609a7685e362d0cf08b25df53b449))
+
+
 ## v1.7.0 (2026-09-20)
 
 ### Bug Fixes
