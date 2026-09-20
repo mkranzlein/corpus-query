@@ -2,6 +2,49 @@
 
 <!-- version list -->
 
+## v1.2.0 (2026-09-20)
+
+### Bug Fixes
+
+- **store**: Let summary chunks omit a turn range and record embedding provenance
+  ([#27](https://github.com/mkranzlein/corpus-query/pull/27),
+  [`d0a46f8`](https://github.com/mkranzlein/corpus-query/commit/d0a46f8261f2c75475f77488df35e509062a7944))
+
+### Documentation
+
+- Record the planted imperfections and keep the corpus out of git
+  ([#28](https://github.com/mkranzlein/corpus-query/pull/28),
+  [`145f5ad`](https://github.com/mkranzlein/corpus-query/commit/145f5ade272a359921ff93f8025b724fce64bcaf))
+
+### Features
+
+- Add the batched transcript generator and its prompt
+  ([#28](https://github.com/mkranzlein/corpus-query/pull/28),
+  [`145f5ad`](https://github.com/mkranzlein/corpus-query/commit/145f5ade272a359921ff93f8025b724fce64bcaf))
+
+- **scripts**: Add the batched transcript generator
+  ([#28](https://github.com/mkranzlein/corpus-query/pull/28),
+  [`145f5ad`](https://github.com/mkranzlein/corpus-query/commit/145f5ade272a359921ff93f8025b724fce64bcaf))
+
+- **store**: Add the SQLite document store schema
+  ([#27](https://github.com/mkranzlein/corpus-query/pull/27),
+  [`d0a46f8`](https://github.com/mkranzlein/corpus-query/commit/d0a46f8261f2c75475f77488df35e509062a7944))
+
+- **transcripts**: Add the generation prompt, slugs, and the summary read
+  ([#28](https://github.com/mkranzlein/corpus-query/pull/28),
+  [`145f5ad`](https://github.com/mkranzlein/corpus-query/commit/145f5ade272a359921ff93f8025b724fce64bcaf))
+
+- **transcripts**: Give a meeting a length and count its transcript words
+  ([#28](https://github.com/mkranzlein/corpus-query/pull/28),
+  [`145f5ad`](https://github.com/mkranzlein/corpus-query/commit/145f5ade272a359921ff93f8025b724fce64bcaf))
+
+### Refactoring
+
+- **transcripts**: Drop the meeting length field
+  ([#28](https://github.com/mkranzlein/corpus-query/pull/28),
+  [`145f5ad`](https://github.com/mkranzlein/corpus-query/commit/145f5ade272a359921ff93f8025b724fce64bcaf))
+
+
 ## v1.1.0 (2026-09-20)
 
 ### Documentation
