@@ -56,6 +56,9 @@ Two details worth knowing:
 
 - `scripts/bedrock_smoke_test.py` makes a real, billed call to the Bedrock
   Responses API. Ask before running it.
+- `scripts/generate_transcripts.py` generates a batch of meeting transcripts,
+  which is also a real, billed call. Ask before running it. `--dry-run` prints
+  the assembled prompt and calls nothing.
 
 ## Starting new work
 
