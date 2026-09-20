@@ -1,0 +1,19 @@
+# https://docs.codecov.com/docs/codecovyml-reference
+
+coverage:
+  status:
+    # The project as a whole may drift by a point without turning the build
+    # red. Anything larger is worth a look, which is what the status is for.
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    # New and changed lines are held to a fixed bar rather than to the
+    # project's current number, so coverage cannot erode a line at a time.
+    patch:
+      default:
+        target: 90%
+
+comment:
+  layout: "condensed_header, diff, files"
+  require_changes: true
