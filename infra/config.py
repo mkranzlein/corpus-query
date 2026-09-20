@@ -59,3 +59,28 @@ def require(env: dict[str, str], key: str) -> str:
             f"before running."
         )
     return value
+
+
+def read_number(env: dict[str, str], key: str, default: float) -> float:
+    """Return ``key`` from ``env`` as a number, or raise a readable error.
+
+    Args:
+        env: Settings as returned by :func:`load_env`.
+        key: Name of the setting to read.
+        default: Value to use when the setting is absent.
+
+    Returns:
+        The setting's value as a float.
+
+    Raises:
+        ConfigError: If the setting is present but is not a number.
+    """
+    raw = env.get(key)
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        raise ConfigError(
+            f"{key} must be a number, such as {default:g}, but it is set to {raw!r}."
+        ) from None

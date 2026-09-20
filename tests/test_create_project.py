@@ -15,6 +15,7 @@ from infra.create_project import (
     format_api_error,
     main,
     render_dry_run,
+    send,
     write_env_var,
 )
 
@@ -35,7 +36,7 @@ def test_build_request_uses_regional_endpoint():
 def test_build_request_tags_the_project():
     body = build_request(SETTINGS).body
     assert body["name"] == "corpus-query"
-    assert body["tags"] == [{"key": "Project", "value": "corpus-query"}]
+    assert body["tags"] == {"Project": "corpus-query"}
 
 
 def test_build_request_reports_a_missing_setting():
@@ -47,6 +48,37 @@ def test_render_dry_run_shows_method_url_and_body():
     rendered = render_dry_run(build_request(SETTINGS))
     assert rendered.startswith("POST https://bedrock-mantle.us-east-1.api.aws/")
     assert '"name": "corpus-query"' in rendered
+
+
+def test_send_signs_the_exact_bytes_it_sends(monkeypatch):
+    signed: list[bytes] = []
+    sent: list[bytes] = []
+
+    def fake_sign(_request, body):
+        signed.append(body)
+        return {"Content-Type": "application/json", "Authorization": "AWS4-fake"}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+        def read(self):
+            return b'{"projectArn": "arn:aws:example", "projectId": "abc123"}'
+
+    def fake_urlopen(http_request, timeout=None):
+        sent.append(http_request.data)
+        return FakeResponse()
+
+    monkeypatch.setattr("infra.create_project.sign", fake_sign)
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    payload = send(build_request(SETTINGS))
+
+    assert payload["projectId"] == "abc123"
+    assert signed == sent
 
 
 def test_duplicate_name_reads_as_a_sentence():

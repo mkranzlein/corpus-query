@@ -107,6 +107,12 @@ def test_budget_limit_defaults_when_unset():
     )
 
 
+def test_unreadable_budget_limit_names_the_setting():
+    settings = {**SETTINGS, "AWS_BUDGET_LIMIT_USD": "twenty dollars"}
+    with pytest.raises(ConfigError, match="AWS_BUDGET_LIMIT_USD must be a number"):
+        synthesize(settings)
+
+
 def test_stack_refuses_to_synthesize_before_the_project_exists():
     settings = {k: v for k, v in SETTINGS.items() if k != "AWS_PROJECT_ARN"}
     with pytest.raises(ConfigError, match="AWS_PROJECT_ARN"):

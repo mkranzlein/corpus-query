@@ -17,7 +17,7 @@ from aws_cdk import aws_budgets as budgets
 from aws_cdk import aws_iam as iam
 from constructs import Construct
 
-from infra.config import PROJECT_TAG_KEY, require
+from infra.config import PROJECT_TAG_KEY, read_number, require
 
 #: Action that runs inference through the OpenAI-compatible endpoint. Part of
 #: the same ``bedrock-mantle`` namespace as the project ARN.
@@ -29,7 +29,7 @@ ACTUAL_ALERT_THRESHOLD = 80
 #: Percentage of the budget at which the month's forecast raises an alert.
 FORECAST_ALERT_THRESHOLD = 100
 
-_DEFAULT_BUDGET_LIMIT_USD = "20"
+_DEFAULT_BUDGET_LIMIT_USD = 20.0
 
 
 class CorpusQueryStack(Stack):
@@ -60,8 +60,8 @@ class CorpusQueryStack(Stack):
         project_arn = require(env_values, "AWS_PROJECT_ARN")
         project_name = require(env_values, "AWS_PROJECT_NAME")
         notification_email = require(env_values, "AWS_BUDGET_EMAIL")
-        budget_limit = float(
-            env_values.get("AWS_BUDGET_LIMIT_USD", _DEFAULT_BUDGET_LIMIT_USD)
+        budget_limit = read_number(
+            env_values, "AWS_BUDGET_LIMIT_USD", _DEFAULT_BUDGET_LIMIT_USD
         )
 
         Tags.of(self).add(PROJECT_TAG_KEY, require(env_values, "AWS_PROJECT_TAG"))

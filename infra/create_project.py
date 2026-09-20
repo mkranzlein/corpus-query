@@ -12,7 +12,8 @@ Run it with::
 Long-term Bedrock API keys can only get and list projects, so this needs
 admin credentials from the usual boto3 credential chain.
 
-Two details are inferred from the shape of the ARN in the AWS documentation
+The request body follows the documented example for the API. Two other
+details are inferred from the shape of the ARN in the AWS documentation
 rather than confirmed against a live call: the SigV4 signing service name
 (:data:`SIGNING_SERVICE`) and the spelling of the response fields. The
 response reader accepts the plausible spellings and says what it saw when
@@ -75,7 +76,7 @@ class ProjectRequest:
         """JSON body describing the project to create."""
         return {
             "name": self.name,
-            "tags": [{"key": PROJECT_TAG_KEY, "value": self.tag_value}],
+            "tags": {PROJECT_TAG_KEY: self.tag_value},
         }
 
     def encoded_body(self) -> bytes:
@@ -126,11 +127,17 @@ def render_dry_run(request: ProjectRequest) -> str:
     )
 
 
-def sign(request: ProjectRequest) -> dict[str, str]:
+def sign(request: ProjectRequest, body: bytes) -> dict[str, str]:
     """Sign the request with SigV4 and return the headers to send.
+
+    The caller passes the encoded body rather than letting this function
+    encode its own copy, because SigV4 signs a hash of the body: signing one
+    encoding and sending another would fail as a signature mismatch, which is
+    an unpleasant thing to diagnose.
 
     Args:
         request: The request to sign.
+        body: The exact bytes that will be sent as the request body.
 
     Returns:
         The signed headers, including ``Authorization``.
@@ -152,7 +159,7 @@ def sign(request: ProjectRequest) -> dict[str, str]:
     signable = AWSRequest(
         method="POST",
         url=request.url,
-        data=request.encoded_body(),
+        data=body,
         headers={"Content-Type": "application/json"},
     )
     SigV4Auth(
@@ -173,11 +180,11 @@ def send(request: ProjectRequest) -> dict[str, Any]:
     Raises:
         ProvisioningError: If the API rejects the request or is unreachable.
     """
-    headers = sign(request)
+    body = request.encoded_body()
     http_request = urllib.request.Request(
         request.url,
-        data=request.encoded_body(),
-        headers=headers,
+        data=body,
+        headers=sign(request, body),
         method="POST",
     )
     try:
