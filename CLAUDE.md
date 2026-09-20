@@ -11,22 +11,46 @@
   guide](https://google.github.io/styleguide/pyguide.html) wherever it doesn't
   conflict with a ruff rule. Where they disagree, ruff wins.
 
-## Commits and releases
+## Commits and pull requests
 
-- [pre-commit](https://pre-commit.com/) runs ruff, gitleaks, and a commit
-  message check locally. Install the hooks with `pre-commit install` and
-  `pre-commit install --hook-type commit-msg`. CI runs the same config, so
-  anything that passes locally passes there.
+- [pre-commit](https://pre-commit.com/) runs ruff, gitleaks, a commit message
+  check, and a guard against committing on `main`. Install the hooks with
+  `pre-commit install` and `pre-commit install --hook-type commit-msg`. CI runs
+  the same config in `.github/workflows/ci.yml`, so anything that passes
+  locally passes there.
 - Commit messages use [Conventional
   Commits](https://www.conventionalcommits.org/). This is enforced by a hook,
   and the release tooling parses it — a non-conforming message is rejected.
-- Versioning is handled by
-  [python-semantic-release](https://python-semantic-release.readthedocs.io/),
-  which derives the version, CHANGELOG, and tags from commit history. Don't
-  edit the version by hand.
+- All work lands through a pull request. The `no-commit-to-branch` hook fails
+  any commit made while `main` is checked out. It is a local seatbelt rather
+  than enforcement: it applies only where the hooks are installed, and
+  `--no-verify` skips it.
 - Pull requests are squash merged. The squash commit message is what ends up
   in history and in the CHANGELOG, so it has to be a valid conventional
   commit — the individual commits on the branch don't.
+
+## Versioning and releases
+
+[python-semantic-release](https://python-semantic-release.readthedocs.io/) owns
+the version. It is configured under `[tool.semantic_release]` in
+`pyproject.toml` and run by `.github/workflows/release.yml` on every push to
+`main`. When the commits since the last tag warrant a release, it:
+
+1. computes the next version and writes it to `project.version`
+2. writes the new section of `CHANGELOG.md`
+3. commits, tags `vX.Y.Z`, and pushes
+4. publishes a GitHub Release carrying those notes
+
+Don't edit the version or the CHANGELOG by hand — the next run will overwrite
+either one.
+
+Two details worth knowing:
+
+- Releases carry notes only. This is an application rather than a published
+  package, so no build runs and no artifacts are attached.
+- The release commit is pushed with `GITHUB_TOKEN`. Pushes made with that token
+  do not trigger workflows, so the release commit does not re-run CI. That is
+  intended.
 
 ## Scripts
 
