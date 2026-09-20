@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v2.0.0 (2026-09-20)
+
+### Bug Fixes
+
+- **infra**: Scope the policy to one model and keep it replaceable
+  ([#49](https://github.com/mkranzlein/corpus-query/pull/49),
+  [`b1a1065`](https://github.com/mkranzlein/corpus-query/commit/b1a1065be6b6c3753fd259d6f71e24dc24ac2309))
+
+### Chores
+
+- Retire the Bedrock project provisioning
+  ([#49](https://github.com/mkranzlein/corpus-query/pull/49),
+  [`b1a1065`](https://github.com/mkranzlein/corpus-query/commit/b1a1065be6b6c3753fd259d6f71e24dc24ac2309))
+
+### Features
+
+- Call Claude Sonnet 4.6 on bedrock-runtime
+  ([#49](https://github.com/mkranzlein/corpus-query/pull/49),
+  [`b1a1065`](https://github.com/mkranzlein/corpus-query/commit/b1a1065be6b6c3753fd259d6f71e24dc24ac2309))
+
+
 ## v1.7.1 (2026-09-20)
 
 ### Bug Fixes
