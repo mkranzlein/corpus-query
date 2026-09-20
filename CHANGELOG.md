@@ -2,6 +2,37 @@
 
 <!-- version list -->
 
+## v1.3.0 (2026-09-20)
+
+### Documentation
+
+- Sweep leftover agent placeholder branches
+  ([#32](https://github.com/mkranzlein/corpus-query/pull/32),
+  [`ffb728d`](https://github.com/mkranzlein/corpus-query/commit/ffb728d8d08e4afa326a81842d6dd345eae5f7f9))
+
+- **transcripts**: Mention the parser in the package docstring
+  ([#33](https://github.com/mkranzlein/corpus-query/pull/33),
+  [`a7ca76c`](https://github.com/mkranzlein/corpus-query/commit/a7ca76c087a52f2a04e105c74e9db306f20144ed))
+
+### Features
+
+- Parse and chunk transcripts into the document store
+  ([#33](https://github.com/mkranzlein/corpus-query/pull/33),
+  [`a7ca76c`](https://github.com/mkranzlein/corpus-query/commit/a7ca76c087a52f2a04e105c74e9db306f20144ed))
+
+- **ingest**: Chunk a transcript into overlapping turn windows
+  ([#33](https://github.com/mkranzlein/corpus-query/pull/33),
+  [`a7ca76c`](https://github.com/mkranzlein/corpus-query/commit/a7ca76c087a52f2a04e105c74e9db306f20144ed))
+
+- **ingest**: Write parsed transcripts into the document store
+  ([#33](https://github.com/mkranzlein/corpus-query/pull/33),
+  [`a7ca76c`](https://github.com/mkranzlein/corpus-query/commit/a7ca76c087a52f2a04e105c74e9db306f20144ed))
+
+- **transcripts**: Move the transcript parser into the package
+  ([#33](https://github.com/mkranzlein/corpus-query/pull/33),
+  [`a7ca76c`](https://github.com/mkranzlein/corpus-query/commit/a7ca76c087a52f2a04e105c74e9db306f20144ed))
+
+
 ## v1.2.0 (2026-09-20)
 
 ### Bug Fixes
