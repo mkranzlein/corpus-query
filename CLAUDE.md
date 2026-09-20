@@ -28,6 +28,11 @@
   in history and in the CHANGELOG, so it has to be a valid conventional
   commit — the individual commits on the branch don't.
 
+## Scripts
+
+- `scripts/bedrock_smoke_test.py` makes a real, billed call to the Bedrock
+  Responses API. Ask before running it.
+
 ## Starting new work
 
 Before creating a feature branch, get back to a clean main:
