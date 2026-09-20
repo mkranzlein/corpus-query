@@ -236,9 +236,21 @@ def _warm_models() -> None:
     importing either module pulls in torch, which is an optional extra — the
     same pattern :mod:`corpus_query.retrieval.dense` and
     :mod:`corpus_query.retrieval.search` use.
+
+    Raises:
+        StartupError: If the models extra is not installed. Searching
+            without it is not possible, so it is reported here with the
+            command that fixes it rather than as an import traceback out of
+            a startup hook.
     """
-    from corpus_query.models.embedder import load_embedder
-    from corpus_query.models.reranker import load_reranker
+    try:
+        from corpus_query.models.embedder import load_embedder
+        from corpus_query.models.reranker import load_reranker
+    except ImportError as exc:
+        raise StartupError(
+            f"the embedding and reranking models are not installed ({exc}). "
+            f"Run `uv sync --extra models` and try again."
+        ) from exc
 
     load_embedder()
     load_reranker()

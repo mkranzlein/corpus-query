@@ -14,6 +14,7 @@ for. Nothing here loads a model, so none of it needs the models extra.
 from __future__ import annotations
 
 import asyncio
+import sys
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -339,6 +340,21 @@ def test_startup_fails_loudly_when_the_store_has_no_chunks(tmp_path):
 
     with pytest.raises(StartupError, match="no chunks"):
         open_resources(database, tmp_path / "chroma", warm_models=False)
+
+
+def test_startup_says_how_to_install_the_models(tmp_path, ingest, monkeypatch):
+    """Without the models extra, startup names the command that fixes it."""
+    database = tmp_path / "corpus.db"
+    connection = connect(database)
+    ingest(connection, "rev-b-schedule")
+    connection.close()
+    # A None entry in sys.modules is how the import system records "this
+    # module is not importable", so this stands in for the extra being
+    # absent whether or not it is installed here.
+    monkeypatch.setitem(sys.modules, "corpus_query.models.embedder", None)
+
+    with pytest.raises(StartupError, match="uv sync --extra models"):
+        open_resources(database, tmp_path / "chroma")
 
 
 def test_open_resources_opens_the_store_and_the_index(tmp_path, ingest):
