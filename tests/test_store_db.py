@@ -78,6 +78,19 @@ def test_opening_a_future_version_fails_loudly(tmp_path):
         connect(path)
 
 
+def test_a_version_one_database_is_refused_rather_than_half_migrated(tmp_path):
+    """There is no migration from the transcript-only schema, and saying so
+    is better than opening a store whose columns are not the ones here."""
+    path = tmp_path / "old.db"
+    connect(path).close()
+    conn = sqlite3.connect(path)
+    conn.execute("PRAGMA user_version = 1")
+    conn.close()
+
+    with pytest.raises(SchemaVersionError, match="no migration path"):
+        connect(path)
+
+
 def test_reopening_an_existing_database_does_not_reapply_the_schema(tmp_path):
     path = tmp_path / "store.db"
     connect(path).close()
