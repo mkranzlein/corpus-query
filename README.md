@@ -212,6 +212,15 @@ The two billed steps need a Bedrock key; see
 [docs/provisioning.md](docs/provisioning.md) for where one comes from and how
 the spend is bounded.
 
+The Word, PowerPoint, and Excel files in `data/office/` came from three
+independent Claude Code sessions running Opus, one per file type. Each session
+was told only to read its prompt and follow it exactly:
+[docx.md](corpus_query/office/prompts/docx.md),
+[pptx.md](corpus_query/office/prompts/pptx.md), or
+[xlsx.md](corpus_query/office/prompts/xlsx.md). The prompts build on
+[data/office_files_guidance.md](data/office_files_guidance.md), which specifies
+the nine documents.
+
 ## Development
 
 ```bash
