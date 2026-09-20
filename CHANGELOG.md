@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.1.0 (2026-09-20)
+
+### Features
+
+- **infra**: Deny Bedrock access once spend reaches the budget
+  ([#50](https://github.com/mkranzlein/corpus-query/pull/50),
+  [`cc56e5d`](https://github.com/mkranzlein/corpus-query/commit/cc56e5d3b4b71c2e91e4fae95b9adf0281f63302))
+
+
 ## v2.0.0 (2026-09-20)
 
 ### Bug Fixes
