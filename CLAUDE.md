@@ -65,6 +65,9 @@ Two details worth knowing:
 
 ## Scripts
 
+- `scripts/fetch_models.py` downloads the embedding and reranking model
+  weights into the project's local cache. It costs nothing and calls
+  nothing hosted — it's a plain download of public weights over HTTPS.
 - `scripts/bedrock_smoke_test.py` makes a real, billed call to the Bedrock
   Responses API. Ask before running it.
 - `scripts/generate_transcripts.py` generates a batch of meeting transcripts,
