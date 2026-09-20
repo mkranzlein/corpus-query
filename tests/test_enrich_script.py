@@ -370,3 +370,18 @@ def test_a_dry_run_that_skips_dedupe_does_not_print_its_prompt(
     assert run(["--db", str(path), "--dry-run", "--no-dedupe"], fake_client()) == 0
 
     assert "===== dedupe =====" not in capsys.readouterr().out
+
+
+def test_a_dry_run_writes_nothing_but_still_shows_the_seeded_categories(
+    corpus, fake_client, run, capsys
+):
+    path = corpus("first")
+
+    assert run(["--db", str(path), "--dry-run"], fake_client()) == 0
+
+    assert "- Supply Chain" in capsys.readouterr().out
+    connection = connect(path)
+    try:
+        assert connection.execute("SELECT count(*) FROM topics").fetchone()[0] == 0
+    finally:
+        connection.close()

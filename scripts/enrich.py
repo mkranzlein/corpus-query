@@ -51,7 +51,12 @@ from corpus_query.enrich.pipeline import (
     seed_store,
 )
 from corpus_query.enrich.prompts import PromptError
-from corpus_query.enrich.topics import DEFAULT_TOPICS_FILE, list_categories
+from corpus_query.enrich.topics import (
+    DEFAULT_TOPICS_FILE,
+    list_categories,
+    missing_categories,
+    read_seed_topics,
+)
 from corpus_query.store.db import DEFAULT_DATABASE_FILE, SchemaVersionError, connect
 from infra.config import ConfigError, load_env, require
 
@@ -275,9 +280,10 @@ def _run(
             fills it.
         ConfigError: If a client setting is missing.
     """
-    added = seed_store(connection, args.topics)
-    if added:
-        print(f"Seeded {len(added)} categories.")
+    # Read before anything else: a seed list that cannot be read is worth
+    # failing on before a single billed call, and a dry run needs to show
+    # the categories a real run would seed without writing any of them.
+    seeds = read_seed_topics(args.topics)
 
     document_ids = (
         ids_for_slugs(connection, args.slugs) if args.slugs else pending_ids(connection)
@@ -287,13 +293,18 @@ def _run(
         return 0
 
     if args.dry_run:
+        existing = list_categories(connection)
         print_prompts(
             connection,
             document_ids,
-            list_categories(connection),
+            sorted(existing + missing_categories(existing, seeds)),
             dedupe=not args.no_dedupe,
         )
         return 0
+
+    added = seed_store(connection, args.topics)
+    if added:
+        print(f"Seeded {len(added)} categories.")
 
     embed, embedding_model_id = embedder_factory()
     client = client_factory(load_env(ENV_FILE))

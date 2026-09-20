@@ -75,12 +75,26 @@ def seed_categories(connection: sqlite3.Connection, names: Iterable[str]) -> lis
         the store already held all of them, which is the normal case on
         every run after the first.
     """
-    existing = {name.casefold() for name in list_categories(connection)}
-    added = [name for name in names if name.casefold() not in existing]
+    added = missing_categories(list_categories(connection), names)
     connection.executemany(
         "INSERT INTO topics (name) VALUES (?)", [(name,) for name in added]
     )
     return added
+
+
+def missing_categories(existing: Sequence[str], names: Iterable[str]) -> list[str]:
+    """Return the names that are not already categories.
+
+    Args:
+        existing: The category names the store holds.
+        names: Candidate names, such as the seed list.
+
+    Returns:
+        The candidates with no match in ``existing``, ignoring case, in the
+        order they were given.
+    """
+    known = {name.casefold() for name in existing}
+    return [name for name in names if name.casefold() not in known]
 
 
 def list_categories(connection: sqlite3.Connection) -> list[str]:
