@@ -10,7 +10,13 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.fetch_models import ModelSpec, is_cached, main, parse_args
+from scripts.fetch_models import (
+    WEIGHTS_FILE,
+    ModelSpec,
+    is_cached,
+    main,
+    parse_args,
+)
 
 
 class _Recorder:
@@ -27,8 +33,8 @@ def _specs(cached: set[str]) -> tuple[list[ModelSpec], dict[str, _Recorder]]:
     """Build fake specs, with one loader per repo and a fixed cache state."""
     loaders = {"repo/embedder": _Recorder(), "repo/reranker": _Recorder()}
     specs = [
-        ModelSpec("repo/embedder", "127 MB", "config.json", loaders["repo/embedder"]),
-        ModelSpec("repo/reranker", "87 MB", "config.json", loaders["repo/reranker"]),
+        ModelSpec("repo/embedder", "127 MB", WEIGHTS_FILE, loaders["repo/embedder"]),
+        ModelSpec("repo/reranker", "87 MB", WEIGHTS_FILE, loaders["repo/reranker"]),
     ]
     return specs, loaders
 
@@ -110,8 +116,42 @@ def test_a_missing_models_extra_is_reported_as_one_line(capsys):
 def test_is_cached_reflects_try_to_load_from_cache(cache_state):
     cache_state.add("repo/embedder")
 
-    assert is_cached("repo/embedder", "config.json") is True
-    assert is_cached("repo/reranker", "config.json") is False
+    assert is_cached("repo/embedder", WEIGHTS_FILE) is True
+    assert is_cached("repo/reranker", WEIGHTS_FILE) is False
+
+
+def test_a_model_is_probed_for_its_weights_not_its_config(monkeypatch):
+    """An interrupted download leaves the small files but not the weights.
+
+    Probing anything but the weights would call that cache warm and skip
+    the model, which puts the rest of the download back where this script
+    exists to take it from.
+    """
+    asked = []
+
+    def half_downloaded(repo_id: str, filename: str):
+        asked.append(filename)
+        return None if filename == WEIGHTS_FILE else f"/fake/{repo_id}/{filename}"
+
+    monkeypatch.setattr("scripts.fetch_models.try_to_load_from_cache", half_downloaded)
+
+    assert is_cached("repo/embedder", WEIGHTS_FILE) is False
+    assert asked == [WEIGHTS_FILE]
+
+
+def test_a_half_downloaded_model_is_fetched_again(monkeypatch, capsys):
+    def half_downloaded(repo_id: str, filename: str):
+        return None if filename == WEIGHTS_FILE else f"/fake/{repo_id}/{filename}"
+
+    monkeypatch.setattr("scripts.fetch_models.try_to_load_from_cache", half_downloaded)
+    specs, loaders = _specs(set())
+
+    code = main([], model_specs=lambda: specs)
+
+    assert code == 0
+    assert loaders["repo/embedder"].calls == 1
+    assert loaders["repo/reranker"].calls == 1
+    assert "already cached" not in capsys.readouterr().out
 
 
 def test_parse_args_takes_no_arguments():
