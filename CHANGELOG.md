@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.2.1 (2026-09-20)
+
+### Bug Fixes
+
+- Probe the weights file when deciding a model is cached
+  ([#53](https://github.com/mkranzlein/corpus-query/pull/53),
+  [`2b159cb`](https://github.com/mkranzlein/corpus-query/commit/2b159cb39a19f17a091001de9ca593c26c2ff9e6))
+
+
 ## v2.2.0 (2026-09-20)
 
 ### Features
