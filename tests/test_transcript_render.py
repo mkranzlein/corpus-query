@@ -1,19 +1,20 @@
-"""Tests for the markdown renderer."""
+"""Tests for the markdown renderer.
+
+The round-trip tests here check the renderer, not the parser: they are what
+says the format the renderer writes is recoverable. The parser they use lives
+in :mod:`corpus_query.transcripts.parse`, which is also what ingestion reads
+transcripts with, so the format these tests pin down is the one the store is
+filled from.
+"""
 
 from __future__ import annotations
 
-import re
-
+from corpus_query.transcripts.parse import parse_transcript
 from corpus_query.transcripts.render import EMPTY_SECTION, render_meeting
-
-SPEAKER_MARKER = re.compile(r"^\[([^\]]+)\]: (.*)$")
 
 
 def parse_turns(markdown: str) -> list[tuple[str, str]]:
     """Read speakers and turn text back out of a rendered transcript.
-
-    This lives in the test rather than in the package on purpose: it exists to
-    show the rendered format is unambiguous, not to be used by anything.
 
     Args:
         markdown: A rendered meeting.
@@ -21,11 +22,8 @@ def parse_turns(markdown: str) -> list[tuple[str, str]]:
     Returns:
         One ``(speaker, text)`` pair per turn, in transcript order.
     """
-    lines = markdown.splitlines()
-    start = lines.index("## Transcript") + 1
-    end = lines.index("## Decisions")
-    matches = (SPEAKER_MARKER.match(line) for line in lines[start:end])
-    return [(m.group(1), m.group(2)) for m in matches if m]
+    parsed = parse_transcript(markdown)
+    return [(turn.speaker, turn.text) for turn in parsed.turns]
 
 
 def test_the_four_sections_appear_in_order(make_meeting):
