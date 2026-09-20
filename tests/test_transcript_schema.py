@@ -73,6 +73,8 @@ def test_normalize_line_collapses_every_kind_of_whitespace():
         {"decisions": ["Fine.", " "]},
         {"action_items": [{"assignee": " ", "task": "Something."}]},
         {"action_items": [{"assignee": "Marcus", "task": ""}]},
+        {"turns": [{"speaker": "Devon", "text": "Was I invited?"}]},
+        {"action_items": [{"assignee": "Devon", "task": "Something."}]},
     ],
 )
 def test_unusable_meetings_are_rejected(make_meeting, overrides):
@@ -85,3 +87,20 @@ def test_the_meetings_alias_names_a_list_of_meetings(make_meeting):
     meetings = TypeAdapter(Meetings).validate_python([meeting.model_dump()])
     assert meetings == [meeting]
     assert all(isinstance(item, Meeting) for item in meetings)
+
+
+def test_a_speaker_has_to_be_an_attendee(make_meeting):
+    with pytest.raises(ValidationError, match="speaks but is not an attendee"):
+        make_meeting(turns=[{"speaker": "Devon", "text": "Was I invited?"}])
+
+
+def test_an_action_item_owner_has_to_be_an_attendee(make_meeting):
+    with pytest.raises(ValidationError, match="not an attendee"):
+        make_meeting(action_items=[{"assignee": "Devon", "task": "Something."}])
+
+
+def test_an_attendee_may_neither_speak_nor_owe_anything(make_meeting):
+    meeting = make_meeting()
+    assert "Sofia" in meeting.attendees
+    assert "Sofia" not in {turn.speaker for turn in meeting.turns}
+    assert "Sofia" not in {item.assignee for item in meeting.action_items}

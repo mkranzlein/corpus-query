@@ -21,7 +21,7 @@ from __future__ import annotations
 import datetime
 import re
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 _WHITESPACE = re.compile(r"\s+")
 
@@ -193,6 +193,36 @@ class Meeting(BaseModel):
     def _check_decisions(cls, value: list[str]) -> list[str]:
         """Reject a blank entry in an otherwise fine list of decisions."""
         return [_require_line(decision, "decision") for decision in value]
+
+    @model_validator(mode="after")
+    def _check_everyone_named_was_there(self) -> Meeting:
+        """Reject a meeting that names someone who was not present.
+
+        A speaker who does not attend, or an action item owned by someone who
+        was not in the room, is the kind of quiet inconsistency generation
+        produces and a reader would notice. The attendee list is taken as the
+        authority, since it is the meeting's own account of who was there.
+
+        Returns:
+            The meeting, unchanged.
+
+        Raises:
+            ValueError: If a turn or an action item names someone who is not
+                an attendee.
+        """
+        present = set(self.attendees)
+        strangers = {turn.speaker for turn in self.turns} - present
+        if strangers:
+            raise ValueError(
+                f"{', '.join(sorted(strangers))} speaks but is not an attendee"
+            )
+        unassigned = {item.assignee for item in self.action_items} - present
+        if unassigned:
+            raise ValueError(
+                f"{', '.join(sorted(unassigned))} owns an action item but is "
+                f"not an attendee"
+            )
+        return self
 
 
 type Meetings = list[Meeting]
