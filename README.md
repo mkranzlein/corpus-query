@@ -1,5 +1,7 @@
 # corpus-query
 
+[![codecov](https://codecov.io/gh/mkranzlein/corpus-query/graph/badge.svg?token=ZGULR6SXPA)](https://codecov.io/gh/mkranzlein/corpus-query)
+
 Query a corpus of documents with a language model, reaching Amazon Bedrock
 through its OpenAI-compatible endpoint. You point the application at that
 endpoint with an inference API key; nothing else needs to be set up first.
