@@ -18,8 +18,8 @@ The embedding model comes from the ``models`` extra, which a plain
 the embedding pass would fail at the last step, so the run stops up front
 instead, with the command to fix it.
 
-Settings come from ``.env``: ``OPENAI_API_KEY``, ``OPENAI_BASE_URL``, and
-``OPENAI_PROJECT``.
+Settings come from ``.env``: ``AWS_BEARER_TOKEN_BEDROCK`` and
+``AWS_REGION``.
 
 Every run without ``--dry-run`` makes real, billed inference calls — several
 per document. Do not run this without asking first; see CLAUDE.md.
@@ -38,7 +38,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from openai import OpenAI
+from anthropic import AnthropicBedrock
 
 from corpus_query.enrich import passes
 from corpus_query.enrich.documents import ids_for_slugs, pending_ids, read_document
@@ -60,12 +60,14 @@ from corpus_query.enrich.topics import (
 from corpus_query.store.db import DEFAULT_DATABASE_FILE, SchemaVersionError, connect
 from infra.config import ConfigError, load_env, require
 
-#: Environment file this script reads, holding the OpenAI-compatible client
+#: Environment file this script reads, holding the inference client's
 #: settings rather than the AWS provisioning ones.
 ENV_FILE = ".env"
 
-#: A plain Bedrock model id, not a ``us.``-prefixed inference profile.
-MODEL = "openai.gpt-5.6-sol"
+#: The US cross-region inference profile for Claude Sonnet 4.6, which is how
+#: the model is offered rather than as a plain foundation-model id: a call is
+#: routed to whichever US region has capacity for it.
+MODEL = "us.anthropic.claude-sonnet-4-6"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -122,22 +124,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def build_client(env: dict[str, str]) -> OpenAI:
-    """Build the OpenAI client pointed at the Bedrock endpoint.
+def build_client(env: dict[str, str]) -> AnthropicBedrock:
+    """Build the Anthropic client pointed at Bedrock Runtime.
 
     Args:
         env: Settings as returned by :func:`infra.config.load_env`.
 
     Returns:
-        A client configured with the key, endpoint, and project from ``env``.
+        A client configured with the key and region from ``env``.
 
     Raises:
         ConfigError: If a required setting is missing.
     """
-    return OpenAI(
-        api_key=require(env, "OPENAI_API_KEY"),
-        base_url=require(env, "OPENAI_BASE_URL"),
-        project=require(env, "OPENAI_PROJECT"),
+    return AnthropicBedrock(
+        api_key=require(env, "AWS_BEARER_TOKEN_BEDROCK"),
+        aws_region=require(env, "AWS_REGION"),
     )
 
 
@@ -217,7 +218,7 @@ def print_prompts(
 
 def main(
     argv: list[str] | None = None,
-    client_factory: Callable[[dict[str, str]], OpenAI] = build_client,
+    client_factory: Callable[[dict[str, str]], AnthropicBedrock] = build_client,
     embedder_factory: Callable[[], tuple[Embed, str]] = build_embedder,
 ) -> int:
     """Run the script.
@@ -259,7 +260,7 @@ def main(
 def _run(
     args: argparse.Namespace,
     connection,
-    client_factory: Callable[[dict[str, str]], OpenAI],
+    client_factory: Callable[[dict[str, str]], AnthropicBedrock],
     embedder_factory: Callable[[], tuple[Embed, str]],
 ) -> int:
     """Do the work, with the store open.
@@ -331,7 +332,7 @@ def _run(
     return 1 if failures else 0
 
 
-def _dedupe(connection, client: OpenAI, model: str) -> None:
+def _dedupe(connection, client: AnthropicBedrock, model: str) -> None:
     """Run the dedupe pass and report what it merged.
 
     A failure here is printed rather than raised. Every document is already

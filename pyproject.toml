@@ -5,13 +5,13 @@ description = "Corpus query application and its AWS infrastructure."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "anthropic[bedrock]>=1.7.0",
     "aws-cdk-lib>=2.170.0",
     "boto3>=1.35.0",
     "chromadb>=1.5.9",
     "constructs>=10.0.0,<11.0.0",
     "fastapi>=0.141.1",
     "numpy>=2.5.3",
-    "openai>=3.16.2",
     "pydantic>=2.13.5",
     "python-dotenv>=1.2.3",
     "uvicorn>=0.53.0",

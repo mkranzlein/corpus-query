@@ -40,6 +40,11 @@ from corpus_query.enrich.topics import describe_categories
 #: opposite of the generator, whose whole job is variety.
 TEMPERATURE = 0.2
 
+#: Ceiling on one pass. Every one of them answers with a short object — a
+#: summary of a few sentences, a handful of topics, two labels, or a list of
+#: merges — so this is room to spare rather than a target.
+MAX_TOKENS = 4096
+
 _Parsed = TypeVar("_Parsed", bound=BaseModel)
 
 
@@ -130,7 +135,7 @@ def summarize(client: Any, model: str, document: StoredDocument) -> str:
     """Ask for a document's summary.
 
     Args:
-        client: An OpenAI-compatible client.
+        client: A configured client.
         model: The model id to call.
         document: The document to summarize.
 
@@ -150,7 +155,7 @@ def choose_topics(
     """Ask which categories a document belongs under.
 
     Args:
-        client: An OpenAI-compatible client.
+        client: A configured client.
         model: The model id to call.
         document: The document to file.
         categories: Every category that exists right now.
@@ -175,7 +180,7 @@ def assess_priority(
     """Ask how time sensitive a document is, and how much it moves.
 
     Args:
-        client: An OpenAI-compatible client.
+        client: A configured client.
         model: The model id to call.
         document: The document to assess.
 
@@ -195,7 +200,7 @@ def propose_merges(
     """Ask which categories mean the same thing.
 
     Args:
-        client: An OpenAI-compatible client.
+        client: A configured client.
         model: The model id to call.
         categories: Every category in the store.
 
@@ -211,15 +216,21 @@ def propose_merges(
 
 
 def request(
-    client: Any, model: str, prompt: str, text_format: type[_Parsed]
+    client: Any, model: str, prompt: str, output_format: type[_Parsed]
 ) -> _Parsed:
     """Send one prompt and validate what comes back.
 
+    ``TEMPERATURE`` goes through ``extra_body`` because the SDK dropped
+    sampling controls from its typed parameters: the models released after
+    this one reject them outright. Sonnet 4.6 still honours the setting, and
+    a pass that answers differently every time it is asked is worth less
+    here than one that does not.
+
     Args:
-        client: An OpenAI-compatible client.
+        client: A configured client.
         model: The model id to call.
         prompt: The assembled prompt.
-        text_format: The shape the response has to take.
+        output_format: The shape the response has to take.
 
     Returns:
         The parsed, validated response.
@@ -229,22 +240,42 @@ def request(
             output, or carried one that does not validate.
     """
     try:
-        response = client.responses.parse(
+        message = client.messages.parse(
             model=model,
-            input=prompt,
-            text_format=text_format,
-            temperature=TEMPERATURE,
+            max_tokens=MAX_TOKENS,
+            messages=[{"role": "user", "content": prompt}],
+            output_format=output_format,
+            extra_body={"temperature": TEMPERATURE},
         )
     except ValidationError as exc:
         raise EnrichmentError(
-            f"The {text_format.__name__} response did not validate: {exc}"
+            f"The {output_format.__name__} response did not validate: {exc}"
         ) from exc
-    parsed = response.output_parsed
+    parsed = message.parsed_output
     if parsed is None:
         raise EnrichmentError(
-            f"The {text_format.__name__} response carried no parsed structured output."
+            f"The {output_format.__name__} response carried no parsed "
+            f"structured output ({_why_empty(message)})."
         )
     return parsed
+
+
+def _why_empty(message: Any) -> str:
+    """Say why a response carried no parsed structured output.
+
+    Args:
+        message: The response that came back without parsed output.
+
+    Returns:
+        A phrase naming the likely cause, so a failed document does not
+        leave the reader guessing between a truncated response and a
+        declined one.
+    """
+    if message.stop_reason == "max_tokens":
+        return f"cut off at the {MAX_TOKENS}-token limit"
+    if message.stop_reason == "refusal":
+        return "the model declined to answer"
+    return f"stop reason: {message.stop_reason}"
 
 
 def _bullets(values: Sequence[str]) -> str:

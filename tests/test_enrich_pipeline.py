@@ -28,7 +28,7 @@ from corpus_query.enrich.schema import (
 from corpus_query.enrich.topics import DEFAULT_TOPICS_FILE, list_categories
 from tests.conftest import REPO_ROOT, canned
 
-MODEL = "openai.test-model"
+MODEL = "test-model"
 
 
 @pytest.fixture
@@ -192,10 +192,10 @@ def test_documents_are_enriched_in_the_order_they_are_given(
 def test_nothing_is_written_when_a_pass_fails(store, ingest, fake_client, enrich):
     document_id = ingest(store, "rev-b-schedule")
 
-    def refuse(prompt, text_format):
-        if text_format is PriorityAssessment:
+    def refuse(prompt, output_format):
+        if output_format is PriorityAssessment:
             return None
-        return canned()(prompt, text_format)
+        return canned()(prompt, output_format)
 
     with pytest.raises(EnrichmentError, match="no parsed structured output"):
         enrich(store, fake_client(refuse), document_id)
@@ -224,10 +224,10 @@ def test_one_failed_document_does_not_abandon_the_others(
     second = ingest(store, "second", subject="Tooling sync")
     third = ingest(store, "third", subject="Pricing review")
 
-    def fail_the_second(prompt, text_format):
-        if "Tooling sync" in prompt and text_format is DocumentSummary:
+    def fail_the_second(prompt, output_format):
+        if "Tooling sync" in prompt and output_format is DocumentSummary:
             return None
-        return canned()(prompt, text_format)
+        return canned()(prompt, output_format)
 
     done, failures = enrich_all(
         store, fake_client(fail_the_second), [first, second, third]
