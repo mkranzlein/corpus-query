@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v2.3.0 (2026-09-20)
+
+### Documentation
+
+- Describe the generalized search response and ingestion
+  ([#62](https://github.com/mkranzlein/corpus-query/pull/62),
+  [`806c632`](https://github.com/mkranzlein/corpus-query/commit/806c63217ab997667bef02a8fb411f6ff4d3bef0))
+
+### Features
+
+- Generalize the document store and search beyond transcripts
+  ([#62](https://github.com/mkranzlein/corpus-query/pull/62),
+  [`806c632`](https://github.com/mkranzlein/corpus-query/commit/806c63217ab997667bef02a8fb411f6ff4d3bef0))
+
+### Testing
+
+- Refuse a version 1 database rather than half-migrating it
+  ([#62](https://github.com/mkranzlein/corpus-query/pull/62),
+  [`806c632`](https://github.com/mkranzlein/corpus-query/commit/806c63217ab997667bef02a8fb411f6ff4d3bef0))
+
+
 ## v2.2.1 (2026-09-20)
 
 ### Bug Fixes
