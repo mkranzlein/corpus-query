@@ -1,15 +1,16 @@
 """Tests for reading prior-meeting summaries out of the document store.
 
-The store's own schema lands separately; these tests create the small part of
-it this read depends on, so a shape change there shows up here as a failure
-rather than as a silently empty prompt.
+These go through the store's own ``connect``, so a real schema change shows
+up here as a failure rather than as a silently empty prompt.
 """
 
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 
+import pytest
+
+from corpus_query.store.db import SCHEMA_VERSION, SchemaVersionError, connect
 from corpus_query.transcripts.summaries import (
     NO_PRIOR_MEETINGS,
     PriorMeeting,
@@ -17,29 +18,29 @@ from corpus_query.transcripts.summaries import (
     read_summaries,
 )
 
-DOCUMENTS = """
-    CREATE TABLE documents (
-        slug TEXT PRIMARY KEY,
-        subject TEXT NOT NULL,
-        date TEXT NOT NULL,
-        summary TEXT
-    )
-"""
-
 
 def make_store(path: Path, rows: list[tuple[str, str, str, str | None]]) -> Path:
-    """Create a database holding just enough of a ``documents`` table.
+    """Create a store and insert documents into it directly.
 
     Args:
         path: Where to write the database.
-        rows: ``(slug, subject, date, summary)`` per document.
+        rows: ``(slug, subject, meeting_date, summary)`` per document.
 
     Returns:
         The path written.
     """
-    with sqlite3.connect(path) as connection:
-        connection.execute(DOCUMENTS)
-        connection.executemany("INSERT INTO documents VALUES (?, ?, ?, ?)", rows)
+    connection = connect(path)
+    try:
+        connection.executemany(
+            """
+            INSERT INTO documents (slug, source_path, subject, meeting_date, summary)
+            VALUES (?, 'transcripts/x.md', ?, ?, ?)
+            """,
+            rows,
+        )
+        connection.commit()
+    finally:
+        connection.close()
     return path
 
 
@@ -47,11 +48,21 @@ def test_a_missing_database_is_not_an_error(tmp_path: Path):
     assert read_summaries(tmp_path / "nothing-here.db") == ()
 
 
-def test_a_database_without_a_documents_table_is_not_an_error(tmp_path: Path):
+def test_an_uninitialized_database_file_is_not_an_error(tmp_path: Path):
     path = tmp_path / "corpus.db"
-    with sqlite3.connect(path) as connection:
-        connection.execute("CREATE TABLE unrelated (id INTEGER)")
+    path.touch()
     assert read_summaries(path) == ()
+
+
+def test_a_database_at_the_wrong_schema_version_fails_loudly(tmp_path: Path):
+    path = tmp_path / "corpus.db"
+    connect(path).close()
+    connection = connect(path)
+    connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION + 1}")
+    connection.close()
+
+    with pytest.raises(SchemaVersionError):
+        read_summaries(path)
 
 
 def test_summaries_come_back_oldest_first(tmp_path: Path):

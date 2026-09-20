@@ -16,6 +16,11 @@ from pathlib import Path
 #: this purpose and does not use itself.
 SCHEMA_VERSION = 1
 
+#: Where the document store lives by default, relative to the repository
+#: root. Ingestion writes here unless told otherwise, so anything else that
+#: needs to find the store without being told a path should use this.
+DEFAULT_DATABASE_FILE = Path("data/corpus.db")
+
 _SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
 

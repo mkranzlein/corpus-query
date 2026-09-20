@@ -28,8 +28,7 @@ from corpus_query.ingest.pipeline import (
     ingest_paths,
     transcript_paths,
 )
-from corpus_query.store.db import SchemaVersionError, connect
-from corpus_query.transcripts.summaries import DEFAULT_DATABASE_FILE
+from corpus_query.store.db import DEFAULT_DATABASE_FILE, SchemaVersionError, connect
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
