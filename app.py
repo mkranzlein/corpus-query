@@ -1,7 +1,8 @@
 """CDK app entry point.
 
-Synthesize with ``uv run cdk synth`` and deploy with ``uv run cdk deploy``,
-after the Bedrock project exists — see the README for the order.
+Synthesize with ``uv run cdk synth`` and deploy with ``uv run cdk deploy``.
+The deployed policy is what a Bedrock API key is then minted against — see
+the README for the order.
 """
 
 from __future__ import annotations
