@@ -29,6 +29,11 @@ module-root = ""
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
 upload_to_vcs_release = false
+# uv.lock records the project's own version, so bumping project.version above
+# leaves it stale. Relock and carry the result in the release commit, which
+# keeps `uv sync --locked` honest in CI. uv is not in the action's container.
+assets = ["uv.lock"]
+build_command = "pip install uv && uv lock"
 
 [tool.semantic_release.branches.main]
 match = "main"

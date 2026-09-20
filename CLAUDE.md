@@ -38,16 +38,27 @@ the version. It is configured under `[tool.semantic_release]` in
 
 1. computes the next version and writes it to `project.version`
 2. writes the new section of `CHANGELOG.md`
-3. commits, tags `vX.Y.Z`, and pushes
-4. publishes a GitHub Release carrying those notes
+3. runs `uv lock` to pick up that version
+4. commits all three, tags `vX.Y.Z`, and pushes
+5. publishes a GitHub Release carrying those notes
 
 Don't edit the version or the CHANGELOG by hand — the next run will overwrite
 either one.
 
+Step 3 is there because `uv.lock` records the project's own version alongside
+its dependencies', so a bump to `project.version` leaves the lock a version
+behind. That matters because CI installs with `uv sync --locked`, which fails
+on a lock that disagrees with `pyproject.toml` instead of quietly re-resolving
+— left alone, the first pull request after any release would fail for a reason
+having nothing to do with it. `uv lock` runs as `build_command` and `uv.lock`
+is listed in `assets`, which is what puts it in the release commit; the command
+installs uv first because the action's container does not ship it.
+
 Two details worth knowing:
 
 - Releases carry notes only. This is an application rather than a published
-  package, so no build runs and no artifacts are attached.
+  package, so nothing is built for distribution and no artifacts are attached.
+  `build_command` is borrowed to relock rather than to build.
 - The release commit is pushed with `GITHUB_TOKEN`. Pushes made with that token
   do not trigger workflows, so the release commit does not re-run CI. That is
   intended.
