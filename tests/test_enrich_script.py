@@ -20,6 +20,7 @@ from corpus_query.enrich.schema import (
     TopicMerges,
 )
 from corpus_query.store.db import connect
+from corpus_query.transcripts.summaries import read_summaries
 from scripts.enrich import build_client, build_embedder, main, parse_args
 from tests.conftest import canned
 
@@ -348,3 +349,14 @@ def test_a_store_written_by_another_version_is_refused(
     assert run(["--db", str(path)], fake_client()) == 1
 
     assert "schema version 99" in capsys.readouterr().err
+
+
+def test_an_enriched_summary_is_what_the_generator_reads_back(corpus, fake_client, run):
+    path = corpus("first")
+    summary = "Rev B slips a week on connectors. The team holds the launch date."
+
+    run(["--db", str(path)], fake_client(summary=summary))
+
+    [prior] = read_summaries(path)
+    assert prior.summary == summary
+    assert prior.subject == "Meeting 0"
