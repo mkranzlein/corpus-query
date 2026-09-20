@@ -44,13 +44,29 @@ instead.
 
 4. **Implement it**, following the conventions in this repository's CLAUDE.md.
 
-5. **Run the tests and the hooks.** Tests must pass and `pre-commit run
-   --all-files` must be clean before you commit. If you cannot get them
-   passing, stop and report rather than committing broken work or disabling a
-   check.
+5. **Commit as you go.** Commit at every natural boundary — a module that
+   stands on its own, a test file that passes, a refactor finished — rather
+   than saving one commit for the end. Push the branch as soon as the first
+   commit exists, and keep pushing as you go.
 
-6. **Commit** with a Conventional Commits message. The subject describes the
-   change; the issue reference belongs in the pull request, not here.
+   This is about surviving interruption. A long run can end without warning:
+   the machine sleeps, a usage limit is reached, something times out. Work
+   that is committed and pushed can be picked up and finished. Work sitting
+   uncommitted in a worktree is archaeology at best, and is lost outright if
+   the worktree goes away. A run that produces ten files and no commits has
+   produced nothing.
+
+   Before each commit, run the tests that cover what you changed and
+   `pre-commit run --files <the files you changed>`. Prefer a green commit,
+   but do not let a checkpoint wait on the whole suite — an honest checkpoint
+   that says what is unfinished beats losing an hour of work. Use a
+   Conventional Commits message every time; the subject describes the change,
+   and the issue reference belongs in the pull request, not here.
+
+6. **Verify before opening the PR.** The full test suite must pass and
+   `pre-commit run --all-files` must be clean. If you cannot get them passing,
+   stop and report rather than opening a pull request, committing over the
+   problem, or disabling a check.
 
 7. **Open a PR.** `gh pr create` with a description covering what changed, why,
    how you verified it, and anything you noticed but deliberately left alone.
