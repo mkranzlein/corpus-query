@@ -1,1 +1,1 @@
-"""Meeting transcripts: the meeting schema and the markdown renderer."""
+"""Meeting transcripts: the schema, the prompt, and the markdown renderer."""

@@ -26,6 +26,11 @@ node_modules/
 .env.*
 !.env.example
 
+# Generated corpus. Transcripts are produced by hand with
+# scripts/generate_transcripts.py and are not committed.
+data/transcripts/
+data/*.db
+
 # Model caches kept inside the project
 .cache/
 
