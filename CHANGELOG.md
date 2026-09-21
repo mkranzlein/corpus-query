@@ -2,6 +2,77 @@
 
 <!-- version list -->
 
+## v2.15.0 (2026-09-21)
+
+### Bug Fixes
+
+- Make the usage database upgrade all or nothing
+  ([#113](https://github.com/mkranzlein/corpus-query/pull/113),
+  [`9fa4765`](https://github.com/mkranzlein/corpus-query/commit/9fa4765ff96df7a3496e14bbcf015ea7e58adcfd))
+
+- Send /review/ to the review page instead of a 404
+  ([#113](https://github.com/mkranzlein/corpus-query/pull/113),
+  [`9fa4765`](https://github.com/mkranzlein/corpus-query/commit/9fa4765ff96df7a3496e14bbcf015ea7e58adcfd))
+
+### Build System
+
+- Rebuild the frontend bundle with the review queue
+  ([#113](https://github.com/mkranzlein/corpus-query/pull/113),
+  [`9fa4765`](https://github.com/mkranzlein/corpus-query/commit/9fa4765ff96df7a3496e14bbcf015ea7e58adcfd))
+
+### Continuous Integration
+
+- Catch untracked files in the frontend bundle staleness check
+  ([#111](https://github.com/mkranzlein/corpus-query/pull/111),
+  [`b15493e`](https://github.com/mkranzlein/corpus-query/commit/b15493ee0a08a49600629d8c2a8fc0ebd60cab85))
+
+- Fail when the committed frontend bundle is stale
+  ([#111](https://github.com/mkranzlein/corpus-query/pull/111),
+  [`b15493e`](https://github.com/mkranzlein/corpus-query/commit/b15493ee0a08a49600629d8c2a8fc0ebd60cab85))
+
+- Run the frontend tests in the lint job
+  ([#113](https://github.com/mkranzlein/corpus-query/pull/113),
+  [`9fa4765`](https://github.com/mkranzlein/corpus-query/commit/9fa4765ff96df7a3496e14bbcf015ea7e58adcfd))
+
+### Documentation
+
+- Describe the review queue and the frontend tests
+  ([#113](https://github.com/mkranzlein/corpus-query/pull/113),
+  [`9fa4765`](https://github.com/mkranzlein/corpus-query/commit/9fa4765ff96df7a3496e14bbcf015ea7e58adcfd))
+
+- Write the measurement approach for the first thirty days
+  ([#112](https://github.com/mkranzlein/corpus-query/pull/112),
+  [`b12b765`](https://github.com/mkranzlein/corpus-query/commit/b12b765fa130872e66d303457a0b0432768fcd68))
+
+### Features
+
+- Add a review queue for gaps, corrections, and feedback
+  ([#113](https://github.com/mkranzlein/corpus-query/pull/113),
+  [`9fa4765`](https://github.com/mkranzlein/corpus-query/commit/9fa4765ff96df7a3496e14bbcf015ea7e58adcfd))
+
+- Add a review queue page for gaps, corrections, and feedback
+  ([#113](https://github.com/mkranzlein/corpus-query/pull/113),
+  [`9fa4765`](https://github.com/mkranzlein/corpus-query/commit/9fa4765ff96df7a3496e14bbcf015ea7e58adcfd))
+
+- Read one captured record and mark it reviewed over the API
+  ([#113](https://github.com/mkranzlein/corpus-query/pull/113),
+  [`9fa4765`](https://github.com/mkranzlein/corpus-query/commit/9fa4765ff96df7a3496e14bbcf015ea7e58adcfd))
+
+- Record when a gap, correction, or feedback was reviewed
+  ([#113](https://github.com/mkranzlein/corpus-query/pull/113),
+  [`9fa4765`](https://github.com/mkranzlein/corpus-query/commit/9fa4765ff96df7a3496e14bbcf015ea7e58adcfd))
+
+### Testing
+
+- Temporary staleness demo (not rebuilt, will be reverted)
+  ([#111](https://github.com/mkranzlein/corpus-query/pull/111),
+  [`b15493e`](https://github.com/mkranzlein/corpus-query/commit/b15493ee0a08a49600629d8c2a8fc0ebd60cab85))
+
+- Temporary untracked-bundle-file demo (not rebuilt, will be reverted)
+  ([#111](https://github.com/mkranzlein/corpus-query/pull/111),
+  [`b15493e`](https://github.com/mkranzlein/corpus-query/commit/b15493ee0a08a49600629d8c2a8fc0ebd60cab85))
+
+
 ## v2.14.0 (2026-09-21)
 
 ### Documentation
