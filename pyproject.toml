@@ -1,6 +1,6 @@
 [project]
 name = "corpus-query"
-version = "2.24.0"
+version = "2.24.1"
 description = "Corpus query application and its AWS infrastructure."
 readme = "README.md"
 requires-python = ">=3.14"

@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.24.1 (2026-09-21)
+
+### Bug Fixes
+
+- **ask**: Align answer-view fixtures with the corpus, share routing types
+  ([#127](https://github.com/mkranzlein/corpus-query/pull/127),
+  [`635d12e`](https://github.com/mkranzlein/corpus-query/commit/635d12e5198267e1b4803c713032ddb25181fceb))
+
+
 ## v2.24.0 (2026-09-21)
 
 ### Build System
