@@ -1,6 +1,6 @@
 # corpus-query
 
-[![codecov](https://codecov.io/gh/mkranzlein/corpus-query/graph/badge.svg?token=ZGULR6SXPA)](https://codecov.io/gh/mkranzlein/corpus-query)
+[![CI](https://github.com/mkranzlein/corpus-query/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mkranzlein/corpus-query/actions/workflows/ci.yml) [![codecov](https://codecov.io/gh/mkranzlein/corpus-query/graph/badge.svg?token=ZGULR6SXPA)](https://codecov.io/gh/mkranzlein/corpus-query)
 
 Ask a corpus of meeting transcripts a question in plain English and get back
 the passages that bear on it. Each result carries where it came from — the
