@@ -497,6 +497,10 @@ are reading came from a correction rather than from the record. Feeding
 unreviewed corrections into answers without those is a way to make the system
 confidently wrong in a new direction.
 
+Gaps, corrections, and feedback are also the diagnostic layer underneath the
+one metric worth watching in a launch window — see
+[docs/retention.md](docs/retention.md).
+
 ### Check that it is up
 
 ```bash
