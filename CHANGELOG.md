@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.10.0 (2026-09-21)
+
+### Features
+
+- Serve a built React frontend from the API
+  ([#104](https://github.com/mkranzlein/corpus-query/pull/104),
+  [`c17c530`](https://github.com/mkranzlein/corpus-query/commit/c17c530a8c13de2e3bc9386e11939bf2407507b7))
+
+
 ## v2.9.0 (2026-09-21)
 
 ### Bug Fixes
