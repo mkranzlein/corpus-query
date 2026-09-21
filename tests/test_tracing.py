@@ -324,6 +324,75 @@ def test_a_streamed_answer_is_traced_like_a_json_one(tmp_path) -> None:
     assert traced(STREAM) == traced({})
 
 
+@pytest.mark.parametrize(
+    ("params", "backend", "model_name"),
+    [
+        (
+            {"ls_provider": "ollama", "ls_model_name": "granite4.1:8b"},
+            "ollama",
+            "granite4.1:8b",
+        ),
+        (
+            {
+                "ls_provider": "amazon_bedrock",
+                "ls_model_name": "us.anthropic.claude-sonnet-4-6",
+            },
+            "aws.bedrock",
+            "us.anthropic.claude-sonnet-4-6",
+        ),
+    ],
+)
+@pytest.mark.parametrize("headers", [{}, STREAM], ids=["json", "stream"])
+def test_the_answer_row_links_to_its_trace_and_names_what_answered(
+    tmp_path, monkeypatch, params, backend, model_name, headers
+) -> None:
+    """The row's trace id finds the spans, and its numbers agree with them.
+
+    Both ways of asking write the row the same way, and the backend on it is
+    whichever model the graph actually ran on — here each of the project's
+    two, as a scripted model reporting itself the way each one does.
+    """
+    model = IdentifiedModel([])
+    model.replies = answering(model)
+    monkeypatch.setattr(model, "_get_ls_params", lambda **kwargs: params)
+    request(
+        traced_app(tmp_path, scripted(model)),
+        "POST",
+        "/answer",
+        json={"question": QUESTION},
+        headers=headers,
+    )
+
+    connection = capture.connect()
+    try:
+        [row] = connection.execute("SELECT * FROM answers").fetchall()
+        linked = [
+            name
+            for (name,) in connection.execute(
+                "SELECT s.name FROM answers AS a "
+                "JOIN spans AS s ON s.trace_id = a.trace_id "
+                "ORDER BY s.start_time_unix_nano"
+            )
+        ]
+    finally:
+        connection.close()
+    [rows] = recorded_traces()
+    run = one(rows, "invoke_agent corpus-query")
+    tool = one(rows, "execute_tool search_corpus")
+
+    assert row["trace_id"] == run.trace_id
+    assert linked == [span.name for span in rows]
+    assert row["backend"] == backend
+    assert row["model"] == model_name
+    assert row["searches"] == 1
+    assert row["top_score"] == tool.attributes["corpus_query.confidence.top_score"]
+    assert row["margin"] == tool.attributes["corpus_query.confidence.margin"]
+    # The answer is the second chunk of the three, word for word.
+    assert row["citation_coverage"] == 1.0
+    duration = (run.end_time_unix_nano - run.start_time_unix_nano) / 1e6
+    assert 0 <= row["latency_ms"] <= duration + 1
+
+
 def test_a_stream_the_client_walks_away_from_ends_its_spans(tmp_path) -> None:
     """The run and the model call it interrupted both end, as cancelled."""
     model = HangingModel([searches("connector lead time"), HANG])

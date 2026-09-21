@@ -21,6 +21,10 @@ to answer and to say where the answer came from. Alongside that, as the tool
 message's artifact, go the same passages as structured citations, which is
 what the response carries back to the caller. Both come from one search, so
 what the answer cites and what the model read cannot drift apart.
+
+The artifact also keeps what the answer's row is measured with: each passage
+as the model was shown it, which citation coverage is checked against, and
+the search's top score and margin. See :func:`found` for its shape.
 """
 
 from __future__ import annotations
@@ -106,7 +110,7 @@ def search_tool(
 
     async def search_corpus(
         query: str, tool_call_id: str | None = None
-    ) -> tuple[str, list[dict[str, Any]]]:
+    ) -> tuple[str, dict[str, Any]]:
         """Run one search and return passages for the model and citations.
 
         The search runs inside a tool span, and the request carries that
@@ -120,8 +124,9 @@ def search_tool(
                 one.
 
         Returns:
-            The passages as the model reads them, and the same passages as
-            structured citations.
+            The passages as the model reads them, and what :func:`found`
+            reads back out of the tool message: the same passages as
+            structured citations, their text, and the search's confidence.
 
         Raises:
             httpx.HTTPStatusError: If the search endpoint refused the
@@ -157,7 +162,14 @@ def search_tool(
             )
         return (
             render_passages(query, results, confidence.get("unmatched_terms") or []),
-            [citation(result) for result in results],
+            {
+                "citations": [citation(result) for result in results],
+                "passages": [passage(result) for result in results],
+                "confidence": {
+                    "top_score": confidence.get("top_score"),
+                    "margin": confidence.get("margin"),
+                },
+            },
         )
 
     return StructuredTool.from_function(
@@ -167,6 +179,32 @@ def search_tool(
         args_schema=SearchCorpus,
         response_format="content_and_artifact",
     )
+
+
+def found(artifact: Any) -> dict[str, Any]:
+    """Read what one search found back out of its tool message's artifact.
+
+    The artifact is plain data, because it is checkpointed with the rest of
+    the conversation. A thread checkpointed before the artifact carried
+    passages and confidence holds a bare list of citations, and is read as
+    that list with nothing else known about the search.
+
+    Args:
+        artifact: A search tool message's artifact, or None.
+
+    Returns:
+        ``citations``, the passages as the answer cites them; ``passages``,
+        the same passages as the model was shown them; and ``confidence``,
+        the search's ``top_score`` and ``margin``. Each is empty when the
+        artifact does not say.
+    """
+    if isinstance(artifact, dict):
+        return {
+            "citations": list(artifact.get("citations") or []),
+            "passages": list(artifact.get("passages") or []),
+            "confidence": dict(artifact.get("confidence") or {}),
+        }
+    return {"citations": list(artifact or []), "passages": [], "confidence": {}}
 
 
 def citation(result: dict[str, Any]) -> dict[str, Any]:
@@ -232,18 +270,31 @@ def render_passages(
     if not results:
         return f'No passages matched "{query}".{missing}'
 
-    blocks = []
-    for index, result in enumerate(results, start=1):
-        source = f"{result['title']} ({result['document_date']}"
-        if result["author"]:
-            source += f", {result['author']}"
-        elif result.get("attendees"):
-            source += f", {', '.join(result['attendees'])}"
-        source += f", {result['location']})"
-        blocks.append(f"[{index}] {source}\n{result['text']}")
+    blocks = [
+        f"[{index}] {passage(result)}" for index, result in enumerate(results, start=1)
+    ]
     return (
         f'The {len(results)} closest passages to "{query}".{missing} Closest is '
         f"not the same as relevant: read them against the question you were "
         f"asked, and if none of them answers it, say the record does not say "
         f"rather than summarizing what is here.\n\n" + "\n\n".join(blocks)
     )
+
+
+def passage(result: dict[str, Any]) -> str:
+    """Render one search result as the model reads it, without its number.
+
+    Args:
+        result: One result, as ``/search`` returns it.
+
+    Returns:
+        A line saying where the passage came from — title, date, author or
+        attendees, and location — and then the passage's text.
+    """
+    source = f"{result['title']} ({result['document_date']}"
+    if result["author"]:
+        source += f", {result['author']}"
+    elif result.get("attendees"):
+        source += f", {', '.join(result['attendees'])}"
+    source += f", {result['location']})"
+    return f"{source}\n{result['text']}"

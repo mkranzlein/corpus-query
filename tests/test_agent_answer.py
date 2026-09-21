@@ -1072,6 +1072,121 @@ def test_an_out_of_scope_question_is_recorded_but_is_not_a_gap() -> None:
     assert written["gaps"] == []
 
 
+def test_an_answered_question_is_recorded_with_its_numbers() -> None:
+    """The row carries what retrieval, the answer, and the run measured."""
+    model = ScriptedModel(
+        [
+            searches("connector lead time"),
+            says("Marcus put the rev B boards two weeks out."),
+            verified(),
+            answered(),
+        ]
+    )
+    request(
+        answering_app(model, StubSearch(result=found())),
+        "POST",
+        "/answer",
+        json={"question": "Where are the rev B boards?"},
+    )
+
+    [answer] = recorded()["answers"]
+    assert answer["searches"] == 1
+    assert answer["top_score"] == 4.5
+    assert answer["margin"] == 1.25
+    # Every content word but "put" and "boards" is in the passage.
+    assert answer["citation_coverage"] == 1.0
+    assert answer["latency_ms"] >= 0
+    # The scripted model does not say what it is, and the row says so rather
+    # than guessing.
+    assert answer["backend"] == "unknown"
+    assert answer["model"] is None
+
+
+def test_an_abstention_is_recorded_with_its_numbers() -> None:
+    """An abstention is a measurement: the row is there, and so are its numbers.
+
+    Nothing came back, so there is no score and no passage to check the
+    answer against, and those are null rather than zero.
+    """
+    model = ScriptedModel(
+        [
+            searches("kalamazoo office"),
+            says("The record does not say anything about a Kalamazoo office."),
+        ]
+    )
+    request(
+        answering_app(model, StubSearch(result=nothing())),
+        "POST",
+        "/answer",
+        json={"question": "What is the Kalamazoo office working on?"},
+        headers={"Accept": "text/event-stream"},
+    )
+
+    [answer] = recorded()["answers"]
+    assert answer["abstained"] == 1
+    assert answer["searches"] == 1
+    assert answer["top_score"] is None
+    assert answer["margin"] is None
+    assert answer["citation_coverage"] is None
+    assert answer["latency_ms"] >= 0
+    assert answer["backend"] == "unknown"
+
+
+def test_an_out_of_scope_question_is_recorded_as_searching_nothing() -> None:
+    """Zero searches is what takes a decline out of a rate over the record."""
+    model = ScriptedModel(
+        [says("I answer from this organization's own record, and that is outside it.")]
+    )
+    request(
+        answering_app(model, StubSearch(result=found())),
+        "POST",
+        "/answer",
+        json={"question": "What is the capital of France?"},
+    )
+
+    [answer] = recorded()["answers"]
+    assert answer["searches"] == 0
+    assert answer["top_score"] is None
+    assert answer["citation_coverage"] is None
+
+
+def test_the_strongest_of_several_searches_is_the_one_recorded() -> None:
+    """A two-part question records the search that matched best, whole."""
+    model = ScriptedModel(
+        [
+            searches("connector lead time", call_id="call-1"),
+            searches("thermal review", call_id="call-2"),
+            says("Marcus put the rev B boards two weeks out."),
+            verified(),
+            answered(),
+        ]
+    )
+    weak = SearchResult(
+        results=[a_result(score=1.0)],
+        confidence=a_confidence(top_score=1.0, margin=0.5),
+    )
+    strong = SearchResult(
+        results=[a_result(chunk_id=8, score=6.0)],
+        confidence=a_confidence(top_score=6.0, margin=None),
+    )
+    results = iter([weak, strong])
+
+    def search(connection, collection, query, **kwargs):
+        return next(results)
+
+    request(
+        answering_app(model, search),
+        "POST",
+        "/answer",
+        json={"question": "Where are the rev B boards, and who owns thermal?"},
+    )
+
+    [answer] = recorded()["answers"]
+    assert answer["searches"] == 2
+    assert answer["top_score"] == 6.0
+    assert answer["margin"] is None
+
+
 def test_a_correction_can_name_the_answer_that_came_back() -> None:
     """The id the response carries is the id a correction is written against.
 
