@@ -479,6 +479,26 @@ class RecordModel(BaseModel):
     abstained: bool = Field(
         description="Whether the record failed to settle that question."
     )
+    citations: list[CitationModel] = Field(
+        default_factory=list,
+        description="The passages the answer rested on, best first. Empty "
+        "when it rested on none.",
+    )
+    reviewed_at: str | None = Field(
+        default=None,
+        description="When someone reading the review queue marked it seen, "
+        "ISO 8601, UTC, or null while it is still new.",
+    )
+
+
+class ReviewRequest(BaseModel):
+    """What ``PATCH`` on one gap, correction, or piece of feedback takes."""
+
+    reviewed: bool = Field(
+        description="True to mark the record reviewed, false to put it back "
+        "among the new ones. Marking one already reviewed keeps the time it "
+        "was first marked."
+    )
 
 
 class GapModel(RecordModel):

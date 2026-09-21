@@ -15,14 +15,19 @@ and the endpoint that ranks is still curlable on its own.
 wrong, against the id ``/answer`` returned, and ``GET /gaps``,
 ``GET /corrections``, and ``GET /feedback`` read the three kinds back, most
 recent first. A gap needs no endpoint to be written: the service records one
-itself whenever the record did not settle a question. All of it goes in the
-usage database, which is the local uncommitted file beside the corpus — using
-the system never modifies a file under version control.
+itself whenever the record did not settle a question. ``GET`` on
+``/gaps/{id}``, ``/corrections/{id}``, or ``/feedback/{id}`` reads one record,
+and ``PATCH`` on the same path marks it reviewed or clears the mark — the one
+change a record takes after it is written. All of it goes in the usage
+database, which is the local uncommitted file beside the corpus — using the
+system never modifies a file under version control.
 
 ``GET /`` serves the browser application, built from ``frontend/`` and
 committed under ``static/`` beside this module. It is mounted last, so the
 JSON endpoints and the generated OpenAPI documents keep their paths and
-nothing about them changes by virtue of a page existing.
+nothing about them changes by virtue of a page existing. ``GET /review``
+serves the same page, which shows the review queue when that is the path it
+was loaded at; nothing on the question-and-answer page links there.
 
 Everything expensive happens once, at startup: the document store is opened,
 the vector index is opened — rebuilt from the embeddings already in the store
@@ -58,7 +63,7 @@ from typing import Any
 
 from chromadb.api.models.Collection import Collection
 from fastapi import FastAPI, HTTPException, Query, Request, Response, status
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from corpus_query.agent.runtime import OpenAgent, open_agent
@@ -78,6 +83,8 @@ from corpus_query.api.models import (
     GapsResponse,
     HealthResponse,
     IndexHealth,
+    RecordModel,
+    ReviewRequest,
     RoutingModel,
     SearchRequest,
     SearchResponse,
@@ -87,7 +94,12 @@ from corpus_query.retrieval.index import DEFAULT_INDEX_DIR, open_index
 from corpus_query.retrieval.search import SearchResult
 from corpus_query.retrieval.search import search as run_search
 from corpus_query.store import capture
-from corpus_query.store.capture import DEFAULT_RECORDS, MAX_RECORDS, UnknownAnswerError
+from corpus_query.store.capture import (
+    DEFAULT_RECORDS,
+    MAX_RECORDS,
+    UnknownAnswerError,
+    UnknownRecordError,
+)
 from corpus_query.store.db import DEFAULT_DATABASE_FILE, connect
 
 #: Runs one query against the store and the index. The project's retrieval
@@ -432,6 +444,10 @@ def create_app(
         rows = capture.feedback(opened.captured, limit=limit)
         return FeedbackResponse(feedback=[FeedbackModel(**row) for row in rows])
 
+    _add_record_routes(app, "gaps", GapModel, "gap")
+    _add_record_routes(app, "corrections", CorrectionModel, "correction")
+    _add_record_routes(app, "feedback", FeedbackModel, "piece of feedback")
+
     @app.get("/health", response_model=HealthResponse)
     async def health_endpoint(request: Request, response: Response):
         """Report that the app is up and what it is serving from.
@@ -484,6 +500,78 @@ def _limit() -> Any:
     return Query(default=DEFAULT_RECORDS, ge=1, le=MAX_RECORDS)
 
 
+def _add_record_routes(
+    app: FastAPI, kind: str, model: type[RecordModel], noun: str
+) -> None:
+    """Add reading one record, and marking it reviewed, for one kind.
+
+    The three kinds are read and marked identically, so the two routes are
+    written once and added three times rather than copied.
+
+    Args:
+        app: The application to add them to.
+        kind: The kind, one of :data:`corpus_query.store.capture.KINDS`,
+            which is also the path the list of that kind is served at.
+        model: What one record of that kind is returned as.
+        noun: What one record of that kind is called, for the generated
+            documentation.
+    """
+
+    async def read_endpoint(record_id: int, request: Request):
+        """Read one record of this kind by its id."""
+        opened: Resources = request.app.state.resources
+        try:
+            row = capture.record(opened.captured, kind, record_id)
+        except UnknownRecordError as exc:
+            raise _unknown_record(exc) from exc
+        return model(**row)
+
+    async def review_endpoint(record_id: int, payload: ReviewRequest, request: Request):
+        """Mark one record of this kind reviewed, or clear the mark."""
+        opened: Resources = request.app.state.resources
+        try:
+            row = capture.mark_reviewed(
+                opened.captured, kind, record_id, reviewed=payload.reviewed
+            )
+        except UnknownRecordError as exc:
+            raise _unknown_record(exc) from exc
+        return model(**row)
+
+    app.add_api_route(
+        f"/{kind}/{{record_id}}",
+        read_endpoint,
+        methods=["GET"],
+        response_model=model,
+        summary=f"Read one {noun}",
+        description=f"One {noun}, with the question, answer, and citations "
+        f"it was recorded against. 404 if no {noun} has that id.",
+        operation_id=f"read_{kind}_record",
+    )
+    app.add_api_route(
+        f"/{kind}/{{record_id}}",
+        review_endpoint,
+        methods=["PATCH"],
+        response_model=model,
+        summary=f"Mark one {noun} reviewed, or clear the mark",
+        description=f"Sets whether the {noun} has been seen by someone "
+        f"reading the review queue. Nothing else about it changes. 404 if "
+        f"no {noun} has that id.",
+        operation_id=f"review_{kind}_record",
+    )
+
+
+def _unknown_record(exc: UnknownRecordError) -> HTTPException:
+    """Turn an unknown record id into the status that says so.
+
+    Args:
+        exc: What the store raised.
+
+    Returns:
+        The 404 to raise in its place.
+    """
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
 def _unknown_answer(exc: UnknownAnswerError) -> HTTPException:
     """Turn an unknown answer id into the status that says so.
 
@@ -515,17 +603,48 @@ def _mount_frontend(app: FastAPI, directory: Path) -> None:
     page saying how to build it rather than a service that refuses to come
     up over a file nothing else needs.
 
+    ``/review`` is the same page. The application reads the path it was
+    loaded at to decide which view to show, so the review queue has an
+    address of its own without a second bundle or a client-side router.
+    Only that one path is served: a static mount would 404 it, because no
+    file is called ``review``, and a catch-all that answered every unknown
+    path with the page would turn a mistyped endpoint into a 200.
+
+    ``/review/`` redirects to ``/review`` rather than serving the page
+    itself. The bundle's asset URLs are relative, so from ``/review/`` the
+    page would ask for ``/review/assets/…`` and load without its script or
+    its styles. The redirect puts the browser on the address where they
+    resolve. It is registered first because the mount at ``/`` would
+    otherwise answer the path with a 404 before FastAPI's own trailing
+    slash redirect ever saw it.
+
     Args:
         app: The application to mount onto.
         directory: The built application, as Vite wrote it.
     """
+
+    @app.get("/review/", include_in_schema=False)
+    async def review_with_a_slash() -> RedirectResponse:
+        """Send a trailing slash to the address the page's assets resolve from."""
+        return RedirectResponse(
+            "/review", status_code=status.HTTP_308_PERMANENT_REDIRECT
+        )
+
     if directory.is_dir():
+        page = directory / "index.html"
+
+        @app.get("/review", include_in_schema=False)
+        async def review_page() -> FileResponse:
+            """Serve the application, which shows the review queue here."""
+            return FileResponse(page)
+
         # html=True is what makes ``/`` serve index.html rather than a
         # directory listing.
         app.mount("/", StaticFiles(directory=directory, html=True), name="frontend")
         return
 
     @app.get("/", response_class=PlainTextResponse)
+    @app.get("/review", response_class=PlainTextResponse, include_in_schema=False)
     async def missing_frontend(response: Response) -> str:
         """Say where the page went, and how to put it back."""
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE

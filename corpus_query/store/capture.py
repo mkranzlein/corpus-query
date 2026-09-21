@@ -21,6 +21,16 @@ that already holds the agent's graph checkpoints. See
 corpus. Asking a question, correcting an answer, and reading either back all
 leave the committed corpus untouched.
 
+Reviewing
+=========
+
+Each gap, correction, and piece of feedback carries ``reviewed_at``: null
+while it is new, and the time someone reading the queue marked it seen once
+they have. It is the one thing about a record that changes after it is
+written, and it changes nothing else about it — the question, the answer,
+and what the user said stay exactly as they were recorded. Clearing it puts
+an item back among the new ones, so a mistaken click is not permanent.
+
 Why the schema version is a row rather than the ``user_version`` pragma
 =======================================================================
 
@@ -54,7 +64,7 @@ from corpus_query.store.usage import usage_database
 #: The version of these tables that this code reads and writes. Recorded in
 #: ``capture_meta`` rather than in the file's ``user_version`` pragma, for
 #: the reasons in the module docstring.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 #: The key the version is stored under in ``capture_meta``.
 SCHEMA_VERSION_KEY = "schema_version"
@@ -72,6 +82,19 @@ MAX_RECORDS = 200
 
 _SCHEMA_PATH = Path(__file__).parent / "capture.sql"
 
+#: The three kinds of record, by the names of their tables. Each can be read
+#: by id and marked reviewed. The names are the tables' own, which is what
+#: makes them safe to interpolate where a parameter cannot go — and why a
+#: kind is checked against this list before it gets that far.
+KINDS = ("gaps", "corrections", "feedback")
+
+#: What takes a file from each older version to the next one, keyed by the
+#: version it starts from. A version-1 file predates reviewing, so its rows
+#: gain a null ``reviewed_at``, which reads, correctly, as not yet seen.
+_MIGRATIONS: dict[int, tuple[str, ...]] = {
+    1: tuple(f"ALTER TABLE {table} ADD COLUMN reviewed_at TEXT" for table in KINDS),
+}
+
 
 class CaptureSchemaVersionError(Exception):
     """The captured records are at a version this code does not know."""
@@ -79,6 +102,10 @@ class CaptureSchemaVersionError(Exception):
 
 class UnknownAnswerError(LookupError):
     """A record was written against an answer id that is not in the store."""
+
+
+class UnknownRecordError(LookupError):
+    """No gap, correction, or piece of feedback has the id that was named."""
 
 
 def connect(path: Path | str | None = None) -> sqlite3.Connection:
@@ -135,6 +162,9 @@ def _initialize(connection: sqlite3.Connection) -> None:
         connection.commit()
         return
     version = _recorded_version(connection)
+    if version in _MIGRATIONS:
+        _migrate(connection, version)
+        return
     if version != SCHEMA_VERSION:
         raise CaptureSchemaVersionError(
             f"the captured records in this usage database are at version "
@@ -143,6 +173,47 @@ def _initialize(connection: sqlite3.Connection) -> None:
             f"committed, so deleting it is a supported way out — it costs "
             f"the conversations and records it held and nothing else."
         )
+
+
+def _migrate(connection: sqlite3.Connection, version: int) -> None:
+    """Bring these tables from an older version up to the current one.
+
+    Every step runs in one transaction with the version bump, so a file is
+    either wholly at the new version or untouched at the old one. The rows
+    already there are kept: the usage database is local and not committed,
+    and asking someone to delete theirs to pick up a new column would cost
+    them every record it held.
+
+    The transaction is opened with an explicit ``BEGIN``. In its default
+    mode, Python's :mod:`sqlite3` opens a transaction on its own only before
+    an INSERT, UPDATE, DELETE, or REPLACE, never before DDL, so under a bare
+    ``with connection:`` each ``ALTER TABLE`` would commit the moment it
+    ran. A failure partway through would then leave some columns added and
+    the old version recorded, and every later open would retry the first
+    ALTER and fail on a column that already exists. SQLite's DDL is
+    transactional, so inside an explicit transaction the ALTERs roll back
+    with everything else.
+
+    Args:
+        connection: An open connection whose tables are at ``version``,
+            with no transaction in progress.
+        version: The version recorded in the file, a key of
+            :data:`_MIGRATIONS`.
+    """
+    connection.execute("BEGIN")
+    try:
+        while version != SCHEMA_VERSION:
+            for statement in _MIGRATIONS[version]:
+                connection.execute(statement)
+            version += 1
+        connection.execute(
+            "UPDATE capture_meta SET value = ? WHERE key = ?",
+            (str(SCHEMA_VERSION), SCHEMA_VERSION_KEY),
+        )
+    except BaseException:
+        connection.rollback()
+        raise
+    connection.commit()
 
 
 def _has_tables(connection: sqlite3.Connection) -> bool:
@@ -390,6 +461,83 @@ def feedback(
     ]
 
 
+def record(connection: sqlite3.Connection, kind: str, row_id: int) -> dict[str, Any]:
+    """Read one gap, correction, or piece of feedback by its id.
+
+    Args:
+        connection: An open capture connection.
+        kind: Which kind it is, one of :data:`KINDS`.
+        row_id: Its id.
+
+    Returns:
+        The record as a list of that kind would return it.
+
+    Raises:
+        UnknownRecordError: If no record of that kind has that id.
+        ValueError: If ``kind`` is not one of :data:`KINDS`.
+    """
+    rows = _READERS[_kind(kind)](connection, row_id=row_id)
+    if not rows:
+        raise UnknownRecordError(f"no {kind} record has id {row_id}")
+    [row] = rows
+    return row
+
+
+def mark_reviewed(
+    connection: sqlite3.Connection,
+    kind: str,
+    row_id: int,
+    reviewed: bool = True,
+) -> dict[str, Any]:
+    """Mark one record seen, or put it back among the new ones.
+
+    Marking a record that is already reviewed keeps the time it was first
+    marked, so repeating the request does not move it.
+
+    Args:
+        connection: An open capture connection.
+        kind: Which kind it is, one of :data:`KINDS`.
+        row_id: Its id.
+        reviewed: True to mark it reviewed, False to clear the mark.
+
+    Returns:
+        The record as a read of it would return it afterwards.
+
+    Raises:
+        UnknownRecordError: If no record of that kind has that id.
+        ValueError: If ``kind`` is not one of :data:`KINDS`.
+    """
+    table = _kind(kind)
+    if reviewed:
+        stamp = "coalesce(reviewed_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+    else:
+        stamp = "NULL"
+    with connection:
+        cursor = connection.execute(
+            f"UPDATE {table} SET reviewed_at = {stamp} WHERE id = ?", (row_id,)
+        )
+    if cursor.rowcount == 0:
+        raise UnknownRecordError(f"no {kind} record has id {row_id}")
+    return record(connection, table, row_id)
+
+
+def _kind(kind: str) -> str:
+    """Check that a kind names one of the three record tables.
+
+    Args:
+        kind: What the caller named.
+
+    Returns:
+        The kind, unchanged.
+
+    Raises:
+        ValueError: If it is not one of :data:`KINDS`.
+    """
+    if kind not in KINDS:
+        raise ValueError(f"kind must be one of {', '.join(KINDS)}, not {kind!r}")
+    return kind
+
+
 def _insert(
     connection: sqlite3.Connection,
     answer_id: str,
@@ -473,8 +621,9 @@ def _select(
         The rows, most recent first, or the single row that was named.
     """
     shared = (
-        f"SELECT g.id, g.answer_id, g.created_at, {columns}, "
-        f"a.thread_id, a.query AS answer_query, a.answer, a.abstained "
+        f"SELECT g.id, g.answer_id, g.created_at, g.reviewed_at, {columns}, "
+        f"a.thread_id, a.query AS answer_query, a.answer, a.citations, "
+        f"a.abstained "
         f"FROM {table} AS g JOIN answers AS a ON a.id = g.answer_id"
     )
     if row_id is not None:
@@ -515,16 +664,18 @@ def _record(row: sqlite3.Row) -> dict[str, Any]:
         row: One joined row.
 
     Returns:
-        The row's own identity and timestamp, plus the question and answer
-        it hangs off.
+        The row's own identity, timestamp, and review state, plus the
+        question, answer, and citations it hangs off.
     """
     return {
         "id": row["id"],
         "answer_id": row["answer_id"],
         "created_at": row["created_at"],
+        "reviewed_at": row["reviewed_at"],
         "thread_id": row["thread_id"],
         "question": row["answer_query"],
         "answer": row["answer"],
+        "citations": json.loads(row["citations"]),
         "abstained": bool(row["abstained"]),
     }
 
@@ -539,3 +690,8 @@ def _loaded(value: str | None) -> dict[str, Any] | None:
         The parsed object, or None.
     """
     return None if value is None else json.loads(value)
+
+
+#: The reader for each kind of record. Defined after the readers themselves,
+#: which is the only reason it sits at the bottom of the module.
+_READERS = {"gaps": gaps, "corrections": corrections, "feedback": feedback}

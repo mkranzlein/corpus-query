@@ -61,6 +61,10 @@ CREATE TABLE gaps (
     -- Who to ask, as the JSON the response carries, or null when the
     -- passages named nobody on the roster and there was no one to suggest.
     routing TEXT,
+    -- When someone reading the review queue marked this seen, or null while
+    -- it is still new. A timestamp rather than a flag, because when an item
+    -- was looked at is worth keeping and costs nothing more than whether.
+    reviewed_at TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
@@ -74,6 +78,10 @@ CREATE TABLE corrections (
     answer_id TEXT NOT NULL REFERENCES answers (id) ON DELETE CASCADE,
     what_was_wrong TEXT NOT NULL,
     what_is_right TEXT NOT NULL,
+    -- When someone reading the review queue marked this seen, or null while
+    -- it is still new. A timestamp rather than a flag, because when an item
+    -- was looked at is worth keeping and costs nothing more than whether.
+    reviewed_at TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
@@ -89,6 +97,10 @@ CREATE TABLE feedback (
     answer_id TEXT NOT NULL REFERENCES answers (id) ON DELETE CASCADE,
     verdict TEXT NOT NULL CHECK (verdict IN ('up', 'down')),
     note TEXT,
+    -- When someone reading the review queue marked this seen, or null while
+    -- it is still new. A timestamp rather than a flag, because when an item
+    -- was looked at is worth keeping and costs nothing more than whether.
+    reviewed_at TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
