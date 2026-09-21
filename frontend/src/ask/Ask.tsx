@@ -146,7 +146,11 @@ export default function Ask() {
           id="question"
           rows={3}
           value={draft}
-          placeholder="What did we decide about the connector lead time?"
+          placeholder={
+            turns.length === 0
+              ? "What did we decide about the connector lead time?"
+              : undefined
+          }
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={onKeyDown}
         />
