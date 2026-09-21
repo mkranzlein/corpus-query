@@ -86,6 +86,10 @@ class SearchResultModel(BaseModel):
         description="Who wrote it, or null for a transcript, which has "
         "attendees rather than an author."
     )
+    attendees: list[str] = Field(
+        description="Who was in the room, for a transcript. Empty for a "
+        "document that names an author."
+    )
     location: str = Field(
         description="Where in the document the chunk sits, as a citation "
         "shows it: a turn range, a heading path, a slide number, a sheet and "
@@ -130,6 +134,7 @@ class SearchResultModel(BaseModel):
             title=result.title,
             document_date=result.document_date,
             author=result.author,
+            attendees=list(result.attendees),
             location=result.location,
             span_start=result.span_start,
             span_end=result.span_end,
@@ -271,9 +276,43 @@ class CitationModel(BaseModel):
         description="Who wrote it, or null for a transcript, which has "
         "attendees rather than an author."
     )
+    attendees: list[str] = Field(
+        default_factory=list,
+        description="Who was in the room, for a transcript. Empty for a "
+        "document that names an author.",
+    )
     location: str = Field(
         description="Where in the document the passage sits: a turn range, "
         "a heading path, a slide number, a sheet and row range."
+    )
+
+
+class RoutingCandidateModel(BaseModel):
+    """One person worth asking, and the passages that named them."""
+
+    name: str = Field(description="The person, as the roster spells them.")
+    role: str = Field(description="Their role, from the roster.")
+    department: str = Field(description="Their department, from the roster.")
+    passages: int = Field(
+        description="How many of the retrieved passages this person wrote "
+        "or attended. What the ranking is by."
+    )
+    evidence: list[CitationModel] = Field(
+        description="Those passages, cited the way an answer's claims are "
+        "cited, so a suggestion can be followed back to what produced it."
+    )
+
+
+class RoutingModel(BaseModel):
+    """Who to ask when the record did not settle the question."""
+
+    candidates: list[RoutingCandidateModel] = Field(
+        description="People worth asking, best first."
+    )
+    question: str = Field(
+        description="The user's question restated so it stands on its own, "
+        "with the context that made it unanswerable. Text to edit and send, "
+        "not something this service sends anywhere."
     )
 
 
@@ -297,6 +336,13 @@ class AnswerResponse(BaseModel):
         description="How many searches the agent ran for this question. "
         "Zero when it did not search, more than one when the question had "
         "more than one part."
+    )
+    routing: RoutingModel | None = Field(
+        default=None,
+        description="Who to ask, when the agent searched and could not "
+        "answer from what came back. Null for an answered question and for "
+        "an out-of-scope one, which is declined without a search and routes "
+        "to nobody.",
     )
     thread_id: str = Field(
         description="The conversation this answer belongs to. Send it back "

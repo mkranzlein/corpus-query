@@ -27,6 +27,7 @@ def _insert_document(
     time_sensitivity: str | None = "near_term",
     business_impact: str | None = "moderate",
     topics: list[str] = (),
+    attendees: list[str] = (),
 ) -> int:
     cursor = connection.execute(
         """
@@ -47,6 +48,11 @@ def _insert_document(
         ),
     )
     document_id = cursor.lastrowid
+    for name in attendees:
+        connection.execute(
+            "INSERT INTO attendees (document_id, name) VALUES (?, ?)",
+            (document_id, name),
+        )
     for name in topics:
         (topic_id,) = connection.execute(
             "INSERT INTO topics (name) VALUES (?) RETURNING id", (name,)
@@ -129,6 +135,7 @@ def test_returns_full_metadata_for_each_result(connection, tmp_path):
         time_sensitivity="urgent",
         business_impact="critical",
         topics=["Firmware", "Supply chain"],
+        attendees=["Priya", "Marcus"],
     )
     chunk_id = _insert_chunk(
         connection,
@@ -157,6 +164,9 @@ def test_returns_full_metadata_for_each_result(connection, tmp_path):
     assert only.title == "Rev B schedule"
     assert only.document_date == "2026-03-04"
     assert only.author is None
+    # A meeting has no author. Who was in the room comes back instead, in
+    # the order the header listed them.
+    assert only.attendees == ["Priya", "Marcus"]
     assert only.location == "turns 2-4"
     assert only.span_start == 2
     assert only.span_end == 4
@@ -195,6 +205,7 @@ def test_a_single_author_document_reports_its_kind_and_author(connection, tmp_pa
     [only] = result.results
     assert only.source_kind == DOCX
     assert only.author == "Devon"
+    assert only.attendees == []
     assert only.title == "Thermal review"
 
 

@@ -54,6 +54,7 @@ from corpus_query.api.models import (
     DatabaseHealth,
     HealthResponse,
     IndexHealth,
+    RoutingModel,
     SearchRequest,
     SearchResponse,
     SearchResultModel,
@@ -235,7 +236,9 @@ def create_app(
             The answer, the passages it rests on, and the conversation it
             belongs to. A question the corpus cannot settle comes back as
             an answer saying so, not as an error, and so does one the
-            corpus was never going to be asked.
+            corpus was never going to be asked. The first of those two also
+            comes back with a suggestion of who to ask; the second routes
+            to nobody.
         """
         agent = request.app.state.agent
         result = await agent.answer(payload.question, thread_id=payload.thread_id)
@@ -244,6 +247,9 @@ def create_app(
             answer=result.answer,
             citations=[CitationModel(**row) for row in result.citations],
             searches=result.searches,
+            routing=(
+                RoutingModel(**result.routing) if result.routing is not None else None
+            ),
             thread_id=result.thread_id,
         )
 

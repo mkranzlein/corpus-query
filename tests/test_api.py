@@ -105,17 +105,38 @@ class StubSearch:
         return self.result
 
 
-def a_result(rank: int = 1, chunk_id: int = 7, score: float = 4.5) -> Result:
-    """Build one ranked result with every field populated."""
+def a_result(
+    rank: int = 1,
+    chunk_id: int = 7,
+    score: float = 4.5,
+    document_slug: str = "rev-b-schedule",
+    title: str = "Rev B schedule",
+    source_kind: str = TRANSCRIPT,
+    author: str | None = None,
+    attendees: list[str] | None = None,
+    location: str = "turns 0-1",
+) -> Result:
+    """Build one ranked result with every field populated.
+
+    The defaults are a transcript, which is the corpus's commonest source
+    and the one that carries attendees rather than an author. The people
+    fields are parameters because what a passage names is what decides who
+    a question routes to.
+    """
     return Result(
         chunk_id=chunk_id,
         text="Marcus: Two weeks out, assuming the connectors land.",
-        document_slug="rev-b-schedule",
-        source_kind=TRANSCRIPT,
-        title="Rev B schedule",
+        document_slug=document_slug,
+        source_kind=source_kind,
+        title=title,
         document_date="2026-03-04",
-        author=None,
-        location="turns 0-1",
+        author=author,
+        attendees=(
+            ["Priya", "Marcus", "Sofia"]
+            if attendees is None and author is None
+            else list(attendees or [])
+        ),
+        location=location,
         span_start=0,
         span_end=1,
         topics=["Hardware", "Supply chain"],
@@ -181,6 +202,7 @@ def test_search_returns_ranked_results_with_provenance(app_factory):
     assert result["title"] == "Rev B schedule"
     assert result["document_date"] == "2026-03-04"
     assert result["author"] is None
+    assert result["attendees"] == ["Priya", "Marcus", "Sofia"]
     assert result["location"] == "turns 0-1"
     assert (result["span_start"], result["span_end"]) == (0, 1)
     assert result["topics"] == ["Hardware", "Supply chain"]

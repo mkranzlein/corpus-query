@@ -54,6 +54,12 @@ class Result:
     """Who wrote it, or ``None`` for a transcript, whose people are its
     attendees."""
 
+    attendees: list[str]
+    """Who was in the room, for a transcript. Empty for a document with an
+    author. The two coexist rather than one standing in for the other, so a
+    caller asking who to ask about a passage has the same answer either
+    way."""
+
     location: str
     """What a citation shows a reader: a turn range, a heading path, a slide
     number."""
@@ -173,6 +179,7 @@ def search(
             title=metadata[chunk_id].title,
             document_date=metadata[chunk_id].document_date,
             author=metadata[chunk_id].author,
+            attendees=metadata[chunk_id].attendees,
             location=metadata[chunk_id].location,
             span_start=metadata[chunk_id].span_start,
             span_end=metadata[chunk_id].span_end,
@@ -213,6 +220,7 @@ class _ChunkMetadata:
     title: str
     document_date: str
     author: str | None
+    attendees: list[str]
     location: str
     span_start: int | None
     span_end: int | None
@@ -279,9 +287,9 @@ def _chunk_metadata(
         """,
         list(chunk_ids),
     ).fetchall()
-    topics_by_document = _topics_by_document(
-        connection, [row["document_id"] for row in rows]
-    )
+    document_ids = [row["document_id"] for row in rows]
+    topics_by_document = _topics_by_document(connection, document_ids)
+    attendees_by_document = _attendees_by_document(connection, document_ids)
     return {
         row["chunk_id"]: _ChunkMetadata(
             text=row["text"],
@@ -290,6 +298,7 @@ def _chunk_metadata(
             title=row["title"],
             document_date=row["document_date"],
             author=row["author"],
+            attendees=attendees_by_document.get(row["document_id"], []),
             location=row["location"],
             span_start=row["span_start"],
             span_end=row["span_end"],
@@ -299,6 +308,37 @@ def _chunk_metadata(
         )
         for row in rows
     }
+
+
+def _attendees_by_document(
+    connection: sqlite3.Connection, document_ids: Sequence[int]
+) -> dict[int, list[str]]:
+    """Fetch who was at each document's meeting.
+
+    Args:
+        connection: An open document store.
+        document_ids: The documents to fetch attendees for.
+
+    Returns:
+        Attendee names, in the order they were written, keyed by document
+        id. A document that has an author instead of attendees is absent.
+    """
+    if not document_ids:
+        return {}
+    placeholders = ", ".join("?" for _ in document_ids)
+    rows = connection.execute(
+        f"""
+        SELECT document_id, name
+        FROM attendees
+        WHERE document_id IN ({placeholders})
+        ORDER BY id
+        """,
+        list(document_ids),
+    ).fetchall()
+    by_document: dict[int, list[str]] = {}
+    for row in rows:
+        by_document.setdefault(row["document_id"], []).append(row["name"])
+    return by_document
 
 
 def _topics_by_document(

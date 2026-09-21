@@ -1,11 +1,19 @@
-"""The graph: a model that may search, and the loop around it.
+"""The graph: a model that may search, the loop around it, and what to do
+when the search did not settle the question.
 
-Two nodes. ``think`` calls the model. ``tools`` runs whatever the model asked
-for and feeds the results back. The edge between them is conditional, so a
-question the model answers outright never reaches retrieval at all, and a
-question with two halves goes round twice. That loop is the whole reason the
-agent exists as a graph rather than a function that searches and then
+Three nodes. ``think`` calls the model. ``tools`` runs whatever the model
+asked for and feeds the results back. The edge between them is conditional,
+so a question the model answers outright never reaches retrieval at all, and
+a question with two halves goes round twice. That loop is the whole reason
+the agent exists as a graph rather than a function that searches and then
 summarizes.
+
+``route`` runs once, after the model has stopped calling tools, and does
+something only for a turn that searched. It asks whether the answer settled
+the question, and when it did not, turns the passages that failed to answer
+it into a suggestion of who to ask. Its model call is its own: neither the
+prompt nor the reply joins the conversation, because a drafted question
+appended to the history is something the next turn would try to answer.
 
 The model is passed in. Nothing here imports a provider, names one, or knows
 what is answering — tools are attached with ``bind_tools``, so the tool schema
@@ -28,6 +36,7 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from corpus_query.agent.prompts import load
+from corpus_query.agent.routing import suggestion
 
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
@@ -58,6 +67,13 @@ class Answer:
     searches: int
     """How many searches this turn ran."""
 
+    routing: dict[str, Any] | None
+    """Who to ask, when the turn searched and the answer did not settle the
+    question: candidates, the passages that named each of them, and a
+    drafted question. ``None`` for an answered question, for one declined
+    without a search, and for one whose passages name nobody on the
+    roster."""
+
     thread_id: str
     """The conversation this turn belongs to. Passing it back continues the
     conversation; leaving it out starts a new one."""
@@ -71,6 +87,12 @@ class Agent:
     """The compiled LangGraph graph. Compiled once, awaited per request."""
 
     system_prompt: str = field(default_factory=lambda: load("answer"))
+
+    routing_prompt: str = field(default_factory=lambda: load("route"))
+    """What the routing node judges an answer with. Held here for the same
+    reason the system prompt is: it travels as state rather than being read
+    inside the node, so editing the file changes resumed conversations as
+    well as new ones."""
 
     async def answer(self, question: str, thread_id: str | None = None) -> Answer:
         """Answer one question.
@@ -88,6 +110,11 @@ class Agent:
             {
                 "messages": [HumanMessage(question)],
                 "system_prompt": self.system_prompt,
+                "routing_prompt": self.routing_prompt,
+                # Cleared on the way in. State outlives a turn, so a
+                # suggestion left over from an earlier question would
+                # otherwise come back attached to the answer to this one.
+                "routing": None,
             },
             config={"configurable": {"thread_id": thread}},
         )
@@ -96,6 +123,7 @@ class Agent:
             answer=_final_text(turn),
             citations=_citations(turn),
             searches=sum(isinstance(message, ToolMessage) for message in turn),
+            routing=state.get("routing"),
             thread_id=thread,
         )
 
@@ -110,6 +138,8 @@ class State(MessagesState):
     """
 
     system_prompt: str
+    routing_prompt: str
+    routing: dict[str, Any] | None
 
 
 def build_graph(
@@ -160,14 +190,52 @@ def build_graph(
         speaker = model if searches >= max_searches else with_tools
         return {"messages": [await speaker.ainvoke(messages)]}
 
+    async def route(state: State) -> dict[str, Any]:
+        """Suggest who to ask, if the answer did not settle the question.
+
+        The model judges its own answer, without its tools and without the
+        conversation: it is shown the question and the answer, which is all
+        that deciding between "this was answered" and "this was not" takes,
+        and a prompt that short is what keeps a second call on every
+        searching turn affordable.
+
+        A turn that ran no search skips the call entirely. That is the
+        out-of-scope decline: nothing was retrieved, so no passage named
+        anybody, and routing is for questions this organization should be
+        able to answer rather than for questions it was never going to be
+        asked.
+
+        Args:
+            state: The conversation and the prompts above it.
+
+        Returns:
+            The routing to attach to this turn, or ``None``.
+        """
+        turn = _this_turn(state["messages"])
+        citations = _citations(turn)
+        if not citations:
+            return {"routing": None}
+        judgement = await model.ainvoke(
+            [
+                SystemMessage(state["routing_prompt"]),
+                HumanMessage(
+                    f"Question asked:\n{_question(turn)}\n\n"
+                    f"Answer given:\n{_final_text(turn)}"
+                ),
+            ]
+        )
+        return {"routing": suggestion(citations, _text_of(judgement))}
+
     builder = StateGraph(State)
     builder.add_node("think", think)
     builder.add_node("tools", ToolNode(tools))
+    builder.add_node("route", route)
     builder.add_edge(START, "think")
     builder.add_conditional_edges(
-        "think", tools_condition, {"tools": "tools", END: END}
+        "think", tools_condition, {"tools": "tools", END: "route"}
     )
     builder.add_edge("tools", "think")
+    builder.add_edge("route", END)
     return builder.compile(checkpointer=checkpointer)
 
 
@@ -190,6 +258,22 @@ def _this_turn(messages: list[Any]) -> list[Any]:
     return messages
 
 
+def _question(messages: list[Any]) -> str:
+    """Return the question this turn was asked.
+
+    Args:
+        messages: This turn's messages, which open with it.
+
+    Returns:
+        The question, or an empty string if the turn does not open with
+        one.
+    """
+    for message in messages:
+        if isinstance(message, HumanMessage):
+            return _text_of(message)
+    return ""
+
+
 def _final_text(messages: list[Any]) -> str:
     """Return the text of the last thing the model said.
 
@@ -201,8 +285,22 @@ def _final_text(messages: list[Any]) -> str:
     """
     for message in reversed(messages):
         if isinstance(message, AIMessage):
-            return message.text if isinstance(message.text, str) else str(message.text)
+            return _text_of(message)
     return ""
+
+
+def _text_of(message: Any) -> str:
+    """Return one message's text.
+
+    Args:
+        message: The message to read.
+
+    Returns:
+        Its text, which is a string on every model that answers in prose
+        and is coerced to one otherwise.
+    """
+    text = message.text
+    return text if isinstance(text, str) else str(text)
 
 
 def _citations(messages: list[Any]) -> list[dict[str, Any]]:
