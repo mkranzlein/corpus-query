@@ -28,7 +28,17 @@ export default defineConfig({
   },
   server: {
     proxy: Object.fromEntries(
-      ["/search", "/answer", "/chunks", "/health", "/openapi.json", "/docs"].map((path) => [
+      [
+        "/search",
+        "/answer",
+        "/chunks",
+        "/health",
+        "/openapi.json",
+        "/docs",
+        "/feedback",
+        "/corrections",
+        "/gaps",
+      ].map((path) => [
         path,
         { target: "http://127.0.0.1:8000", changeOrigin: true },
       ]),
