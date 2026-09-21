@@ -271,5 +271,5 @@ harmless with uv gone; remove them by hand if you want them gone too.
 If you installed uv with Homebrew instead, `brew uninstall uv` replaces the
 last line.
 
-The packages `apt` installed on Ubuntu in step 1 — curl, git, and zstd — are
-general-purpose tools that other software relies on. Leave them.
+The packages `apt` installed on Ubuntu in setup step 1 — curl, git, and zstd —
+are general-purpose tools that other software relies on. Leave them.
