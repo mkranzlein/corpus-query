@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v2.20.0 (2026-09-21)
+
+### Bug Fixes
+
+- Leave the follow-up box without the first question's example
+  ([#121](https://github.com/mkranzlein/corpus-query/pull/121),
+  [`8edd9b9`](https://github.com/mkranzlein/corpus-query/commit/8edd9b95cdfd6baae3694625d47ee492c79f150e))
+
+### Features
+
+- Ask a question in the browser and read the answer with its passages
+  ([#121](https://github.com/mkranzlein/corpus-query/pull/121),
+  [`8edd9b9`](https://github.com/mkranzlein/corpus-query/commit/8edd9b95cdfd6baae3694625d47ee492c79f150e))
+
+- Read a cited passage by id and say whether an answer abstained
+  ([#121](https://github.com/mkranzlein/corpus-query/pull/121),
+  [`8edd9b9`](https://github.com/mkranzlein/corpus-query/commit/8edd9b95cdfd6baae3694625d47ee492c79f150e))
+
+
 ## v2.19.0 (2026-09-21)
 
 ### Documentation
