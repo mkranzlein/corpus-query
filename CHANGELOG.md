@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v2.7.0 (2026-09-21)
+
+### Features
+
+- Read PowerPoint decks into one chunk per slide
+  ([#76](https://github.com/mkranzlein/corpus-query/pull/76),
+  [`831a160`](https://github.com/mkranzlein/corpus-query/commit/831a1600c1ab8719fc308714e480550ff5042fcb))
+
+### Testing
+
+- Cover reading, ingesting, and enriching PowerPoint decks
+  ([#76](https://github.com/mkranzlein/corpus-query/pull/76),
+  [`831a160`](https://github.com/mkranzlein/corpus-query/commit/831a1600c1ab8719fc308714e480550ff5042fcb))
+
+
 ## v2.6.0 (2026-09-21)
 
 ### Build System
