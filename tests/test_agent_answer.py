@@ -549,6 +549,42 @@ def test_regeneration_stops_at_the_bound_and_says_so() -> None:
     assert answer.verification == {"rejected": [claim], "exhausted": True}
 
 
+def test_an_unreadable_verify_reply_is_recorded_without_a_redraft() -> None:
+    """A verify reply with no labelled line is not treated as a rejection.
+
+    A small model sometimes answers verification by echoing the drafted
+    answer back instead of writing the sentinel or a labelled line. That is
+    not evidence anything was rejected, and asking the model to redraft
+    over it cannot converge — see ``verification.py``. It costs no redraft
+    and no regeneration attempt; the draft is returned as it stands and the
+    reply that could not be read is kept on the answer.
+    """
+    draft = "Marcus said the freeze moved to March 19th."
+    echo = (
+        "The record indicates that Marcus said the freeze moved to March "
+        "19th, as shown in the passage."
+    )
+    model = ScriptedModel(
+        [
+            searches("connector lead time"),
+            says(draft),
+            AIMessage(echo),
+            answered(),
+        ]
+    )
+    app = answering_app(model, StubSearch(result=found()))
+
+    answer = answer_directly(app, "Where are the rev B boards?")
+
+    assert answer.answer == draft
+    assert answer.verification == {"unreadable": True, "reply": echo}
+    # The script had exactly one draft, one verify call, and one route
+    # call after the search; a redraft would have needed a reply the
+    # script does not have, and ScriptedModel raises if the graph asks for
+    # one past the end of its script.
+    assert len(model.prompts) == 4
+
+
 def test_the_search_ceiling_makes_the_model_answer() -> None:
     """A model that keeps searching is eventually called without its tools.
 

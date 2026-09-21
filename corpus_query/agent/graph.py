@@ -50,7 +50,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from corpus_query.agent.prompts import load
 from corpus_query.agent.rewriting import resolved_query as read_rewrite
 from corpus_query.agent.routing import drafted_question, suggestion
-from corpus_query.agent.verification import unsupported_claims
+from corpus_query.agent.verification import read_verdict
 
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
@@ -121,11 +121,16 @@ class Answer:
     verification: dict[str, Any] | None
     """What citation verification found, or ``None`` when the turn drafted
     nothing to verify or every claim it made was supported on the first
-    pass. When a claim was not supported: ``rejected``, the unsupported
-    claims from the last check, and ``exhausted``, whether that check ran
-    out of redrafts to try — see :data:`MAX_REGENERATIONS`. The answer
-    itself is always the last draft produced, whether or not verification
-    ever cleared it."""
+    pass. Otherwise one of two shapes. When the model named specific
+    unsupported claims: ``rejected``, those claims from the last check, and
+    ``exhausted``, whether that check ran out of redrafts to try — see
+    :data:`MAX_REGENERATIONS`. When the model's reply was neither the
+    sentinel nor a single labelled rejection — a shape verification cannot
+    act on: ``unreadable`` (``True``) and ``reply``, what the model actually
+    said. An unreadable reply is not redrafted, since a redraft cannot
+    converge on a check that never named anything to fix. The answer itself
+    is always the last draft produced, whether or not verification ever
+    cleared it."""
 
 
 @dataclass(frozen=True)
@@ -316,14 +321,21 @@ def build_graph(
         last draft is what ``route`` and the caller see, and
         ``state["verification"]`` says the check did not clear it.
 
+        A reply this module cannot read as either the sentinel or a
+        labelled rejection is not redrafted either — a reply outside that
+        shape is not evidence a claim was rejected, and asking the model to
+        redraft over it cannot converge on a check that never named
+        anything to fix. ``state["verification"]`` records that the check
+        could not be read, and the draft stands as it is.
+
         Args:
             state: The conversation, with the drafted answer at the end.
 
         Returns:
             Nothing, when there was nothing to verify or every claim held
             up. Otherwise the verification outcome, and — when redrafts
-            remain — a note appended to the conversation asking the model
-            to draft again.
+            remain because specific claims were rejected — a note appended
+            to the conversation asking the model to draft again.
         """
         turn = _this_turn(state["messages"])
         if not _citations(turn):
@@ -337,15 +349,18 @@ def build_graph(
                 ),
             ]
         )
-        rejected = unsupported_claims(_text_of(judgement))
-        if not rejected:
-            return {"verification": None}
+        reply = _text_of(judgement)
+        verdict = read_verdict(reply)
+        if not verdict.rejected:
+            if verdict.readable:
+                return {"verification": None}
+            return {"verification": {"unreadable": True, "reply": _truncated(reply)}}
         attempts = state.get("verify_attempts", 0)
         if attempts >= max_regenerations:
-            return {"verification": {"rejected": rejected, "exhausted": True}}
+            return {"verification": {"rejected": verdict.rejected, "exhausted": True}}
         return {
-            "messages": [SystemMessage(_regeneration_note(rejected))],
-            "verification": {"rejected": rejected, "exhausted": False},
+            "messages": [SystemMessage(_regeneration_note(verdict.rejected))],
+            "verification": {"rejected": verdict.rejected, "exhausted": False},
             "verify_attempts": attempts + 1,
         }
 
@@ -407,11 +422,14 @@ def build_graph(
 
         Returns:
             ``"think"`` when verification appended a redraft request,
-            ``"route"`` otherwise — a pass, nothing to verify, or the
-            regeneration bound was reached.
+            ``"route"`` otherwise — a pass, nothing to verify, an
+            unreadable reply, or the regeneration bound was reached. A
+            verification dict with no ``"exhausted"`` key — the unreadable
+            case — defaults to done rather than redrafted, for the same
+            reason ``verify`` never appends a redraft request for it.
         """
         verification = state.get("verification")
-        if verification is not None and not verification["exhausted"]:
+        if verification is not None and not verification.get("exhausted", True):
             return "think"
         return "route"
 
@@ -573,3 +591,25 @@ def _regeneration_note(rejected: list[str]) -> str:
         "Drop or soften anything they do not support; if that leaves nothing "
         "left to answer with, say the record does not say."
     )
+
+
+#: How much of an unreadable verification reply to keep in
+#: :data:`Answer.verification`. Long enough to show what the model actually
+#: wrote instead of a labelled rejection; short enough that a state record
+#: never grows unboundedly on a model that reliably misses the format.
+_UNREADABLE_REPLY_LIMIT = 500
+
+
+def _truncated(reply: str) -> str:
+    """Bound how much of an unreadable reply is kept.
+
+    Args:
+        reply: The verification model's raw reply.
+
+    Returns:
+        The reply, cut to :data:`_UNREADABLE_REPLY_LIMIT` characters with a
+        marker showing it was cut, or left whole if it already fit.
+    """
+    if len(reply) <= _UNREADABLE_REPLY_LIMIT:
+        return reply
+    return reply[:_UNREADABLE_REPLY_LIMIT] + "…"
