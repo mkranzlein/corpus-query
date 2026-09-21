@@ -54,8 +54,10 @@ make when something asks for it.
 
 from __future__ import annotations
 
+import json
+import logging
 import sqlite3
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -64,8 +66,10 @@ from typing import Any
 from chromadb.api.models.Collection import Collection
 from fastapi import FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
+from fastapi.sse import EventSourceResponse, format_sse_event
 from fastapi.staticfiles import StaticFiles
 
+from corpus_query.agent.graph import EVENTS, Agent, Answer
 from corpus_query.agent.runtime import OpenAgent, open_agent
 from corpus_query.api.models import (
     AnswerRequest,
@@ -115,6 +119,12 @@ type OpenResources = Callable[[], "Resources"]
 #: alone — see the README. Nothing at run time builds it, and nothing at run
 #: time needs Node.
 DEFAULT_STATIC_DIR = Path(__file__).parent / "static"
+
+#: The media type a client asks for, in ``Accept``, to have ``/answer``
+#: stream its progress instead of returning one JSON body.
+EVENT_STREAM = "text/event-stream"
+
+logger = logging.getLogger(__name__)
 
 
 class StartupError(RuntimeError):
@@ -285,13 +295,36 @@ def create_app(
             confidence=ConfidenceModel.from_confidence(result.confidence),
         )
 
-    @app.post("/answer", response_model=AnswerResponse)
+    @app.post(
+        "/answer",
+        response_model=AnswerResponse,
+        responses={
+            200: {
+                "description": "One JSON body by default. With ``Accept: "
+                "text/event-stream``, server-sent events instead: "
+                + "; ".join(
+                    f"``{name}``: {meaning}" for name, meaning in EVENTS.items()
+                )
+                + "; ``answer``: the finished answer, the same JSON body a "
+                "request without the header gets; ``error``: the run failed "
+                "partway, and ``detail`` says why. The stream ends after "
+                "``answer`` or ``error``.",
+                "content": {EVENT_STREAM: {"schema": {"type": "string"}}},
+            }
+        },
+    )
     async def answer_endpoint(payload: AnswerRequest, request: Request):
         """Answer one question out of the corpus.
 
         The graph was compiled at startup; this awaits it. Whether
         retrieval runs, and how many times, is the agent's decision rather
         than this handler's.
+
+        A client that sends ``Accept: text/event-stream`` gets the same run
+        as server-sent events: one as each step starts or reports what it
+        found, and the finished answer last, in the same shape this returns
+        otherwise. Anything else gets the one JSON body, so ``curl`` with no
+        headers is unaffected.
 
         Args:
             payload: The question, and the conversation to continue if
@@ -308,31 +341,15 @@ def create_app(
         """
         opened: Resources = request.app.state.resources
         agent = request.app.state.agent
+        if _wants_events(request):
+            return EventSourceResponse(
+                _answer_events(agent, opened, payload),
+                # Nothing in between should hold events back to batch them,
+                # which is the whole of what streaming them is for.
+                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            )
         result = await agent.answer(payload.question, thread_id=payload.thread_id)
-        answer_id = capture.record_answer(
-            opened.captured,
-            query=payload.question,
-            answer=result.answer,
-            citations=result.citations,
-            thread_id=result.thread_id,
-            abstained=result.abstained,
-        )
-        # A gap is written by the system rather than reported by anybody, so
-        # this is the only place it can come from. The suggestion is stored
-        # as it was made, since the roster and the corpus both move on.
-        if result.abstained or result.routing is not None:
-            capture.record_gap(opened.captured, answer_id, routing=result.routing)
-        return AnswerResponse(
-            question=payload.question,
-            answer=result.answer,
-            citations=[CitationModel(**row) for row in result.citations],
-            searches=result.searches,
-            routing=(
-                RoutingModel(**result.routing) if result.routing is not None else None
-            ),
-            thread_id=result.thread_id,
-            answer_id=answer_id,
-        )
+        return _recorded(opened, payload.question, result)
 
     @app.post(
         "/corrections",
@@ -487,6 +504,112 @@ def create_app(
 
     _mount_frontend(app, DEFAULT_STATIC_DIR if static_dir is None else Path(static_dir))
     return app
+
+
+def _wants_events(request: Request) -> bool:
+    """Return whether a request asked for its answer as an event stream.
+
+    Args:
+        request: The live request.
+
+    Returns:
+        True when ``Accept`` names ``text/event-stream``. A wildcard does
+        not count: ``curl`` sends ``*/*``, and it gets the JSON it always
+        has.
+    """
+    accepted = request.headers.get("accept", "")
+    return any(
+        part.split(";", 1)[0].strip().lower() == EVENT_STREAM
+        for part in accepted.split(",")
+    )
+
+
+def _recorded(opened: Resources, question: str, result: Answer) -> AnswerResponse:
+    """Record one answer, and the gap it leaves if it left one.
+
+    Args:
+        opened: The resources opened at startup, for the usage database.
+        question: The question as it was asked.
+        result: What the agent answered.
+
+    Returns:
+        The response body, carrying the id the answer was recorded under.
+    """
+    answer_id = capture.record_answer(
+        opened.captured,
+        query=question,
+        answer=result.answer,
+        citations=result.citations,
+        thread_id=result.thread_id,
+        abstained=result.abstained,
+    )
+    # A gap is written by the system rather than reported by anybody, so
+    # this is the only place it can come from. The suggestion is stored as
+    # it was made, since the roster and the corpus both move on.
+    if result.abstained or result.routing is not None:
+        capture.record_gap(opened.captured, answer_id, routing=result.routing)
+    return AnswerResponse(
+        question=question,
+        answer=result.answer,
+        citations=[CitationModel(**row) for row in result.citations],
+        searches=result.searches,
+        routing=(
+            RoutingModel(**result.routing) if result.routing is not None else None
+        ),
+        thread_id=result.thread_id,
+        answer_id=answer_id,
+    )
+
+
+async def _answer_events(
+    agent: Agent, opened: Resources, payload: AnswerRequest
+) -> AsyncIterator[bytes]:
+    """Run one question, as server-sent events.
+
+    The response has already started by the time the first event is sent,
+    so a failure partway cannot become a status code. It becomes an
+    ``error`` event instead, and the stream ends there, rather than the
+    connection simply closing and leaving the client to guess whether the
+    answer was finished. The traceback goes to the service's log, as it
+    does for a request that fails before responding.
+
+    A client that stops listening is not caught here. The server cancels
+    the response, the cancellation stops the graph at whatever it was
+    awaiting, and nothing is recorded, since nothing was answered. The
+    half-finished turn left on the thread is cleared by the next question
+    asked on it; see :meth:`corpus_query.agent.graph.Agent.stream`.
+
+    Args:
+        agent: The agent opened at startup.
+        opened: The resources opened at startup, for the usage database.
+        payload: The question, and the conversation to continue.
+
+    Yields:
+        One encoded event per step, then ``answer`` or ``error``.
+    """
+    try:
+        async for item in agent.stream(payload.question, thread_id=payload.thread_id):
+            if isinstance(item, Answer):
+                body = _recorded(opened, payload.question, item)
+                yield _event("answer", body.model_dump(mode="json"))
+            else:
+                yield _event(item.event, item.data)
+    except Exception as exc:
+        logger.exception("answering failed partway through a stream")
+        yield _event("error", {"detail": f"{type(exc).__name__}: {exc}"})
+
+
+def _event(name: str, data: dict[str, Any]) -> bytes:
+    """Encode one server-sent event.
+
+    Args:
+        name: The event type, which a browser dispatches on.
+        data: Its payload, sent as JSON.
+
+    Returns:
+        The event on the wire.
+    """
+    return format_sse_event(event=name, data_str=json.dumps(data))
 
 
 def _limit() -> Any:
