@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v2.11.0 (2026-09-21)
+
+### Features
+
+- Draft the forwarded question in two labelled parts
+  ([#105](https://github.com/mkranzlein/corpus-query/pull/105),
+  [`a328571`](https://github.com/mkranzlein/corpus-query/commit/a328571564766de27e8015e7286e9dd101c9aae1))
+
+- Suggest a routing when the agent cannot answer confidently
+  ([#105](https://github.com/mkranzlein/corpus-query/pull/105),
+  [`a328571`](https://github.com/mkranzlein/corpus-query/commit/a328571564766de27e8015e7286e9dd101c9aae1))
+
+- Suggest who to ask when the agent cannot answer
+  ([#105](https://github.com/mkranzlein/corpus-query/pull/105),
+  [`a328571`](https://github.com/mkranzlein/corpus-query/commit/a328571564766de27e8015e7286e9dd101c9aae1))
+
+
 ## v2.10.0 (2026-09-21)
 
 ### Features
