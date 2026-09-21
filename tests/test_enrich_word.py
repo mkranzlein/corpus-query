@@ -30,12 +30,12 @@ MODEL = "test-model"
 
 #: One of the committed documents. It is the deepest of the three, so what a
 #: model is shown for it is the awkward case rather than the easy one.
-REPORT = REPO_ROOT / "data" / "office" / "xt-9-rev-b-thermal-qualification-report.docx"
+REPORT = REPO_ROOT / "data" / "office" / "mx-3-firmware-2-4-2-soak-test-report.docx"
 
 
 @pytest.fixture
 def report(store, monkeypatch):
-    """Ingest the committed thermal report and return its document id."""
+    """Ingest the committed soak test report and return its document id."""
     monkeypatch.chdir(REPO_ROOT)
     return ingest_file(store, REPORT).document_id
 
@@ -46,17 +46,17 @@ def test_a_word_document_reads_back_with_its_author_and_no_attendees(store, repo
     assert document.source_kind == DOCX
     assert document.author == "Sofia"
     assert document.attendees == ()
-    assert document.title == "XT-9 Rev B Thermal Qualification Report"
-    assert document.document_date == "2026-03-12"
+    assert document.title == "MX-3 Firmware 2.4.2 Soak Test Report"
+    assert document.document_date == "2026-04-14"
 
 
 def test_the_prompt_shows_a_written_document_rather_than_a_meeting(store, report):
     rendered = describe(read_document(store, report))
 
-    assert rendered.startswith("**Title:** XT-9 Rev B Thermal Qualification Report")
+    assert rendered.startswith("**Title:** MX-3 Firmware 2.4.2 Soak Test Report")
     assert "**Author:** Sofia" in rendered
     assert "Attendees" not in rendered
-    assert "Thermal Chamber Results" in rendered, (
+    assert "Idle and Wake Cycles" in rendered, (
         "the headings are part of the document a model is shown"
     )
 
@@ -65,7 +65,7 @@ def test_the_document_a_model_sees_is_the_document_in_order(store, report):
     text = read_document(store, report).text
 
     lines = text.splitlines()
-    assert lines[0] == "Scope of This Qualification"
+    assert lines[0] == "Purpose and Scope"
     # Blank lines are left out: sections are separated by one, so counting
     # them would report a separator as a repeated block.
     blocks = [line for line in lines if line.strip()]
@@ -78,7 +78,7 @@ def test_enriching_fills_the_summary_topics_and_priority(
 ):
     embed, embedding_model_id = fake_embedder
     client = fake_client(
-        summary="Sofia qualifies the compensation firmware. It holds to 60 C.",
+        summary="Sofia soak tests the watchdog fix. No unit faults on 2.4.2.",
         topics=["Firmware", "Quality"],
         time_sensitivity="near_term",
         business_impact="significant",
@@ -130,7 +130,7 @@ def test_the_summary_and_topic_passes_are_shown_the_document_itself(
     [topics_prompt] = client.prompts(TopicAssignment)
     for prompt in (summary_prompt, topics_prompt):
         assert "**Author:** Sofia" in prompt
-        assert "Chamber B, 60 °C Soak" in prompt
+        assert "Rig D" in prompt
         assert "[Priya]:" not in prompt, "a written document has no speakers"
 
 

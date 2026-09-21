@@ -286,9 +286,9 @@ def _title(path: Path, workbook: Workbook, sheets: Sequence[Sheet | None]) -> st
     The core properties' title when it has one. Otherwise one made from the
     file name, whose words carry no capitalization at all: ``q1-sales-
     pipeline``. Each word is spelled the way the workbook itself spells it
-    wherever it says it — a sheet named ``ProximaSense X4 BOM`` settles
-    three of the four words of that file's name — and capitalized when the
-    workbook never does.
+    wherever it says it — a sheet named ``GX-7 BOM`` settles three of the
+    four words of that file's name — and capitalized when the workbook never
+    does.
 
     Args:
         path: The workbook's path, whose stem the title is made from.

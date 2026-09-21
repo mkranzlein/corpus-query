@@ -36,90 +36,70 @@ run: read the batch, find the four, and record them here. Record enough to
 find it again — the slugs involved and the fact in dispute — but not so much
 that this file becomes a second copy of the corpus.
 
-Asking for an imperfection is not the same as getting one. Two of the four
-landed, one landed in a weaker form than it was asked for, and one did not
-land at all. That is recorded below rather than quietly omitted, because a
-list of intended flaws that is really a list of requested flaws would be
-worse than no list: it would have us testing against failures the corpus does
-not actually contain.
+Asking for an imperfection is not the same as getting one. One of the four
+landed several times over, two landed in a weaker form than they were asked
+for, and one did not land at all. That is recorded below rather than quietly
+omitted, because a list of intended flaws that is really a list of requested
+flaws would be worse than no list: it would have us testing against failures
+the corpus does not actually contain.
 
-### Batch 1 — ten meetings, 2026-01-14 to 2026-06-02
+### Batches 1 and 2 — ten meetings, 2026-01-22 to 2026-06-11
+
+The ten meetings were generated in two batches of five, and each batch was
+asked for all four imperfections. Which meeting came from which batch was not
+recorded, so the ten are read together here.
 
 | Imperfection | Meetings | What it is |
 | --- | --- | --- |
-| Reversed decision — **landed** | `xt-9-rev-b-thermal-drift-firmware-workaround-feasibility` (2026-03-05) → `customer-escalation-brannock-refinery-account` (2026-04-08) | March decides to build a firmware thermal-compensation update for Rev B units and ship it to the field, with Sofia on it as her primary focus and a draft due March 19th. In April, Marcus tells the same problem's escalation that the fix "is a component change on the output stage, it's not something you can patch in firmware." Neither the decision nor Sofia's in-flight work is mentioned. |
-| Contradictory facts — **weaker than asked for** | `xt-9-rev-b-thermal-drift-firmware-workaround-feasibility` (2026-03-05) → `customer-escalation-brannock-refinery-account` (2026-04-08) | Not the incompatible figure the prompt asks for. What landed is a contradiction about what is known: in March, Marcus gives the Rev B field population as "somewhere around 340 units." In April, asked the same question, he says he does not have the number and that producing it would mean cross-referencing the shipping manifest against the hardware revision log — "not a five-minute job." No figure in the corpus contradicts another figure. |
-| Unanswered question — **did not land** | — | Every direct question in all ten meetings draws a reply in the very next turn. The nearest approximations are questions deflected rather than dropped: Jamal asking how many Rev B units are in the field (2026-04-08) and Renata asking the total SLA credit exposure (2026-06-02) both get "I don't have that" and then become action items, which is the opposite of the conversation moving on. |
-| Uneven quality — **weakly** | Most uneven: `support-backlog-and-ticket-sla-review`, `q1-sales-pipeline-review`. Most polished: `sensor-unit-cost-review-proximasense-x4`, `fieldsense-200-series-volume-pricing-authorization` | There is a measurable spread — self-interruptions and hedges cluster in two transcripts and are nearly absent from two others, and the Brannock escalation carries a garbled idiom ("caught off-blind") of the kind a transcription pass leaves behind. But no transcript is hard to follow, and none rambles or lands mid-thought the way the prompt asks for. All ten are legible throughout. |
+| Contradictory facts — **landed** | `q2-pricing-review-gx-7-and-rv-2-list-price-adjustment` (2026-03-11) → `nadia-handoff-rv-2-launch-campaign-assets-review` (2026-05-05), `rv-2-pre-launch-readiness-check` (2026-05-19) | In March, Nadia says the RV-2's $189 introductory price "is in the campaign brief, in the pre-launch materials we've shared with two press contacts." In May she has $179 on the one-pager, and says it is "what was in the notes I got from the pricing meeting"; two weeks later she has "$179 in every piece of campaign material I've built." |
+| Contradictory facts — **landed** | `rv-2-pre-launch-readiness-check` (2026-05-19) → `rv-2-firmware-1-0-0-go-no-go-decision` (2026-05-22) | The readiness check opens "five weeks from the RV-2 ship date," has firmware 1.0.0 soaking on twelve units, and has the 400-unit first run starting "on June 2nd at the contract manufacturer." Three days later the go/no-go meeting reports seventy-two hours of soak "on six units," has the same run starting "Monday," and ships it on June 2. |
+| Contradictory facts — **landed** | `quennick-escalation-firmware-defect-on-mx-3-units` (2026-04-09) → `firmware-lifecycle-policy-and-version-support-commitments` (2026-06-11) | April decides that firmware 2.4.2 goes to every MX-3 customer on 2.4.1 at once. In June, Sofia says "Quennick is on MX-3 firmware 2.4.1" and reasons about their support commitment on that basis. |
+| Unanswered question — **weakly** | `nadia-handoff-rv-2-launch-campaign-assets-review` (2026-05-05), `rv-2-pre-launch-readiness-check` (2026-05-19) | Elena asks "Where did $179 come from?" and the only answer is that it was in Nadia's notes. Two weeks later Nadia asks "When did that change?" and Elena says it didn't, as far as she knows. Neither meeting, nor any other, settles where the $179 came from; both move on to correcting the materials. Every other direct question in the ten gets an answer, or a "don't know" that turns into an action item — Elena asking whether Hessanby is talking to competitors (2026-04-23) — or into something to raise on a customer call — how many faulted units Quennick can reach (2026-04-09). |
+| Reversed decision — **weaker than asked for** | `q2-pricing-review-gx-7-and-rv-2-list-price-adjustment` (2026-03-11) → `q1-financial-close-and-margin-review` (2026-04-23) | March raises GX-7 list to $239 and agrees to "hold the line on discounts, and accept that we lose some of the deals we've been buying with price." In April, the Hessanby renewal gets a $198 floor — 17% below the new list, beyond the ten-percent standard discount — without any reference to the March position. What reverses is a policy rather than a stated decision, and April frames it as a floor, not a change of course. |
+| Uneven quality — **did not land** | — | All ten read as tidy transcripts. Turn length varies, and there are a few self-interruptions — Nadia in the readiness check: "I don't — okay, I'm not going to relitigate this right now" — but no transcript rambles, trails off, or lands mid-thought. |
 
 ### What this means for the corpus
 
-The failure the corpus does test well is the stale document: the Rev B thermal
-arc runs across two meetings that disagree about both the fix and what is
-known, with no cross-reference between them for retrieval to lean on. A
-question about how the Rev B drift is being addressed has two defensible
-answers a month apart, and nothing in either meeting flags the other.
+The failure the corpus tests best is the stale or conflicting record on a
+single fact. The RV-2 introductory price is $189 in three meetings and $179 in
+one person's account of her own materials, and — see the office documents
+below — $179 in the one written plan. The RV-2 production schedule and the
+firmware running at Quennick each have two incompatible versions, a few days
+or two months apart, with nothing in either meeting flagging the other.
 
-The failure it does not test is the unanswerable question. Every question here
-has an answer somewhere in the same meeting, so a corpus-wide "nothing here
-settles this" cannot be provoked from the transcripts alone. Worth knowing
-before treating an abstention test as passing on the strength of this corpus.
-
-The office documents in `data/office_files_guidance.md` plant their own three,
-one of which — a figure that disagrees between a workbook and a deck — was
-meant to be the numeric contradiction this batch did not produce. It landed:
-see the office documents section below.
+The failure it tests least is the unanswerable question. The origin of the
+$179 is the one thing the record raises and never settles; everything else
+asked in a meeting is answered in the same meeting. A corpus-wide "nothing
+here settles this" is still best provoked with a question about something the
+company never discussed, which is what the smoke queries do.
 
 ## Office documents
 
 Nine office documents — three Word documents, three PowerPoint decks, three
 Excel workbooks — sit alongside the transcripts under `data/office/`.
-`data/office_files_guidance.md` asked the generator for three imperfections
-across the nine: a document contradicted by a later meeting, a number that
-appears in a workbook and a deck and disagrees, and uneven depth. It also
-asked that documents never cite meetings, so any contradiction across formats
-has to be found by comparing figures directly, the way retrieval would.
+`data/office_files_guidance.md` asked for three imperfections across the
+nine: a document contradicted by a later meeting, a number that appears in a
+workbook and a deck and disagrees, and uneven depth. It also asked that
+documents never cite meetings, so any contradiction across formats has to be
+found by comparing figures directly, the way retrieval would.
 
 This section reads the nine committed files and records what actually landed,
-the same way batch 1 of the transcripts is recorded above. All three asks
-landed, one of them only within one of the two formats it could have spanned.
-A fourth contradiction, not asked for, turned up between two of the documents
-and is recorded alongside them, since retrieval will run into it regardless
-of whether it was planted on purpose.
+the same way the transcripts are recorded above. All three landed.
 
 ### What was planted
 
 | Imperfection | Documents | What it is |
 | --- | --- | --- |
-| Document contradicted by a later meeting — **landed** | `xt-9-rev-b-thermal-qualification-report.docx` (Sofia, 2026-03-12) → `customer-escalation-brannock-refinery-account` (2026-04-08) | The qualification report's Recommendation section ("Field Release of the Compensation Firmware") recommends releasing firmware 3.5.0 with thermal compensation enabled by default to all Rev B units in the field, having tested it into the −40 °C to 55 °C range. In the later transcript, Elena asks Marcus directly whether the Rev B thermal drift is a firmware or hardware issue, and Marcus answers "the fix is a component change on the output stage, it's not something you can patch in firmware" — with no qualification that firmware helps for part of the population, the way the report found. `brannock-refinery-account-recovery-briefing.pptx` (Elena, 2026-04-14, slide 5, "Root Cause: Rev B Analog Output Drift") repeats the same hardware-only framing ("Cannot be corrected in firmware") for a specific account, again without reference to the report's tested mitigation. |
-| A number that appears in a workbook and a deck and disagrees — **landed** | `q1-sales-pipeline.xlsx` (Jamal, 2026-03-30) → `q1-board-review.pptx` (Priya, 2026-04-02) | Slide 6, "Q2 Pipeline by Stage," names three opportunities with figures that do not match the `Open Opportunities` sheet they are drawn from. Tallis Water Authority: the sheet gives $232,000 at the Proposal stage (row 3, `Open Opportunities!F3`); the slide gives $112,000 under a "Commit" bucket. Thornbury Power: the sheet gives $104,000 at Proposal (row 4, `F4`); the slide gives $196,000 under "Negotiation." Sable Creek Gas: the sheet gives $174,000 at Discovery (row 9, `F9`); the slide gives $140,000, also under "Negotiation." The totals disagree as well: the workbook's own `Q2 Forecast by Month` sheet states $2,100,000 total open pipeline and $881,000 weighted (`C5`, `D5`); summing the `Open Opportunities` amounts directly gives $2,555,110, weighted $926,511 by win probability. The slide states $2.12M total and $1.26M weighted. No two of the three totals agree, and the weighted figure the slide uses is 40% higher than either figure the workbook itself supports. |
-| Uneven depth — **landed, among the three Word documents** | `iec-62443-certification-readiness-assessment.docx` (Callum, 1,098 words) vs. `xt-9-rev-b-thermal-qualification-report.docx` (Sofia, 2,738 words) and `contract-manufacturer-transition-plan.docx` (Devon, 3,128 words) | The certification assessment covers the same kind of ground as its two siblings — a gap analysis, a remediation plan, a cost estimate — in under half the length of either, and thinly: its "Gap Analysis by Requirement Family" gives each gap one or two sentences, where the qualification report tabulates results at every soak point and the transition plan scores three candidate manufacturers against six weighted criteria. The three decks (14, 15, and 17 slides, each with a comparable level of speaker-note detail) and three workbooks show no equivalent spread — the unevenness is confined to the Word documents. |
-
-### An unasked-for contradiction between two documents
-
-`iec-62443-certification-readiness-assessment.docx` (Callum, 2026-03-02) tables
-three preliminary assessment-body quotes under "Assessment Body Selection":
-Kestrel Conformity Services at $86,000, Arden Certification GmbH at $104,000,
-and Lindqvist Assurance at $118,000. `q1-board-review.pptx` (Priya,
-2026-04-02, slide 16, "IEC 62443: Meridian's Q3 Requirement") states the range
-as "$92–118K." The high end matches Lindqvist's quote; the low end matches
-none of the three figures in the document it is drawn from. This was not
-among the three imperfections the guidance file asked for.
+| Document contradicted by a later meeting — **landed** | `rv-2-launch-campaign-plan.pptx` (Nadia, 2026-03-04) → `q2-pricing-review-gx-7-and-rv-2-list-price-adjustment` (2026-03-11), `nadia-handoff-rv-2-launch-campaign-assets-review` (2026-05-05), `rv-2-pre-launch-readiness-check` (2026-05-19) | Slide 5, "The Introductory Offer," and its notes give an introductory price of $179 for ninety days, then $209. A week later the pricing review settles $189 and says $189 is what the campaign brief already carries, and both May meetings treat $189 as the agreed number. The deck is the only document that backs Nadia's $179, so a question about the RV-2 launch price has a written source on each side. |
+| A number that appears in a workbook and a deck and disagrees — **landed** | `q1-sales-pipeline.xlsx` (Jamal, 2026-03-30) → `q1-board-review.pptx` (Priya, 2026-04-28) | Slide 6, "Q2 Pipeline by Stage," gives $486K of qualified pipeline closing in Q2, $301K weighted, $171K in Commit, and a $535K base-case forecast. The workbook's `Q2 Forecast by Month` sheet totals $441,964 qualified, $268,586 weighted, $157,640 in Commit, and a $512,586 base case. Named deals disagree too. The slide has the Quennick GX-7 expansion at $64.2K in Commit; the `Open Opportunities` sheet has it as `OPP-1201`, 300 units at $192.60, $57,780, in Negotiation. The slide has Kilnwarden's MX-3 substation refresh at $38.2K in Commit; the sheet has `OPP-1215` at $42,930, in Proposal and forecast as Best Case. The slide's figure for Ivelmoor's plant two rollout, $42.4K, matches the sheet's `OPP-1204`, but the slide calls it Best Case and the sheet has it at Evaluation, forecast as Pipeline. `quennick-account-recovery-briefing.pptx` (Elena, 2026-04-15) quotes the workbook's $57,780, so the two decks disagree with each other as well. |
+| Uneven depth — **landed, among the three Word documents** | `ce-marking-readiness-assessment.docx` (Callum, 686 words) vs. `mx-3-firmware-2-4-2-soak-test-report.docx` (Sofia, 1,889 words) and `end-of-line-test-station-upgrade-plan.docx` (Devon, 1,872 words) | The CE assessment covers directives, gaps, a lab plan, timeline, and cost in about a paragraph each. Its Testing section says "A detailed breakdown by test is given in the next section," and the next section is a four-sentence lab plan with no breakdown. The soak test report tabulates results per rig and idle duration, and the test station plan costs three options line by line. The three decks (13 to 15 slides, each with comparable speaker notes) and three workbooks show no equivalent spread. |
 
 ### What this means for the corpus
 
-The workbook-versus-deck contradiction the transcript batch did not produce
-is present here, and more thoroughly than a single figure: three named
-opportunities and two different pipeline totals disagree between the sales
-pipeline workbook and the board deck built from it, giving retrieval several
-independent ways to return a wrong number with an authoritative-looking
-source. The document-versus-meeting failure mode is also confirmed outside
-the transcripts — a written recommendation, tested and dated, contradicted a
-month later by people who don't cite it, which is exactly the stale-document
-risk the corpus is meant to test.
-
-What did not fully land is the clean three-way split the guidance implied: no
-single document is uniformly thin, and no deck or workbook shows the same
-spread the Word documents do. A reader testing "does retrieval notice when
-one source is far less detailed than another" gets a real case, but only
-within one of the three formats.
+The stale-document failure now has a written source on the wrong side: a
+question about the RV-2 launch price can be answered from a dated, authored
+plan that every later meeting contradicts. The workbook-versus-deck
+contradiction gives retrieval several independent ways to return a wrong
+pipeline number with an authoritative-looking source — two totals, two named
+deals, and a forecast category — and a third document, the account briefing,
+that sides with the workbook against the board deck.

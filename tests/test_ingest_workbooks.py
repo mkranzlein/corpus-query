@@ -33,7 +33,7 @@ from tests.conftest import REPO_ROOT
 OFFICE_DIR = REPO_ROOT / "data" / "office"
 COMMITTED = {
     "q1-sales-pipeline.xlsx": "Jamal",
-    "proximasense-x4-bom-cost.xlsx": "Renata",
+    "gx-7-bom-cost.xlsx": "Renata",
     "support-ticket-sla-log.xlsx": "Theo",
 }
 

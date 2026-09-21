@@ -1,7 +1,14 @@
-You are writing three Excel workbooks for Widget Makers Incorporated, a
-ten-person hardware startup that designs and manufactures industrial sensors.
-They are the working spreadsheets of a real company: a sales pipeline, a bill
-of materials, and a support ticket log. Somebody maintains each one.
+You are writing three Excel workbooks for Main St Widget Foundry LLC, a
+ten-person hardware startup that designs and makes widgets, gizmos, and
+gadgets. They are the working spreadsheets of a real company: a sales pipeline,
+a bill of materials, and a support ticket log. Somebody maintains each one.
+
+What the products are is deliberately left vague. They are physical hardware —
+circuit boards, enclosures, firmware — built in volume and sold to business
+customers, and they go by model names. Nothing written about them says what one
+measures, controls, or is for: they come up in terms of revisions, costs,
+yields, defects, and prices. "Foundry" is only part of the company's name. It
+does no metal casting, and nothing in a workbook should suggest that it does.
 
 Write all three with the `xlsx` skill from the `document-skills` plugin. This
 run produces these three `.xlsx` files and nothing else — no Word documents,
@@ -10,8 +17,9 @@ no PowerPoint decks, no summary of what you did.
 ## Read these first
 
 - `data/roster.md` — the cast. Every person named in a cell is a first name
-  from this file, spelled exactly as it appears. Invent nobody. Customers,
-  suppliers, competitors, and product names may be invented freely.
+  from this file, spelled exactly as it appears. Invent nobody. Customers, suppliers, competitors, and product names are
+  invented — never borrowed from a real company, product, or brand, and
+  never a name you recognize as belonging to one.
 - `data/topics.md` — the categories the corpus is filed under. Useful for
   knowing what this company's concerns are. Do not put the category names in
   the workbooks.
@@ -26,8 +34,8 @@ Write these three, to `data/office/`:
 | File | Author | Date | What it is |
 | --- | --- | --- | --- |
 | `q1-sales-pipeline.xlsx` | Jamal | 2026-03-30 | **Three sheets.** Open opportunities with stage, value, and close date; closed-won deals; a month-by-month forecast roll-up. |
-| `proximasense-x4-bom-cost.xlsx` | Renata | 2026-01-12 | Bill of materials for the ProximaSense X4: line items with quantity, unit cost, extended cost, and supplier. |
-| `support-ticket-sla-log.xlsx` | Theo | 2026-06-01 | Support tickets with opened and resolved dates, severity, SLA target, and whether it was met. |
+| `gx-7-bom-cost.xlsx` | Renata | 2026-01-21 | Bill of materials for the GX-7: line items with quantity, unit cost, extended cost, and supplier. |
+| `support-ticket-sla-log.xlsx` | Theo | 2026-03-25 | Support tickets across the MX-3 and GX-7 with opened and resolved dates, customer, severity, SLA target, and whether it was met. |
 
 ## Size and shape
 
@@ -39,9 +47,9 @@ tests nothing.
   forecast roll-up one row per month for the quarter with a total. This is
   the workbook that proves multi-sheet handling works, so it is the one that
   must not end up with a single sheet.
-- `proximasense-x4-bom-cost.xlsx`: one sheet, 45 to 60 data rows. A bill of
-  materials for an industrial sensor — housing, board, connectors, the sensing
-  element, passives, firmware licensing, assembly labour.
+- `gx-7-bom-cost.xlsx`: one sheet, 45 to 60 data rows. A bill of
+  materials for one of the company's products — housing, board, connectors,
+  the core component, passives, firmware licensing, assembly labour.
 - `support-ticket-sla-log.xlsx`: one sheet, 55 to 75 data rows, spread across
   several months rather than all in one week.
 

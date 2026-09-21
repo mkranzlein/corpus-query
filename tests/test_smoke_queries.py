@@ -59,15 +59,16 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CORPUS = REPO_ROOT / "data" / "corpus.db"
 
 #: A question one meeting in the committed corpus answers outright.
-ANSWERABLE = "What is the fully loaded cost of hiring a firmware engineer?"
+ANSWERABLE = "Can the GX-7 read registers every 200 milliseconds?"
 
 #: The meeting that answers it.
-ANSWERING_DOCUMENT = "hiring-plan-firmware-engineer-headcount"
+ANSWERING_DOCUMENT = "support-backlog-and-escalation-triage-mx-3-and-gx-7"
 
 #: What the scripted model answers it with: the meeting's own figures.
 ANSWER = (
-    "In the firmware engineer headcount meeting, Marcus put the fully loaded "
-    "cost at a hundred and sixty to a hundred and eighty thousand per head."
+    "In the support backlog triage, Sofia said the firmware scheduler runs at "
+    "250-millisecond resolution, so 200 milliseconds is not achievable without "
+    "a firmware change."
 )
 
 #: A question the corpus never discusses, asked in the same register as the
@@ -81,7 +82,7 @@ ABSTENTION = "The record does not say anything about a Singapore office lease."
 def answering_script() -> list:
     """Script a turn that searches, answers from the passage, and settles it."""
     return [
-        searches("fully loaded cost of a firmware engineer hire"),
+        searches("GX-7 register read interval 200 milliseconds"),
         says(ANSWER),
         verified(),
         answered(),
@@ -112,16 +113,15 @@ def stubbed_passage() -> SearchResult:
     result = dataclasses.replace(
         a_result(
             document_slug=ANSWERING_DOCUMENT,
-            title="Hiring Plan – Firmware Engineer Headcount",
-            attendees=["Priya", "Marcus", "Sofia", "Renata"],
-            location="turns 8-8",
+            title="Support Backlog and Escalation Triage — MX-3 and GX-7",
+            attendees=["Theo", "Elena", "Sofia", "Devon"],
+            location="turns 7-7",
         ),
         text=(
-            "[Marcus]: For a mid-level engineer with three to five years of "
-            "embedded systems experience, I'd expect a base salary in the "
-            "range of a hundred and fifteen to a hundred and thirty thousand. "
-            "Fully loaded with benefits and overhead, call it a hundred and "
-            "sixty to a hundred and eighty thousand per head."
+            "[Sofia]: The firmware scheduler runs at 250-millisecond "
+            "resolution in the current release. 200 milliseconds is not "
+            "achievable without a firmware change. I can give you a written "
+            "answer for the ticket."
         ),
     )
     return SearchResult(results=[result], confidence=a_confidence())

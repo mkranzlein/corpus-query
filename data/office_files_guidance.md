@@ -25,9 +25,12 @@ restated here.
   and no attendees.
 - **A date.** A weekday in the first half of 2026, inside the same
   2026-01-05 to 2026-06-30 range the transcripts use.
-- **A subject that fits the company.** Widget Makers Incorporated designs and
-  manufactures industrial sensors. Customers, suppliers, competitors, and
-  product names may be invented freely; people may not.
+- **A subject that fits the company.** Main St Widget Foundry LLC designs and
+  makes widgets, gizmos, and gadgets, left deliberately vague: hardware with
+  boards, enclosures, and firmware, never said to measure or control anything
+  in particular, and never cast metal despite the name. Customers, suppliers,
+  competitors, and product names are invented, never borrowed from a real
+  company, product, or brand; people are not invented at all.
 
 ## The nine documents
 
@@ -35,25 +38,25 @@ restated here.
 
 | File | Author | Date | What it is |
 | --- | --- | --- | --- |
-| `xt-9-rev-b-thermal-qualification-report.docx` | Sofia | 2026-03-12 | Qualification report on thermal drift in the XT-9 Rev B, written after the firmware workaround was tested. Scope, method, results per test chamber, findings, recommendation. |
-| `iec-62443-certification-readiness-assessment.docx` | Callum | 2026-03-02 | Where the company stands against IEC 62443 and what closing the gap costs. Regulatory scope, gap analysis by requirement family, remediation plan, timeline and cost. |
-| `contract-manufacturer-transition-plan.docx` | Devon | 2026-04-15 | A plan for moving board assembly to a second contract manufacturer. Current state, candidate evaluation, transition phases, risks. |
+| `mx-3-firmware-2-4-2-soak-test-report.docx` | Sofia | 2026-04-14 | Test report on MX-3 firmware 2.4.2, the fix for the idle-period watchdog fault, written after the patch was soak tested. Scope, method, results per test rig, findings, release recommendation. |
+| `ce-marking-readiness-assessment.docx` | Callum | 2026-02-24 | Where the company stands against CE marking for the GX-7 and RV-2 and what closing the gap costs. Directives in scope, gap analysis, RoHS documentation, test lab plan, timeline and cost. |
+| `end-of-line-test-station-upgrade-plan.docx` | Devon | 2026-02-26 | A plan for replacing the end-of-line functional test stations at the contract manufacturer. Current state, options evaluated, rollout phases, risks. |
 
 ### PowerPoint
 
 | File | Author | Date | What it is |
 | --- | --- | --- | --- |
-| `q1-board-review.pptx` | Priya | 2026-04-02 | The quarter presented to the board: revenue against plan, pipeline, the state of the product line, what went wrong and what is being done about it. |
-| `fieldsense-200-launch-campaign-plan.pptx` | Nadia | 2026-02-10 | The go-to-market plan for the FieldSense 200 Series launch — positioning, channels, timeline, budget, what success is measured as. |
-| `brannock-refinery-account-recovery-briefing.pptx` | Elena | 2026-04-14 | An internal briefing on a damaged account: what happened, where it stands, the recovery plan, and what is being asked of other teams. |
+| `q1-board-review.pptx` | Priya | 2026-04-28 | The quarter presented to the board: revenue against plan, margin, pipeline, the state of the product line, what went wrong and what is being done about it. |
+| `rv-2-launch-campaign-plan.pptx` | Nadia | 2026-03-04 | The go-to-market plan for the RV-2 launch — positioning, channels, timeline, introductory pricing, budget, what success is measured as. |
+| `quennick-account-recovery-briefing.pptx` | Elena | 2026-04-15 | An internal briefing on a damaged account: what happened, where it stands, the recovery plan, and what is being asked of other teams. |
 
 ### Excel
 
 | File | Author | Date | What it is |
 | --- | --- | --- | --- |
 | `q1-sales-pipeline.xlsx` | Jamal | 2026-03-30 | **Three sheets.** Open opportunities with stage, value, and close date; closed-won deals; a month-by-month forecast roll-up. |
-| `proximasense-x4-bom-cost.xlsx` | Renata | 2026-01-12 | A bill of materials for the ProximaSense X4 with per-line quantities, unit costs, extended costs, and supplier. |
-| `support-ticket-sla-log.xlsx` | Theo | 2026-06-01 | Support tickets with opened and resolved dates, severity, the SLA target, and whether it was met. |
+| `gx-7-bom-cost.xlsx` | Renata | 2026-01-21 | A bill of materials for the GX-7 with per-line quantities, unit costs, extended costs, and supplier. |
+| `support-ticket-sla-log.xlsx` | Theo | 2026-03-25 | Support tickets across the MX-3 and GX-7 with opened and resolved dates, customer, severity, the SLA target, and whether it was met. |
 
 ## How these relate to the transcripts
 
@@ -65,15 +68,15 @@ than one format is in the store.
 
 | Document | Meeting | Relationship |
 | --- | --- | --- |
-| `xt-9-rev-b-thermal-qualification-report.docx` | XT-9 Rev B Thermal Drift – Firmware Workaround Feasibility (2026-03-05) | Reports the results of what the meeting proposed |
-| `iec-62443-certification-readiness-assessment.docx` | IEC 62443 Compliance Certification – Scope and Timeline (2026-02-24) | Written up after the scope was agreed |
-| `fieldsense-200-launch-campaign-plan.pptx` | Q1 Marketing Launch – FieldSense 200 Series (2026-02-03) | The plan the meeting asked for |
-| `brannock-refinery-account-recovery-briefing.pptx` | Customer Escalation – Brannock Refinery Account (2026-04-08) | Briefed after the escalation |
-| `proximasense-x4-bom-cost.xlsx` | Sensor Unit Cost Review – ProximaSense X4 (2026-01-14) | The costs the meeting reviewed, dated two days before it |
-| `support-ticket-sla-log.xlsx` | Support Backlog and Ticket SLA Review (2026-06-02) | The data the meeting reviewed, dated the day before it |
+| `mx-3-firmware-2-4-2-soak-test-report.docx` | Quennick Escalation — Firmware Defect on MX-3 Units (2026-04-09) | Reports the results of the fix the meeting committed to |
+| `ce-marking-readiness-assessment.docx` | CE Mark Certification Scope — RV-2 and GX-7 (2026-02-17) | Written up after the scope was agreed |
+| `rv-2-launch-campaign-plan.pptx` | Q2 Pricing Review — GX-7 and RV-2 List Price Adjustment (2026-03-11) | The plan whose introductory price the meeting argued over, dated a week before it |
+| `quennick-account-recovery-briefing.pptx` | Quennick Escalation — Firmware Defect on MX-3 Units (2026-04-09) | Briefed after the escalation |
+| `gx-7-bom-cost.xlsx` | GX-7 Unit Cost Review and Supplier Decision (2026-01-22) | The costs the meeting reviewed, dated the day before it |
+| `support-ticket-sla-log.xlsx` | Support Backlog and Escalation Triage — MX-3 and GX-7 (2026-03-26) | The data the meeting reviewed, dated the day before it |
 
-`contract-manufacturer-transition-plan.docx`, `q1-board-review.pptx`, and
-`q1-sales-pipeline.xlsx` are the exceptions. The transition plan stands
+`end-of-line-test-station-upgrade-plan.docx`, `q1-board-review.pptx`, and
+`q1-sales-pipeline.xlsx` are the exceptions. The test station plan stands
 entirely alone, so retrieval is not always leaning on a meeting to make sense
 of a document. The board review and the pipeline workbook draw on several
 meetings at once rather than one.

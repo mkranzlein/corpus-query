@@ -1,0 +1,176 @@
+{
+  "subject": "Q1 Financial Close and Margin Review",
+  "date": "2026-04-23",
+  "attendees": [
+    "Priya",
+    "Renata",
+    "Elena",
+    "Marcus"
+  ],
+  "turns": [
+    {
+      "speaker": "Renata",
+      "text": "Books are closed as of this morning. I want to walk through the headline numbers and then get into margin by product line, because there are a couple of things I want engineering and sales to hear directly."
+    },
+    {
+      "speaker": "Priya",
+      "text": "Go ahead."
+    },
+    {
+      "speaker": "Renata",
+      "text": "Total revenue for Q1 came in at $618,400. That's against a plan of $594,000, so we're $24,400 over, about four percent. Gross margin landed at 26.1 percent. Plan was 28.5. So we beat on the top line and missed on margin, which means we need to talk about cost."
+    },
+    {
+      "speaker": "Elena",
+      "text": "What drove the revenue beat?"
+    },
+    {
+      "speaker": "Renata",
+      "text": "Mostly the Hessanby Dynamics order that closed in the last week of March — 90 units of GX-7. That was upside relative to plan. The MX-3 line was essentially flat to forecast."
+    },
+    {
+      "speaker": "Elena",
+      "text": "Hessanby was a competitive situation. Jamal worked it hard. I'm glad it came in."
+    },
+    {
+      "speaker": "Renata",
+      "text": "I'm glad too, but here's the margin problem. Hessanby came in at a negotiated price of $198 per unit on GX-7. At the time that deal was structured, the assumed fully loaded cost was $161. So the assumed margin was roughly 19 percent on that account, which is below our target but was accepted as a strategic entry. The actual fully loaded cost in Q1 came in at $174.20 per unit."
+    },
+    {
+      "speaker": "Marcus",
+      "text": "That's thirteen dollars higher than the deal assumption."
+    },
+    {
+      "speaker": "Renata",
+      "text": "Correct. And it's about seven dollars higher than what I had in the plan. The gap between $161 and $174.20 is the single biggest contributor to the margin miss."
+    },
+    {
+      "speaker": "Priya",
+      "text": "Where does the $174.20 come from? What drove it up?"
+    },
+    {
+      "speaker": "Renata",
+      "text": "Three things. First, the Kessendra PM-4 component — we had allocation issues in January and February and had to go to spot market twice. Spot price was roughly $4.80 above standard cost on those buys. Second, test yield on the GX-7 main assembly ran at 91 percent in Q1, which is two points below the 93 percent we model. Scrap and rework ate into margin. Third, inbound freight on the board assemblies ran over because of a carrier surcharge that wasn't in the plan."
+    },
+    {
+      "speaker": "Marcus",
+      "text": "The yield issue — 91 percent — is that consistent across the quarter or did it improve?"
+    },
+    {
+      "speaker": "Renata",
+      "text": "It was 89 percent in January, 91 in February, 93 in March. So it did improve. March was on target."
+    },
+    {
+      "speaker": "Marcus",
+      "text": "That tracks with a placement program correction Devon pushed to the CM in late January. The early units had a known issue. If March was 93, I'd expect Q2 to hold there or improve."
+    },
+    {
+      "speaker": "Renata",
+      "text": "I'm modeling Q2 yield at 93 percent. If it slips, the margin impact is real. Every point of yield below target on a 93-percent baseline costs us roughly $2,800 per thousand units run, given our scrap cost structure."
+    },
+    {
+      "speaker": "Elena",
+      "text": "The Hessanby price — $198 — we're not underwater, but we're not making money either at $174 cost. What does that look like going forward?"
+    },
+    {
+      "speaker": "Renata",
+      "text": "At $174.20 fully loaded, we're making $23.80 per unit on Hessanby. That's a 12 percent gross margin. I don't want to do more volume at that price."
+    },
+    {
+      "speaker": "Elena",
+      "text": "Their next order is probably 120 units, and they're going to ask for the same price or better. I need to know what my floor is before that conversation."
+    },
+    {
+      "speaker": "Priya",
+      "text": "What's the floor if Q2 cost comes in at the modeled $167?"
+    },
+    {
+      "speaker": "Renata",
+      "text": "At $167, a $198 price gives us 16.4 percent gross margin. Still below target, but less painful. My recommendation is that we hold $198 as the absolute floor for Hessanby and push for $209 on the renewal."
+    },
+    {
+      "speaker": "Elena",
+      "text": "They'll push back. But I can work with a $198 floor if I have it in writing."
+    },
+    {
+      "speaker": "Priya",
+      "text": "Renata, will you document the cost model assumptions for Q2 so Elena has something concrete to take into the Hessanby renewal conversation?"
+    },
+    {
+      "speaker": "Renata",
+      "text": "Yes, I'll put together a one-pager: modeled cost, floor price, and the margin at various price points."
+    },
+    {
+      "speaker": "Priya",
+      "text": "Good. What else from the close?"
+    },
+    {
+      "speaker": "Renata",
+      "text": "MX-3 margin was actually better than plan — 31.2 percent versus 29 percent planned. Volume was lower than we'd like, but the cost structure is cleaner. The Kessendra situation doesn't affect MX-3."
+    },
+    {
+      "speaker": "Marcus",
+      "text": "Is there anything in the Q1 numbers that points to a capital need? I have a thermal chamber request sitting in my budget queue."
+    },
+    {
+      "speaker": "Renata",
+      "text": "Cash position is fine. We ended Q1 with $412,000 in operating cash. The thermal chamber — what's the ask?"
+    },
+    {
+      "speaker": "Marcus",
+      "text": "$18,500 for the unit we specced, or $11,200 for a lower-capacity alternative that would cover most use cases."
+    },
+    {
+      "speaker": "Renata",
+      "text": "Bring it to me as a formal capex request with the business case and I'll review it. I'm not approving it in this meeting, but I'm not saying no either."
+    },
+    {
+      "speaker": "Priya",
+      "text": "Fair. Renata, when do you plan to share the Q1 summary with the full team?"
+    },
+    {
+      "speaker": "Renata",
+      "text": "I'll send a summary to the company by end of week. Top-line numbers only — revenue, margin, cash. The detail stays in this room."
+    },
+    {
+      "speaker": "Priya",
+      "text": "Agreed. Let's keep the product-line cost detail internal to this group for now."
+    },
+    {
+      "speaker": "Elena",
+      "text": "One question before we close — do we have any visibility into whether Hessanby is talking to competitors? I ask because the pricing pressure on that deal was unusual."
+    },
+    {
+      "speaker": "Marcus",
+      "text": "I don't have any intelligence on that."
+    },
+    {
+      "speaker": "Priya",
+      "text": "Elena, that's a question for Jamal to work on his side. Let's not let it sit."
+    }
+  ],
+  "decisions": [
+    "$198 per unit is the absolute floor price for the Hessanby Dynamics GX-7 renewal; Elena will push for $209.",
+    "Renata will produce a Q2 cost model one-pager for Elena to use in the Hessanby renewal conversation.",
+    "Q1 financial summary (top-line only) will be shared with the full company by end of week; product-line cost detail remains restricted.",
+    "Marcus's thermal chamber capex request will be submitted as a formal request for Renata's review, not decided in this meeting."
+  ],
+  "action_items": [
+    {
+      "assignee": "Renata",
+      "task": "Produce a one-pager documenting Q2 modeled cost, Hessanby floor price, and margin at various GX-7 price points for Elena."
+    },
+    {
+      "assignee": "Renata",
+      "task": "Send a top-line Q1 financial summary to the full company by end of week."
+    },
+    {
+      "assignee": "Marcus",
+      "task": "Submit a formal capex request for the thermal chamber, including business case, for Renata's review."
+    },
+    {
+      "assignee": "Elena",
+      "task": "Ask Jamal to gather any competitive intelligence on whether Hessanby Dynamics is evaluating alternative suppliers."
+    }
+  ]
+}

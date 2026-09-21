@@ -1,7 +1,14 @@
-You are writing meeting transcripts for Widget Makers Incorporated, a
-ten-person hardware startup that designs and manufactures industrial sensors.
-The transcripts are the working record of a real company: they are what a
-transcription app produced from the meeting audio, tidied up afterwards.
+You are writing meeting transcripts for Main St Widget Foundry LLC, a
+ten-person hardware startup that designs and makes widgets, gizmos, and
+gadgets. The transcripts are the working record of a real company: they are
+what a transcription app produced from the meeting audio, tidied up afterwards.
+
+What the products are is deliberately left vague. They are physical hardware —
+circuit boards, enclosures, firmware — built in volume and sold to business
+customers, and they go by model names. Nothing written about them says what one
+measures, controls, or is for: they come up in terms of revisions, costs,
+yields, defects, and prices. "Foundry" is only part of the company's name. It
+does no metal casting, and nothing in a meeting should suggest that it does.
 
 Write {{batch}}. They are a batch within a larger corpus, so make them
 different from each other, and different from the meetings already written that
@@ -14,8 +21,10 @@ these first names, spelled exactly like this. Invent nobody.
 
 {{roster}}
 
-Customers, suppliers, competitors, and products may be invented freely and
-named however you like. Only people inside the company come from the roster.
+Customers, suppliers, competitors, and products are invented, and named
+however you like so long as the name is made up: never use the name of a real
+company, product, or brand, and pass over any name you recognize as belonging
+to one. Only people inside the company come from the roster.
 
 ## Meetings already written
 
@@ -43,7 +52,7 @@ pay off.
 
 ## Subject matter
 
-Draw on the whole business, not just engineering standups. Sensor firmware and
+Draw on the whole business, not just engineering standups. Firmware and
 hardware revisions, supplier and lead-time trouble, contract manufacturing,
 pricing and discount approvals, a customer escalation, hiring, a patent or a
 contract review, the marketing launch plan, the quarterly numbers, a support

@@ -63,15 +63,15 @@ describe("the question page", () => {
     });
     render(<Ask />);
 
-    askQuestion("What did we decide about the XT-9 rev B thermal drift?");
+    askQuestion("What did we decide about the RV-2 introductory price?");
     held.send(sse("started", { thread_id: "thread-1" }));
     held.send(sse("drafting", {}));
-    held.send(sse("searching", { query: "XT-9 thermal drift" }));
+    held.send(sse("searching", { query: "RV-2 introductory price" }));
 
     const status = await screen.findByRole("status");
     await waitFor(() =>
       expect(status.textContent).toContain(
-        "Searching the record for “XT-9 thermal drift”",
+        "Searching the record for “RV-2 introductory price”",
       ),
     );
     expect(screen.getByRole("button", { name: "Answering…" })).toHaveProperty(
@@ -85,7 +85,7 @@ describe("the question page", () => {
     held.close();
 
     await screen.findByText(
-      "The team settled on a firmware workaround, per Marcus.",
+      "The RV-2 launches at $189 for ninety days, per Priya.",
     );
     expect(screen.queryByRole("status")).toBeNull();
     // The steps stay on the page afterwards, folded away.
@@ -104,10 +104,10 @@ describe("the question page", () => {
     });
     render(<Ask />);
 
-    askQuestion("What did we decide about the XT-9 rev B thermal drift?");
+    askQuestion("What did we decide about the RV-2 introductory price?");
 
     await screen.findByText(
-      "The team settled on a firmware workaround, per Marcus.",
+      "The RV-2 launches at $189 for ninety days, per Priya.",
     );
     const section = screen.getByRole("region", {
       name: "Passages this answer rests on",
@@ -117,26 +117,26 @@ describe("the question page", () => {
     const [meeting, report] = passages();
 
     // Where each passage came from, and who was behind it.
-    expect(meeting.textContent).toContain("XT-9 Rev B Thermal Drift");
+    expect(meeting.textContent).toContain("Q2 Pricing Review");
     expect(meeting.textContent).toContain("Meeting transcript");
     expect(meeting.textContent).toContain("Attendees");
-    expect(meeting.textContent).toContain("Marcus, Sofia, Devon");
-    expect(meeting.textContent).toContain("xt-9-rev-b-thermal-drift");
-    expect(meeting.textContent).toContain("turns 4-13");
+    expect(meeting.textContent).toContain("Priya, Elena, Renata");
+    expect(meeting.textContent).toContain("q2-pricing-review");
+    expect(meeting.textContent).toContain("turns 22-30");
     expect(meeting.querySelector("time")?.getAttribute("dateTime")).toBe(
-      "2026-03-05",
+      "2026-03-11",
     );
     expect(report.textContent).toContain("Document");
     expect(report.textContent).toContain("Author");
     expect(report.textContent).toContain("Sofia");
     expect(report.textContent).toContain(
-      "Recommendation > Rev C Replacement Threshold",
+      "Results > Extended Soak",
     );
 
     // What was derived about each, read from the passage's own record.
     await waitFor(() => expect(meeting.textContent).toContain("Near term"));
-    expect(meeting.textContent).toContain("Firmware");
-    expect(meeting.textContent).toContain("Thermal");
+    expect(meeting.textContent).toContain("Pricing");
+    expect(meeting.textContent).toContain("Sales");
     expect(meeting.textContent).toContain("Significant");
     await waitFor(() => expect(report.textContent).toContain("Qualification"));
   });
@@ -153,16 +153,16 @@ describe("the question page", () => {
       name: "Read the passage",
     });
     expect(
-      screen.queryByText("The passage behind XT-9 Rev B Thermal Drift."),
+      screen.queryByText("The passage behind Q2 Pricing Review."),
     ).toBeNull();
     fireEvent.click(open);
 
     const text = screen.getByText(
-      "The passage behind XT-9 Rev B Thermal Drift.",
+      "The passage behind Q2 Pricing Review.",
     );
     const quote = text.closest("blockquote") as HTMLElement;
-    expect(quote.textContent).toContain("XT-9 Rev B Thermal Drift");
-    expect(quote.textContent).toContain("turns 4-13");
+    expect(quote.textContent).toContain("Q2 Pricing Review");
+    expect(quote.textContent).toContain("turns 22-30");
     expect(quote.textContent).toMatch(/2026/);
     expect(
       screen.getByRole("button", { name: "Hide the passage" }),
@@ -179,7 +179,7 @@ describe("the question page", () => {
 
     await screen.findByText("The passage itself could not be read.");
     // The citation is still there; only what it opens to is missing.
-    expect(passages()[0].textContent).toContain("XT-9 Rev B Thermal Drift");
+    expect(passages()[0].textContent).toContain("Q2 Pricing Review");
   });
 
   it("presents an abstention as an answer, not a failure", async () => {
@@ -189,12 +189,12 @@ describe("the question page", () => {
     });
     render(<Ask />);
 
-    askQuestion("Which rev B units run hot?");
+    askQuestion("Which sites are the remote Quennick units at?");
 
     await screen.findByText("The record does not settle this.");
     expect(
       screen.getByText(
-        "The record does not say which Rev B units are installed hot.",
+        "The record does not say which sites the remote Quennick units are at.",
       ),
     ).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
@@ -217,7 +217,7 @@ describe("the question page", () => {
     askQuestion("What did we decide about the drift?");
 
     await screen.findByText(
-      "The team settled on a firmware workaround, per Marcus.",
+      "The RV-2 launches at $189 for ninety days, per Priya.",
     );
     expect(screen.queryByText("The record does not settle this.")).toBeNull();
   });
@@ -270,7 +270,7 @@ describe("the question page", () => {
               "answer",
               answered({
                 question: "Who owns that?",
-                answer: "Marcus owns the workaround.",
+                answer: "Renata owns the pricing memo.",
                 citations: [],
                 searches: 0,
                 answer_id: "answer-3",
@@ -284,11 +284,11 @@ describe("the question page", () => {
 
     askQuestion("What did we decide about the drift?");
     await screen.findByText(
-      "The team settled on a firmware workaround, per Marcus.",
+      "The RV-2 launches at $189 for ninety days, per Priya.",
     );
     expect(screen.getByLabelText("Ask a follow-up")).toBeTruthy();
     askQuestion("Who owns that?");
-    await screen.findByText("Marcus owns the workaround.");
+    await screen.findByText("Renata owns the pricing memo.");
 
     expect(asked(fetchMock)).toEqual([
       { question: "What did we decide about the drift?" },
@@ -297,7 +297,7 @@ describe("the question page", () => {
     // Both turns stay on the page, in order.
     expect(
       screen.getByText(
-        "The team settled on a firmware workaround, per Marcus.",
+        "The RV-2 launches at $189 for ninety days, per Priya.",
       ),
     ).toBeTruthy();
     expect(
@@ -325,7 +325,7 @@ describe("the question page", () => {
     await screen.findByRole("alert");
     askQuestion("What did we decide about the drift?");
     await screen.findByText(
-      "The team settled on a firmware workaround, per Marcus.",
+      "The RV-2 launches at $189 for ninety days, per Priya.",
     );
 
     const [, second] = asked(fetchMock);
@@ -343,7 +343,7 @@ describe("the question page", () => {
     render(<Ask />);
     askQuestion("What did we decide about the drift?");
     await screen.findByText(
-      "The team settled on a firmware workaround, per Marcus.",
+      "The RV-2 launches at $189 for ninety days, per Priya.",
     );
 
     fireEvent.click(
@@ -351,12 +351,12 @@ describe("the question page", () => {
     );
     expect(
       screen.queryByText(
-        "The team settled on a firmware workaround, per Marcus.",
+        "The RV-2 launches at $189 for ninety days, per Priya.",
       ),
     ).toBeNull();
     askQuestion("What did we decide about the drift?");
     await screen.findByText(
-      "The team settled on a firmware workaround, per Marcus.",
+      "The RV-2 launches at $189 for ninety days, per Priya.",
     );
 
     const [, second] = asked(fetchMock);
@@ -389,7 +389,7 @@ describe("the question page", () => {
     fireEvent.keyDown(box, { key: "Enter" });
 
     await screen.findByText(
-      "The team settled on a firmware workaround, per Marcus.",
+      "The RV-2 launches at $189 for ninety days, per Priya.",
     );
   });
 });
