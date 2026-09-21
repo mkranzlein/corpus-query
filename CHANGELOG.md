@@ -2,6 +2,31 @@
 
 <!-- version list -->
 
+## v2.18.0 (2026-09-21)
+
+### Documentation
+
+- Describe corrections typed into the conversation
+  ([#118](https://github.com/mkranzlein/corpus-query/pull/118),
+  [`339ce18`](https://github.com/mkranzlein/corpus-query/commit/339ce18d17cb500035a9bde728e40fbf00ad64cf))
+
+### Features
+
+- Capture a correction the user types in conversation
+  ([#118](https://github.com/mkranzlein/corpus-query/pull/118),
+  [`339ce18`](https://github.com/mkranzlein/corpus-query/commit/339ce18d17cb500035a9bde728e40fbf00ad64cf))
+
+- Let the agent record a correction typed in conversation
+  ([#118](https://github.com/mkranzlein/corpus-query/pull/118),
+  [`339ce18`](https://github.com/mkranzlein/corpus-query/commit/339ce18d17cb500035a9bde728e40fbf00ad64cf))
+
+### Testing
+
+- Cover corrections typed in conversation, and write them off the event loop
+  ([#118](https://github.com/mkranzlein/corpus-query/pull/118),
+  [`339ce18`](https://github.com/mkranzlein/corpus-query/commit/339ce18d17cb500035a9bde728e40fbf00ad64cf))
+
+
 ## v2.17.0 (2026-09-21)
 
 ### Documentation
