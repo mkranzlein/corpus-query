@@ -98,5 +98,8 @@ def test_the_database_file_is_created_along_with_its_directory(tmp_path, corpus)
 
 def test_the_defaults_point_at_the_committed_locations():
     arguments = parse_args([])
-    assert arguments.directory.as_posix() == "data/transcripts"
+    assert [directory.as_posix() for directory in arguments.directories] == [
+        "data/transcripts",
+        "data/office",
+    ]
     assert arguments.db.as_posix() == "data/corpus.db"

@@ -9,6 +9,7 @@ Run it with::
 
     uv run scripts/ingest.py                     # everything on disk
     uv run scripts/ingest.py data/transcripts/rev-b-schedule.md
+    uv run scripts/ingest.py --dir data/office   # one directory of it
 
 Re-ingesting a document replaces the rows it wrote before rather than adding a
 second copy, so this is also how an edited document is brought up to date.
@@ -23,7 +24,7 @@ import sys
 from pathlib import Path
 
 from corpus_query.ingest.pipeline import (
-    DEFAULT_TRANSCRIPT_DIR,
+    DEFAULT_DOCUMENT_DIRS,
     Ingested,
     document_paths,
     ingest_paths,
@@ -43,6 +44,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Ingest documents into the document store.",
     )
+    default_dirs = " ".join(str(directory) for directory in DEFAULT_DOCUMENT_DIRS)
     parser.add_argument(
         "paths",
         nargs="*",
@@ -51,10 +53,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--dir",
+        nargs="+",
         type=Path,
-        default=DEFAULT_TRANSCRIPT_DIR,
-        dest="directory",
-        help=f"where documents live (default: {DEFAULT_TRANSCRIPT_DIR})",
+        default=list(DEFAULT_DOCUMENT_DIRS),
+        dest="directories",
+        metavar="DIR",
+        help=f"where documents live, one or more (default: {default_dirs})",
     )
     parser.add_argument(
         "--db",
@@ -92,11 +96,12 @@ def main(argv: list[str] | None = None) -> int:
         A process exit code. Non-zero if any file could not be ingested.
     """
     args = parse_args(argv)
-    paths = args.paths or document_paths(args.directory)
+    paths = args.paths or document_paths(args.directories)
     if not paths:
+        where = ", ".join(str(directory) for directory in args.directories)
         print(
-            f"error: no readable documents found in {args.directory}. Generate "
-            f"some first, or name the files to ingest.",
+            f"error: no readable documents found in {where}. Generate some "
+            f"first, or name the files to ingest.",
             file=sys.stderr,
         )
         return 1
