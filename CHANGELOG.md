@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v2.14.0 (2026-09-21)
+
+### Documentation
+
+- Document both of the agent's run modes
+  ([#110](https://github.com/mkranzlein/corpus-query/pull/110),
+  [`c943975`](https://github.com/mkranzlein/corpus-query/commit/c943975643a60c1008cae7921eff4f8c18eed9df))
+
+### Features
+
+- Choose the agent's chat model between Ollama and Bedrock
+  ([#110](https://github.com/mkranzlein/corpus-query/pull/110),
+  [`c943975`](https://github.com/mkranzlein/corpus-query/commit/c943975643a60c1008cae7921eff4f8c18eed9df))
+
+### Testing
+
+- Cover the backend the serve script starts with
+  ([#110](https://github.com/mkranzlein/corpus-query/pull/110),
+  [`c943975`](https://github.com/mkranzlein/corpus-query/commit/c943975643a60c1008cae7921eff4f8c18eed9df))
+
+
 ## v2.13.0 (2026-09-21)
 
 ### Bug Fixes
