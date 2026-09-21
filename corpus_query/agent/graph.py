@@ -374,7 +374,7 @@ def build_graph(
         messages = state["messages"]
         called = messages[-1]
         call = corrections.correction_call(called)
-        outcome = corrections.handle(
+        outcome = await corrections.handle(
             call,
             corrections.earlier_answers(_history(messages)),
             record_correction,

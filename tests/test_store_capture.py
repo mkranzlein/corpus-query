@@ -320,6 +320,23 @@ def test_every_answer_gets_its_own_id(records) -> None:
     assert first != second
 
 
+def test_an_answer_can_be_written_under_an_id_minted_beforehand(records) -> None:
+    """The agent mints an answer's id before answering; the row keeps it."""
+    answer_id = record_answer(
+        records,
+        query="Where are the rev B boards?",
+        answer="Two weeks out.",
+        citations=[],
+        thread_id="thread-1",
+        abstained=False,
+        answer_id="minted-before",
+    )
+
+    assert answer_id == "minted-before"
+    written = record_correction(records, answer_id, "Two weeks.", "Three weeks.")
+    assert written["answer_id"] == "minted-before"
+
+
 def test_a_record_carries_the_citations_of_its_answer(records) -> None:
     """Opening a record shows what the answer rested on, without a second read."""
     answer_id = an_answer(records, citations=[A_CITATION])

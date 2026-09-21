@@ -15,7 +15,11 @@ and the endpoint that ranks is still curlable on its own.
 wrong, against the id ``/answer`` returned, and ``GET /gaps``,
 ``GET /corrections``, and ``GET /feedback`` read the three kinds back, most
 recent first. A gap needs no endpoint to be written: the service records one
-itself whenever the record did not settle a question. ``GET`` on
+itself whenever the record did not settle a question. Nor does a correction
+typed into the conversation: sent to ``/answer`` as the next message, it is
+recorded by the agent against the earlier answer it corrects, in the same
+table ``POST /corrections`` writes to, and comes back on that response's
+``correction`` field. ``GET`` on
 ``/gaps/{id}``, ``/corrections/{id}``, or ``/feedback/{id}`` reads one record,
 and ``PATCH`` on the same path marks it reviewed or clears the mark — the one
 change a record takes after it is written. All of it goes in the usage

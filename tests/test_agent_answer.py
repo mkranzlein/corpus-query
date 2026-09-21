@@ -34,6 +34,7 @@ from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from corpus_query.agent.graph import Agent, build_graph
+from corpus_query.agent.runtime import correction_recorder
 from corpus_query.agent.retrieval import (
     TOOL_NAME,
     citation,
@@ -180,12 +181,21 @@ def answering_app(model: ScriptedModel, search: StubSearch):
 
     @asynccontextmanager
     async def open_scripted(app):
-        """Open the agent against the scripted model and an in-memory thread store."""
+        """Open the agent against the scripted model and an in-memory thread store.
+
+        Corrections are written the way the service writes them, to the
+        usage database the application's own records are in, so what the
+        agent records and what ``/corrections`` reads back are the same
+        rows.
+        """
         client = in_process_client(app)
         try:
             yield Agent(
                 graph=build_graph(
-                    model, [search_tool(client)], checkpointer=InMemorySaver()
+                    model,
+                    [search_tool(client)],
+                    checkpointer=InMemorySaver(),
+                    record_correction=correction_recorder(),
                 )
             )
         finally:
@@ -910,7 +920,7 @@ def recorded():
     opens the same file the request just wrote to.
 
     Returns:
-        The answers, gaps, corrections, and feedback in it.
+        The answers, gaps, and corrections in it.
     """
     connection = capture.connect()
     try:
@@ -919,6 +929,7 @@ def recorded():
                 "SELECT * FROM answers ORDER BY rowid"
             ).fetchall(),
             "gaps": capture.gaps(connection),
+            "corrections": capture.corrections(connection),
         }
     finally:
         connection.close()

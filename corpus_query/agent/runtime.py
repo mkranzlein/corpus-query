@@ -18,18 +18,18 @@ grow with use, and belong to whoever is running the service. See
 ``setup()`` creates LangGraph's tables in it on the way up.
 
 The same file holds the captured records — gaps, corrections, feedback — and
-the agent opens its own connection to them, because a correction the user
-types in conversation is recorded by the agent rather than by the endpoint.
-It writes through :mod:`corpus_query.store.capture`, the same store ``POST
+the agent writes to them itself, because a correction the user types in
+conversation is recorded by the agent rather than by the endpoint. It writes
+through :mod:`corpus_query.store.capture`, the same store ``POST
 /corrections`` writes to, so a correction reads back the same way whichever
-of the two recorded it.
+of the two recorded it. See :func:`correction_recorder` for how.
 """
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -41,6 +41,8 @@ from corpus_query.store.usage import usage_database
 
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
+
+    from corpus_query.agent.corrections import Recorder
 
 #: Opens the agent for the lifetime of an application, given that
 #: application — which the agent needs because it reaches retrieval by
@@ -81,21 +83,49 @@ async def open_agent(
     try:
         checkpointer = AsyncSqliteSaver(connection)
         await checkpointer.setup()
-        # Opened on the event loop's thread, which is the thread every node
-        # of the graph runs on, so the connection is never used from a
-        # thread other than the one that opened it.
-        captured = capture.connect(checkpoint_database)
-        try:
-            yield Agent(
-                graph=build_graph(
-                    chat_model,
-                    [search_tool(client)],
-                    checkpointer=checkpointer,
-                    record_correction=partial(capture.record_correction, captured),
-                )
+        yield Agent(
+            graph=build_graph(
+                chat_model,
+                [search_tool(client)],
+                checkpointer=checkpointer,
+                record_correction=correction_recorder(checkpoint_database),
             )
-        finally:
-            captured.close()
+        )
     finally:
         await connection.close()
         await client.aclose()
+
+
+def correction_recorder(database: Path | str | None = None) -> Recorder:
+    """Build what the graph records a typed correction with.
+
+    The write is made from inside a running graph, while the checkpointer
+    may be partway through a write of its own to the same file. The
+    checkpointer's connection runs on a thread of its own, but the commit
+    that ends its write is issued from the event loop — so a write here
+    that blocked the loop while waiting for the file would wait on a commit
+    that cannot be issued until it stops waiting, and would fail as locked.
+    Each correction is written on a worker thread instead, over a
+    connection opened and closed there, which leaves the loop free to let
+    the checkpointer finish.
+
+    Args:
+        database: The usage database to write to. None resolves to the
+            project's default when a correction is written.
+
+    Returns:
+        The recorder, to hand to
+        :func:`corpus_query.agent.graph.build_graph`.
+    """
+
+    def write(answer_id: str, wrong: str, right: str) -> dict[str, Any]:
+        connection = capture.connect(database)
+        try:
+            return capture.record_correction(connection, answer_id, wrong, right)
+        finally:
+            connection.close()
+
+    async def record(answer_id: str, wrong: str, right: str) -> dict[str, Any]:
+        return await asyncio.to_thread(write, answer_id, wrong, right)
+
+    return record

@@ -41,7 +41,7 @@ is not itself an answer, and is left off the list.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -54,11 +54,12 @@ from corpus_query.store.capture import UnknownAnswerError
 #: What the tool is called in the model's tool schema.
 TOOL_NAME = "record_correction"
 
-#: Writes one correction and returns the stored row: the answer's id, what
-#: was wrong, and what is right, in that order.
-#: :func:`corpus_query.store.capture.record_correction` with its connection
-#: bound is the one the service uses.
-type Recorder = Callable[[str, str, str], dict[str, Any]]
+#: Writes one correction and returns the stored row, given the answer's id,
+#: what was wrong, and what is right, in that order. Awaited, because the
+#: write is made from inside a running graph: see
+#: :func:`corpus_query.agent.runtime.open_agent` for why it must not block
+#: the event loop while it waits for the file.
+type Recorder = Callable[[str, str, str], Awaitable[dict[str, Any]]]
 
 #: How much of an earlier answer the model is shown beside its number. Enough
 #: to tell two answers apart by what they said; the whole answer is in the
@@ -214,7 +215,7 @@ def numbered(answers: list[EarlierAnswer]) -> str:
     )
 
 
-def handle(
+async def handle(
     call: dict[str, Any],
     answers: list[EarlierAnswer],
     recorder: Recorder | None,
@@ -255,7 +256,7 @@ def handle(
     if target is None:
         return _not_recorded(_which_answer(answers))
     try:
-        written = recorder(target.answer_id, wrong, right)
+        written = await recorder(target.answer_id, wrong, right)
     except UnknownAnswerError:
         return _not_recorded(
             f'I could not record that correction: my answer to "'
