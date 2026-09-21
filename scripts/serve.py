@@ -15,8 +15,9 @@ Run it with::
 
 Two SQLite files are involved and they are not the same one. ``--db`` is the
 corpus, which is read to answer questions and never written to here.
-``--usage-db`` is where conversations are checkpointed and where gaps,
-corrections, and feedback are recorded; it is created on first use, it is not
+``--usage-db`` is where conversations are checkpointed, where gaps,
+corrections, and feedback are recorded, and where each query's trace is
+written; see :mod:`corpus_query.tracing`. It is created on first use, it is not
 committed, and it is the only file serving modifies.
 
 Search runs locally against the store and the local models, and costs
@@ -48,7 +49,9 @@ from corpus_query.api.app import StartupError, create_app, open_resources
 from corpus_query.retrieval.index import DEFAULT_INDEX_DIR
 from corpus_query.store.capture import CaptureSchemaVersionError
 from corpus_query.store.db import DEFAULT_DATABASE_FILE, SchemaVersionError
+from corpus_query.store.spans import SpansSchemaVersionError
 from corpus_query.store.usage import DEFAULT_USAGE_DATABASE_FILE
+from corpus_query.tracing import open_tracing
 
 #: Loopback by default. This is a local service over a local corpus, and
 #: there is no authentication in front of it.
@@ -129,10 +132,12 @@ def main(argv: list[str] | None = None, run=uvicorn.run) -> int:
         resources = open_resources(args.db, args.index, usage_database=args.usage_db)
         backend = selected_backend()
         chat_model = load_chat_model(backend)
+        recording = open_tracing(args.usage_db)
     except (
         StartupError,
         SchemaVersionError,
         CaptureSchemaVersionError,
+        SpansSchemaVersionError,
         ModelConfigurationError,
     ) as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -146,6 +151,7 @@ def main(argv: list[str] | None = None, run=uvicorn.run) -> int:
         agent=lambda application: open_agent(
             application, model=chat_model, checkpoint_database=args.usage_db
         ),
+        traces=lambda: recording,
     )
     print(f"Serving {args.db} on http://{args.host}:{args.port}")
     print(f"/answer is answering from {chat_model_name(chat_model)} on {backend}.")

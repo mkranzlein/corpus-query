@@ -25,12 +25,13 @@ what the answer cites and what the model read cannot drift apart.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import httpx
-from langchain_core.tools import StructuredTool
+from langchain_core.tools import InjectedToolCallId, StructuredTool
 from pydantic import BaseModel, Field
 
+from corpus_query import tracing
 from corpus_query.retrieval.search import DEFAULT_RESULTS
 
 if TYPE_CHECKING:
@@ -40,6 +41,14 @@ if TYPE_CHECKING:
 #: searches, so a model deciding whether to call it is deciding whether the
 #: question is about this corpus.
 TOOL_NAME = "search_corpus"
+
+#: What the model is told the tool does, and what its span describes it as.
+TOOL_DESCRIPTION = (
+    "Search this organization's own record — its meetings, documents, decks, "
+    "and spreadsheets — and return the passages that bear on a question, each "
+    "with the document and place it came from. Call it once per subject you "
+    "need to look up."
+)
 
 #: The path the tool posts to, on whatever host it is pointed at.
 SEARCH_PATH = "/search"
@@ -57,6 +66,9 @@ class SearchCorpus(BaseModel):
         description="What to search for, written as a plain-language "
         "question or phrase. One subject per search."
     )
+    tool_call_id: Annotated[str | None, InjectedToolCallId] = None
+    """Which of the model's calls this is. Filled in by LangChain from the
+    call itself and never shown to the model; recorded on the tool's span."""
 
 
 def in_process_client(
@@ -92,11 +104,20 @@ def search_tool(
         The tool, ready to be bound to a model.
     """
 
-    async def search_corpus(query: str) -> tuple[str, list[dict[str, Any]]]:
+    async def search_corpus(
+        query: str, tool_call_id: str | None = None
+    ) -> tuple[str, list[dict[str, Any]]]:
         """Run one search and return passages for the model and citations.
+
+        The search runs inside a tool span, and the request carries that
+        span's trace context in its headers, so the retrieval spans the
+        endpoint opens belong to this call's trace whether ``/search`` is
+        this process or another one.
 
         Args:
             query: What to search for.
+            tool_call_id: The model's id for this call, when it came from
+                one.
 
         Returns:
             The passages as the model reads them, and the same passages as
@@ -107,11 +128,33 @@ def search_tool(
                 request. Left to surface: a retrieval failure the model
                 narrated around would be worse than one that is reported.
         """
-        response = await client.post(path, json={"query": query, "limit": limit})
-        response.raise_for_status()
-        payload = response.json()
-        results = payload["results"]
-        confidence = payload.get("confidence") or {}
+        with tracing.span(
+            f"execute_tool {TOOL_NAME}",
+            {
+                tracing.OPERATION: "execute_tool",
+                tracing.TOOL_NAME: TOOL_NAME,
+                tracing.TOOL_TYPE: "function",
+                tracing.TOOL_DESCRIPTION: TOOL_DESCRIPTION,
+                tracing.TOOL_CALL_ID: tool_call_id,
+                tracing.RETRIEVAL_QUERY: query,
+            },
+        ) as calling:
+            response = await client.post(
+                path,
+                json={"query": query, "limit": limit},
+                headers=tracing.headers(),
+            )
+            response.raise_for_status()
+            payload = response.json()
+            results = payload["results"]
+            confidence = payload.get("confidence") or {}
+            tracing.annotate(
+                calling,
+                {
+                    "corpus_query.retrieval.result_count": len(results),
+                    **tracing.confidence_attributes(confidence),
+                },
+            )
         return (
             render_passages(query, results, confidence.get("unmatched_terms") or []),
             [citation(result) for result in results],
@@ -120,12 +163,7 @@ def search_tool(
     return StructuredTool.from_function(
         coroutine=search_corpus,
         name=TOOL_NAME,
-        description=(
-            "Search this organization's own record — its meetings, "
-            "documents, decks, and spreadsheets — and return the passages "
-            "that bear on a question, each with the document and place it "
-            "came from. Call it once per subject you need to look up."
-        ),
+        description=TOOL_DESCRIPTION,
         args_schema=SearchCorpus,
         response_format="content_and_artifact",
     )
