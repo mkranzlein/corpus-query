@@ -30,7 +30,10 @@ repos:
       - id: end-of-file-fixer
       - id: trailing-whitespace
       - id: check-yaml
+      # The README's demo recording is the one large file committed on
+      # purpose. Every other file keeps the hook's default limit.
       - id: check-added-large-files
+        exclude: ^docs/demo\.gif$
       - id: no-commit-to-branch
         args: [--branch, main]
 
