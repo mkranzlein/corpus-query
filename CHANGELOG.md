@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v2.23.0 (2026-09-21)
+
+### Build System
+
+- Rebuild the frontend bundle ([#124](https://github.com/mkranzlein/corpus-query/pull/124),
+  [`33078f3`](https://github.com/mkranzlein/corpus-query/commit/33078f3b410de1ca97c16b8bb76f9aa7945ebb0e))
+
+### Features
+
+- **ask**: Show who to ask on an abstention, with a draft to copy
+  ([#124](https://github.com/mkranzlein/corpus-query/pull/124),
+  [`33078f3`](https://github.com/mkranzlein/corpus-query/commit/33078f3b410de1ca97c16b8bb76f9aa7945ebb0e))
+
+
 ## v2.22.0 (2026-09-21)
 
 ### Features
