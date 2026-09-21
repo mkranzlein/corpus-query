@@ -13,7 +13,7 @@ import pytest
 
 from corpus_query.retrieval import index as index_module
 from corpus_query.retrieval.blobs import vector_to_blob
-from corpus_query.retrieval.search import search
+from corpus_query.retrieval.search import read_chunk, search
 from corpus_query.store.kinds import DOCX, TRANSCRIPT
 
 
@@ -449,3 +449,41 @@ def test_the_default_embed_and_rerank_are_the_projects(
 
     assert len(result.results) == 1
     assert result.results[0].rerank_score == pytest.approx(1.0)
+
+
+def test_read_chunk_returns_one_passage_with_its_metadata(connection):
+    document_id = _insert_document(
+        connection,
+        "meeting-1",
+        title="Rev B schedule",
+        document_date="2026-03-04",
+        time_sensitivity="urgent",
+        business_impact="critical",
+        topics=["Firmware"],
+        attendees=["Priya", "Marcus"],
+    )
+    chunk_id = _insert_chunk(
+        connection,
+        document_id,
+        0,
+        "The connector lead time slipped two weeks.",
+        _vector(0),
+        span_start=2,
+        span_end=4,
+    )
+
+    chunk = read_chunk(connection, chunk_id)
+
+    assert chunk is not None
+    assert chunk.text == "The connector lead time slipped two weeks."
+    assert chunk.title == "Rev B schedule"
+    assert chunk.document_date == "2026-03-04"
+    assert chunk.attendees == ["Priya", "Marcus"]
+    assert chunk.location == "turns 2-4"
+    assert chunk.topics == ["Firmware"]
+    assert chunk.time_sensitivity == "urgent"
+    assert chunk.business_impact == "critical"
+
+
+def test_read_chunk_returns_none_for_an_unknown_id(connection):
+    assert read_chunk(connection, 12345) is None

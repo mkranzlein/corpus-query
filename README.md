@@ -219,6 +219,7 @@ curl -s localhost:8000/answer \
     // ...the rest of what it read
   ],
   "searches": 1,
+  "abstained": false,
   "routing": null,
   "thread_id": "bafccadb164e4447b21f7a8899f11390",
   "answer_id": "5f1c0b7a2c1e4d8fa0b9c7d6e5f43210"
@@ -236,7 +237,21 @@ detail.
 **Not knowing is an answer.** Retrieval always returns its best few passages,
 so the agent's job includes deciding that they do not actually address what
 was asked and saying so, rather than summarizing whatever came back. That
-comes back as a `200` with no citations, like any other answer.
+comes back as a `200`, like any other answer, with `abstained` set to `true`.
+A question declined without a search, as out of scope, is not an abstention:
+the record was never going to hold it, so `abstained` stays `false`.
+
+A citation says where a passage came from but not what it says. Read the
+passage itself, and the topics, time sensitivity, and business impact derived
+for its document, by the citation's `chunk_id`:
+
+```bash
+curl -s localhost:8000/chunks/98
+```
+
+The body is a search result's fields without `rank` and `rerank_score`, since
+a passage read on its own was not ranked against anything. An id the corpus
+does not hold is a `404`.
 
 ### Not knowing also suggests who to ask
 
