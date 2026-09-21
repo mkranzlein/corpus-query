@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v2.24.0 (2026-09-21)
+
+### Build System
+
+- **frontend**: Rebuild the committed bundle
+  ([#125](https://github.com/mkranzlein/corpus-query/pull/125),
+  [`3b7a424`](https://github.com/mkranzlein/corpus-query/commit/3b7a424c492d1579488ed74a6d289a3682c90cac))
+
+### Features
+
+- **ask**: Vote on an answer and correct it from the answer view
+  ([#125](https://github.com/mkranzlein/corpus-query/pull/125),
+  [`3b7a424`](https://github.com/mkranzlein/corpus-query/commit/3b7a424c492d1579488ed74a6d289a3682c90cac))
+
+
 ## v2.23.0 (2026-09-21)
 
 ### Build System
