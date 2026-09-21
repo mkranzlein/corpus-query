@@ -2,6 +2,39 @@
 
 <!-- version list -->
 
+## v2.21.0 (2026-09-21)
+
+### Documentation
+
+- Document the answer metrics and test the SQL that reads them
+  ([#120](https://github.com/mkranzlein/corpus-query/pull/120),
+  [`a1ae152`](https://github.com/mkranzlein/corpus-query/commit/a1ae15298b136b1535b68278faccbb358c9bdad1))
+
+- Say where the backend on an answer row is read from
+  ([#120](https://github.com/mkranzlein/corpus-query/pull/120),
+  [`a1ae152`](https://github.com/mkranzlein/corpus-query/commit/a1ae15298b136b1535b68278faccbb358c9bdad1))
+
+### Features
+
+- Add per-query measurement columns to the answer row
+  ([#120](https://github.com/mkranzlein/corpus-query/pull/120),
+  [`a1ae152`](https://github.com/mkranzlein/corpus-query/commit/a1ae15298b136b1535b68278faccbb358c9bdad1))
+
+- Measure each answer and write the numbers to its row
+  ([#120](https://github.com/mkranzlein/corpus-query/pull/120),
+  [`a1ae152`](https://github.com/mkranzlein/corpus-query/commit/a1ae15298b136b1535b68278faccbb358c9bdad1))
+
+- Record per-query answer metrics and add degradation smoke queries
+  ([#120](https://github.com/mkranzlein/corpus-query/pull/120),
+  [`a1ae152`](https://github.com/mkranzlein/corpus-query/commit/a1ae15298b136b1535b68278faccbb358c9bdad1))
+
+### Testing
+
+- Add smoke queries for an answerable and an unanswerable question
+  ([#120](https://github.com/mkranzlein/corpus-query/pull/120),
+  [`a1ae152`](https://github.com/mkranzlein/corpus-query/commit/a1ae15298b136b1535b68278faccbb358c9bdad1))
+
+
 ## v2.20.0 (2026-09-21)
 
 ### Bug Fixes
