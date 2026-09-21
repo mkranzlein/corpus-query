@@ -87,7 +87,7 @@ region in `.env` — [`.env.example`](.env.example) is a template with every
 setting that file takes — and name the backend when you start the service:
 
 ```bash
-cp .env.example .env   # then fill in AWS_BEARER_TOKEN_BEDROCK and AWS_REGION
+cp -n .env.example .env   # leaves an existing .env alone; then fill in AWS_BEARER_TOKEN_BEDROCK and AWS_REGION
 CORPUS_QUERY_MODEL_BACKEND=bedrock uv run scripts/serve.py
 ```
 

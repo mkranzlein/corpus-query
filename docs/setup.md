@@ -114,7 +114,7 @@ ships, which has every setting the service reads from that file and no
 values for the secret ones:
 
 ```bash
-cp .env.example .env
+cp -n .env.example .env   # -n leaves an existing .env alone
 ```
 
 Then fill in:
