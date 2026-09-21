@@ -29,6 +29,24 @@ jobs:
 
       - run: npm --prefix frontend ci
 
+      # The build output under corpus_query/api/static/ is committed (see the
+      # README's "The committed frontend" section) so that running the system
+      # needs only Python. Nothing else checks that it still matches the
+      # source it was built from, so rebuild it here and fail if the rebuild
+      # differs from what is committed — that is the only thing that catches
+      # a frontend change pushed without its bundle. This depends on Vite's
+      # output being reproducible, which has been confirmed in this same
+      # Linux container the workflow runs in.
+      - run: npm --prefix frontend run build
+
+      - name: Check that the committed frontend bundle is up to date
+        run: |
+          if ! git diff --quiet -- corpus_query/api/static; then
+            echo "::error::corpus_query/api/static is out of date with frontend/. Run 'npm --prefix frontend run build' and commit the result."
+            git diff --stat -- corpus_query/api/static
+            exit 1
+          fi
+
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
