@@ -853,9 +853,10 @@ npm --prefix frontend run dev  # http://localhost:5173, against a live API
 
 `npm run dev` serves the application itself with hot module replacement and
 proxies `/search`, `/answer`, `/chunks`, `/health`, `/feedback`,
-`/corrections`, and `/gaps` through to `scripts/serve.py` on port 8000, so run
-that in another terminal. Requests stay same-origin that way, which is why
-the API carries no CORS configuration for the sake of development.
+`/corrections`, `/gaps`, `/openapi.json`, and `/docs` through to
+`scripts/serve.py` on port 8000, so run that in another terminal. Requests
+stay same-origin that way, which is why the API carries no CORS configuration
+for the sake of development.
 
 ```bash
 npm --prefix frontend run lint       # eslint
