@@ -52,15 +52,10 @@ from pptx.shapes.base import BaseShape
 from pptx.slide import Slide
 from pptx.util import Pt
 
+from corpus_query.ingest.author import ROSTER_PATH, resolve_author
 from corpus_query.ingest.chunk import TARGET_WORDS, Chunk, count_words
 from corpus_query.ingest.reader import IngestError, ReadDocument
 from corpus_query.store.kinds import PPTX, SLIDE
-from corpus_query.transcripts.roster import (
-    DEFAULT_ROSTER_FILE,
-    RosterError,
-    first_names,
-    read_roster,
-)
 
 #: The file extension this reader claims.
 DECK_SUFFIX = ".pptx"
@@ -102,7 +97,7 @@ class ReadSlide:
 def read_deck(
     path: Path,
     target_words: int = TARGET_WORDS,
-    roster_path: Path | str = DEFAULT_ROSTER_FILE,
+    roster_path: Path | str = ROSTER_PATH,
 ) -> ReadDocument:
     """Read one PowerPoint deck into a document ready to be written.
 
@@ -128,7 +123,7 @@ def read_deck(
         raise IngestError(f"Could not open {path} as a PowerPoint deck: {exc}") from exc
 
     properties = presentation.core_properties
-    author = resolve_author(properties.author, path, roster_path)
+    author = resolve_author(path, properties.author, roster_path)
     document_date = _document_date(properties.modified, properties.created, path)
 
     slides = [
@@ -149,39 +144,6 @@ def read_deck(
         units=len(slides),
         unit_name="slides",
     )
-
-
-def resolve_author(
-    author: str | None, path: Path, roster_path: Path | str = DEFAULT_ROSTER_FILE
-) -> str:
-    """Resolve a deck's author to one person on the roster.
-
-    Args:
-        author: The author named in the deck's core properties.
-        path: The deck, for the error message.
-        roster_path: The staff roster.
-
-    Returns:
-        The author's first name, spelled as the roster spells it.
-
-    Raises:
-        IngestError: If the author is blank, is not on the roster, or the
-            roster cannot be read.
-    """
-    name = (author or "").strip()
-    if not name:
-        raise IngestError(f"{path} names no author in its core properties.")
-    try:
-        roster = first_names(read_roster(roster_path))
-    except RosterError as exc:
-        raise IngestError(str(exc)) from exc
-    matches = [person for person in roster if person.casefold() == name.casefold()]
-    if len(matches) != 1:
-        raise IngestError(
-            f"{path} names {name!r} as its author, who is not on the roster at "
-            f"{roster_path}. A deck's author must be one person on the roster."
-        )
-    return matches[0]
 
 
 def read_slide(number: int, slide: Slide) -> ReadSlide:

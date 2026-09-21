@@ -17,12 +17,7 @@ import pytest
 from pptx import Presentation
 from pptx.util import Inches, Pt
 
-from corpus_query.ingest.decks import (
-    DECK_SUFFIX,
-    NOTES_LABEL,
-    read_deck,
-    resolve_author,
-)
+from corpus_query.ingest.decks import DECK_SUFFIX, NOTES_LABEL, read_deck
 from corpus_query.ingest.pipeline import READERS, ingest_file, reader_for
 from corpus_query.ingest.reader import IngestError
 from corpus_query.store.kinds import PPTX, SLIDE
@@ -254,11 +249,10 @@ def test_a_core_properties_title_wins(build_deck):
     assert document.title == "Q1 2026 Board Review"
 
 
-def test_the_author_resolves_to_one_person_on_the_roster(build_deck, roster_path):
+def test_the_author_resolves_to_one_person_on_the_roster(build_deck):
     document = build_deck([("Cover", ["A figure"], "")], author="priya")
 
     assert document.author == "Priya"
-    assert resolve_author("Priya", Path("deck.pptx"), roster_path) == "Priya"
 
 
 def test_an_author_who_is_not_on_the_roster_is_refused(build_deck):
@@ -318,11 +312,7 @@ def test_most_committed_slides_carry_speaker_notes(deck_paths, roster_path):
         assert len(with_notes) > len(chunks) / 2, path.name
 
 
-def test_a_committed_deck_ingests_into_the_store(store, deck_paths, monkeypatch):
-    # The reader looks for the roster at its default path, which is relative
-    # to the repository root, and the pipeline gives it no way to say
-    # otherwise.
-    monkeypatch.chdir(REPO_ROOT)
+def test_a_committed_deck_ingests_into_the_store(store, deck_paths):
     path = next(p for p in deck_paths if p.stem == "q1-board-review")
 
     result = ingest_file(store, path)
