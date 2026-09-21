@@ -32,7 +32,80 @@ jobs:
         env:
           SKIP: no-commit-to-branch,pytest
 
+  # Decides whether a pull request touches anything the test suite could
+  # possibly care about. It does not run on pushes to main: those always run
+  # the suite, because the release workflow runs on main and a release must
+  # never be cut from a tree the tests have not seen.
+  #
+  # What counts as documentation, and so does not run the suite:
+  #
+  #   - any .md file outside corpus_query/ and data/ — README.md,
+  #     CHANGELOG.md, CLAUDE.md, docs/**, .claude/**
+  #   - LICENSE
+  #
+  # Markdown under corpus_query/ and data/ is deliberately excluded from that,
+  # because it is input rather than documentation: the prompt templates in
+  # corpus_query/*/prompts/ and corpus_query/transcripts/prompt.md are loaded
+  # at run time, and data/roster.md, data/topics.md,
+  # data/office_files_guidance.md and the transcripts under data/ are read by
+  # the code and asserted on by the tests. Everything else — Python,
+  # pyproject.toml, uv.lock, this workflow, the pre-commit config — runs the
+  # suite.
+  #
+  # The rule is written as "documentation is a short allowlist" rather than
+  # "**.md minus some exceptions" so that a new markdown file added under
+  # corpus_query/ or data/ runs the suite by default. Getting that wrong in
+  # the safe direction costs a few CI minutes; getting it wrong in the other
+  # direction means an untested change.
+  #
+  # One tradeoff to know about: a job skipped this way reports no conclusion
+  # at all. The repository is private, so there is no branch protection and no
+  # required status checks, and nothing waits on it. If it ever becomes public
+  # with `test` as a required check, a documentation-only pull request would
+  # block forever, and the fix is a job that reports success in place of the
+  # skipped one.
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          is_docs() {
+            case "$1" in
+              corpus_query/*.md|data/*.md) return 1 ;;
+              *.md|LICENSE) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          code=false
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            if is_docs "$file"; then
+              echo "documentation: $file"
+            else
+              echo "runs the suite: $file"
+              code=true
+            fi
+          done < <(git diff --name-only "$BASE_SHA" HEAD)
+
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "::notice::test job will run: $code"
+
   test:
+    needs: changes
+    # !cancelled() is what lets this run at all on a push to main, where the
+    # changes job is skipped: without a status check function here, a skipped
+    # dependency skips its dependents too.
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
