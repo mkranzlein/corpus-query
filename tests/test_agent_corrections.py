@@ -18,12 +18,14 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+import httpx
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from corpus_query.agent import corrections
 from corpus_query.agent.prompts import load
 from corpus_query.agent.retrieval import TOOL_NAME
+from corpus_query.api.models import AnswerResponse
 from corpus_query.store.capture import UnknownAnswerError
 from test_agent_answer import (
     ScriptedModel,
@@ -36,6 +38,7 @@ from test_agent_answer import (
     searches,
     verified,
 )
+from test_answer_stream import STREAM, events, names
 from test_api import StubSearch
 
 FREEZE = "When is the firmware freeze?"
@@ -426,3 +429,49 @@ def test_the_system_prompt_says_what_makes_a_turn_a_correction() -> None:
     assert corrections.TOOL_NAME in prompt
     assert "says specifically what is right instead" in prompt
     assert "Disagreement that does not say what is right" in prompt
+
+
+def test_a_streamed_correction_reports_recording_rather_than_searching() -> None:
+    """Streamed, a correcting turn reports no search, and ends on the record.
+
+    The model here also asks for a search alongside the correction, which
+    the graph drops, so the stream must not announce it either. The answer
+    event carries the same body the JSON response does, correction and all.
+    """
+    both = AIMessage(
+        "",
+        tool_calls=[
+            {"name": TOOL_NAME, "args": {"query": "freeze date"}, "id": "s"},
+            *corrects(number=1).tool_calls,
+        ],
+    )
+    model = ScriptedModel([*answers_freeze(), says(CORRECTION), both])
+    search = StubSearch(result=found())
+    app = answering_app(model, search)
+
+    async def run() -> tuple[dict[str, Any], httpx.Response]:
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://api.test"
+            ) as client:
+                asked = await client.post("/answer", json={"question": FREEZE})
+                first = asked.json()
+                streamed = await client.post(
+                    "/answer",
+                    json={"question": CORRECTION, "thread_id": first["thread_id"]},
+                    headers=STREAM,
+                )
+                return first, streamed
+
+    first, streamed = asyncio.run(run())
+    stream = events(streamed)
+
+    assert names(stream) == ["started", "drafting", "correcting", "answer"]
+    assert len(search.calls) == 1
+    answer = AnswerResponse.model_validate(dict(stream)["answer"])
+    assert answer.searches == 0
+    assert answer.correction is not None
+    assert answer.correction.answer_id == first["answer_id"]
+    assert answer.answer.startswith("I've recorded your correction")
+    [written] = recorded()["corrections"]
+    assert written["id"] == answer.correction.id

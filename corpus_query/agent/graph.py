@@ -41,6 +41,12 @@ The system prompt is prepended at each model call rather than stored in the
 graph's state. State is checkpointed and replayed, and a prompt that lives in
 it is a prompt that gets frozen into every thread ever started, so editing the
 file would change new conversations and not resumed ones.
+
+A turn can be watched as it runs. :meth:`Agent.stream` reports each step as a
+:class:`Progress` — a search asked for, what it returned, a draft started, a
+verification finished — and the answer last; :meth:`Agent.answer` is the same
+run with the steps dropped. What each step is called and carries is
+:data:`EVENTS`.
 """
 
 from __future__ import annotations
@@ -49,7 +55,13 @@ import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import (
+    AIMessage,
+    HumanMessage,
+    RemoveMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
@@ -60,6 +72,8 @@ from corpus_query.agent.routing import drafted_question, suggestion
 from corpus_query.agent.verification import read_verdict
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from langchain_core.language_models.chat_models import BaseChatModel
     from langchain_core.tools import BaseTool
     from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -179,6 +193,9 @@ class Agent:
     async def answer(self, question: str, thread_id: str | None = None) -> Answer:
         """Answer one question.
 
+        The same run :meth:`stream` makes, with the progress along the way
+        dropped, so the two can never disagree about what the answer is.
+
         Args:
             question: The question, in natural language.
             thread_id: The conversation to continue. A new one is started
@@ -187,33 +204,76 @@ class Agent:
         Returns:
             The answer, its citations, and the conversation it belongs to.
         """
+        result: Answer | None = None
+        async for item in self.stream(question, thread_id=thread_id):
+            if isinstance(item, Answer):
+                result = item
+        if result is None:  # pragma: no cover - stream always ends on one
+            raise RuntimeError("the graph finished without an answer")
+        return result
+
+    async def stream(
+        self, question: str, thread_id: str | None = None
+    ) -> AsyncIterator[Progress | Answer]:
+        """Answer one question, reporting each step as it happens.
+
+        The graph is run with LangGraph's task stream, which reports a node
+        as it starts and again when it finishes, and each of those that
+        means something to a person waiting is turned into a
+        :class:`Progress`. What each event means is set out in
+        :data:`EVENTS`.
+
+        A run that is abandoned partway — the caller stopped listening, the
+        model failed, the process was stopped — leaves its thread holding
+        half a turn. The next question asked on that thread clears it first;
+        see :meth:`_abandoned`.
+
+        Args:
+            question: The question, in natural language.
+            thread_id: The conversation to continue. A new one is started
+                when this is not given.
+
+        Yields:
+            :class:`Progress` for each step, in the order the graph took
+            them, and then the :class:`Answer`, last.
+        """
         thread = thread_id or uuid.uuid4().hex
+        config = {"configurable": {"thread_id": thread}}
+        yield Progress("started", {"thread_id": thread})
+        cleared = await self._abandoned(config) if thread_id else []
         # The answer's id is the question's message id, so the conversation
         # itself records which answer row each earlier turn became. See
         # corpus_query.agent.corrections.
         answer_id = uuid.uuid4().hex
-        state = await self.graph.ainvoke(
-            {
-                "messages": [HumanMessage(question, id=answer_id)],
-                "system_prompt": self.system_prompt,
-                "routing_prompt": self.routing_prompt,
-                "rewrite_prompt": self.rewrite_prompt,
-                "verify_prompt": self.verify_prompt,
-                # Cleared on the way in. State outlives a turn, so a
-                # suggestion, a rewrite, or a verification left over from an
-                # earlier question would otherwise come back attached to the
-                # answer to this one.
-                "routing": None,
-                "abstained": False,
-                "resolved_query": "",
-                "verification": None,
-                "verify_attempts": 0,
-                "correction": None,
-            },
-            config={"configurable": {"thread_id": thread}},
-        )
+        turn_input = {
+            "messages": [*cleared, HumanMessage(question, id=answer_id)],
+            "system_prompt": self.system_prompt,
+            "routing_prompt": self.routing_prompt,
+            "rewrite_prompt": self.rewrite_prompt,
+            "verify_prompt": self.verify_prompt,
+            # Cleared on the way in. State outlives a turn, so a
+            # suggestion, a rewrite, or a verification left over from an
+            # earlier question would otherwise come back attached to the
+            # answer to this one.
+            "routing": None,
+            "abstained": False,
+            "resolved_query": "",
+            "verification": None,
+            "verify_attempts": 0,
+            "correction": None,
+        }
+        watch = _Watch()
+        state: dict[str, Any] = {}
+        async for mode, chunk in self.graph.astream(
+            turn_input, config=config, stream_mode=["tasks", "values"]
+        ):
+            if mode == "values":
+                state = chunk
+                continue
+            for progress in watch.saw(chunk):
+                yield progress
         turn = _this_turn(state["messages"])
-        return Answer(
+        yield Answer(
             answer=_final_text(turn),
             citations=_citations(turn),
             searches=_search_count(turn),
@@ -225,6 +285,193 @@ class Agent:
             answer_id=answer_id,
             correction=state.get("correction"),
         )
+
+    async def _abandoned(self, config: dict[str, Any]) -> list[RemoveMessage]:
+        """Find what an unfinished run left on this thread, to clear it.
+
+        Every step is checkpointed as it completes, so a run that stops
+        partway leaves the thread holding the question and whatever the
+        graph had done with it so far — which can be a search the model
+        asked for with no result after it. That history is worse than none:
+        the next turn's rewrite reads it as conversation, and a model
+        provider that insists every tool call be answered refuses the
+        thread outright. Nothing answered that question and nothing
+        recorded it, so the turn is removed as if it had never been asked.
+
+        A run is unfinished when the checkpoint still names nodes to run.
+        Nothing in this graph pauses on purpose, so that only happens when a
+        run was stopped; a task that did pause on purpose, with an
+        interrupt, is left alone.
+
+        Args:
+            config: The thread, as the graph is invoked with it.
+
+        Returns:
+            One removal per message of the unfinished turn, to send in with
+            the next question. Empty when the thread finished cleanly, is
+            new, or is not persisted at all.
+        """
+        if self.graph.checkpointer is None:
+            return []
+        snapshot = await self.graph.aget_state(config)
+        if not snapshot.next or any(task.interrupts for task in snapshot.tasks):
+            return []
+        turn = _this_turn(snapshot.values.get("messages", []))
+        return [RemoveMessage(id=message.id) for message in turn]
+
+
+#: What :meth:`Agent.stream` reports, in the order a searching turn reports
+#: it. Each event's data is a JSON object.
+EVENTS: dict[str, str] = {
+    "started": "The question was received. ``thread_id`` is the conversation "
+    "it belongs to, known before anything else has run.",
+    "drafting": "The model has been asked to answer. It may ask for a search "
+    "instead, in which case ``searching`` follows; after a search, or a "
+    "rejected draft, this comes round again.",
+    "searching": "Retrieval has started. ``query`` is what the model asked "
+    "to search for.",
+    "searched": "Retrieval returned. ``query`` is what was searched for and "
+    "``citations`` the passages that came back, best first, in the shape "
+    "an answer cites them in.",
+    "verifying": "The drafted answer's claims are being checked against the "
+    "passages that were searched for. A turn that cited nothing skips this.",
+    "verified": "The check finished. ``verification`` is what it found, in "
+    "the shape the answer records it in — null when every claim held up — "
+    "and ``redraft`` is whether the model is being sent back to draft "
+    "again.",
+    "routing": "The answer is being judged against the question, to decide "
+    "whether it settled it and who to ask if not. A turn that cited "
+    "nothing skips this.",
+    "correcting": "The model took the message as a correction of an earlier "
+    "answer rather than a question, and it is being recorded. Reported "
+    "instead of everything from ``searching`` on: a correcting turn "
+    "searches nothing, verifies nothing, and routes nothing, and the "
+    "answer that follows says what was recorded.",
+}
+
+
+@dataclass(frozen=True)
+class Progress:
+    """One step of a question being answered, as it happens."""
+
+    event: str
+    """Which step: one of :data:`EVENTS`."""
+
+    data: dict[str, Any]
+    """What the step has to say, as a JSON object."""
+
+
+@dataclass
+class _Watch:
+    """Turns the graph's task stream into progress, one turn's worth.
+
+    The task stream reports a node when it starts and again when it
+    finishes, with what it wrote. A start is when a step begins; a finish
+    is when there is something to say about what it found. The two need a
+    little memory between them: a search result names only the call it
+    answers, not what was searched for, and whether verification and
+    routing do anything depends on whether a search returned passages.
+    """
+
+    queries: dict[str, str] = field(default_factory=dict)
+    """What each tool call asked to search for, by call id."""
+
+    cited: bool = False
+    """Whether any search this turn returned a passage."""
+
+    def saw(self, task: dict[str, Any]) -> list[Progress]:
+        """Report what one task event means.
+
+        Args:
+            task: One item of LangGraph's ``tasks`` stream: a start carries
+                ``input``, a finish carries ``result`` and ``error``.
+
+        Returns:
+            The progress to report for it, often none.
+        """
+        name = task["name"]
+        if "result" not in task:
+            if name == "think":
+                return [Progress("drafting", {})]
+            if name == "verify" and self.cited:
+                return [Progress("verifying", {})]
+            if name == "route" and self.cited:
+                return [Progress("routing", {})]
+            if name == "correct":
+                return [Progress("correcting", {})]
+            return []
+        # A task that failed has nothing to report. The failure itself
+        # comes out of the stream as an exception.
+        if task.get("error") is not None:
+            return []
+        messages = (task["result"] or {}).get("messages", [])
+        if name == "think":
+            return self._searching(messages)
+        if name == "tools":
+            return self._searched(messages)
+        if name == "verify" and self.cited:
+            verification = task["result"].get("verification")
+            return [
+                Progress(
+                    "verified",
+                    {
+                        "verification": verification,
+                        "redraft": _needs_redraft(verification),
+                    },
+                )
+            ]
+        return []
+
+    def _searching(self, messages: list[Any]) -> list[Progress]:
+        """Report each search the model just asked for.
+
+        A reply that calls the correction tool reports no search at all:
+        the graph drops any search asked for alongside a correction, so
+        none of them will run.
+        """
+        progress = []
+        if any(corrections.correction_call(message) for message in messages):
+            return progress
+        for message in messages:
+            for call in getattr(message, "tool_calls", None) or []:
+                query = str(call.get("args", {}).get("query", ""))
+                self.queries[call.get("id") or ""] = query
+                progress.append(Progress("searching", {"query": query}))
+        return progress
+
+    def _searched(self, messages: list[Any]) -> list[Progress]:
+        """Report what each search that just ran came back with."""
+        progress = []
+        for message in messages:
+            if not isinstance(message, ToolMessage):
+                continue
+            citations = list(message.artifact or [])
+            self.cited = self.cited or bool(citations)
+            progress.append(
+                Progress(
+                    "searched",
+                    {
+                        "query": self.queries.get(message.tool_call_id, ""),
+                        "citations": citations,
+                    },
+                )
+            )
+        return progress
+
+
+def _needs_redraft(verification: dict[str, Any] | None) -> bool:
+    """Return whether a verification outcome sends the model back to draft.
+
+    Args:
+        verification: What ``verify`` recorded.
+
+    Returns:
+        True only when specific claims were rejected and redrafts remain.
+        A verification with no ``"exhausted"`` key — the unreadable case —
+        counts as done rather than redrafted, for the same reason ``verify``
+        never appends a redraft request for it.
+    """
+    return verification is not None and not verification.get("exhausted", True)
 
 
 class State(MessagesState):
@@ -519,15 +766,10 @@ def build_graph(
         Returns:
             ``"think"`` when verification appended a redraft request,
             ``"route"`` otherwise — a pass, nothing to verify, an
-            unreadable reply, or the regeneration bound was reached. A
-            verification dict with no ``"exhausted"`` key — the unreadable
-            case — defaults to done rather than redrafted, for the same
-            reason ``verify`` never appends a redraft request for it.
+            unreadable reply, or the regeneration bound was reached. See
+            :func:`_needs_redraft`.
         """
-        verification = state.get("verification")
-        if verification is not None and not verification.get("exhausted", True):
-            return "think"
-        return "route"
+        return "think" if _needs_redraft(state.get("verification")) else "route"
 
     builder = StateGraph(State)
     builder.add_node("rewrite", rewrite)
