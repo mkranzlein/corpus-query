@@ -2,6 +2,68 @@
 
 <!-- version list -->
 
+## v2.9.0 (2026-09-21)
+
+### Bug Fixes
+
+- Keep the system prompt inside the model's context window
+  ([#103](https://github.com/mkranzlein/corpus-query/pull/103),
+  [`951be5d`](https://github.com/mkranzlein/corpus-query/commit/951be5dd070e22f5b7ed88d2a5186c230f45f0ca))
+
+### Chores
+
+- Rebuild the committed corpus over all four formats
+  ([#83](https://github.com/mkranzlein/corpus-query/pull/83),
+  [`7fb3d49`](https://github.com/mkranzlein/corpus-query/commit/7fb3d499a015850ce093013240db5a3d81d29ff3))
+
+### Continuous Integration
+
+- Skip the test job on documentation-only pull requests
+  ([#85](https://github.com/mkranzlein/corpus-query/pull/85),
+  [`fac97aa`](https://github.com/mkranzlein/corpus-query/commit/fac97aae09b67ff540989e45c08840d7246cb7a9))
+
+### Documentation
+
+- Add CI status badge to README ([#82](https://github.com/mkranzlein/corpus-query/pull/82),
+  [`4f555e4`](https://github.com/mkranzlein/corpus-query/commit/4f555e40badf6cccf6db0b03b4c12f883a80db05))
+
+- Document /answer and what it takes to run it
+  ([#103](https://github.com/mkranzlein/corpus-query/pull/103),
+  [`951be5d`](https://github.com/mkranzlein/corpus-query/commit/951be5dd070e22f5b7ed88d2a5186c230f45f0ca))
+
+### Features
+
+- Answer questions with a LangGraph agent at POST /answer
+  ([#103](https://github.com/mkranzlein/corpus-query/pull/103),
+  [`951be5d`](https://github.com/mkranzlein/corpus-query/commit/951be5dd070e22f5b7ed88d2a5186c230f45f0ca))
+
+### Performance Improvements
+
+- Size the context window from measurement, not from a round number
+  ([#103](https://github.com/mkranzlein/corpus-query/pull/103),
+  [`951be5d`](https://github.com/mkranzlein/corpus-query/commit/951be5dd070e22f5b7ed88d2a5186c230f45f0ca))
+
+### Refactoring
+
+- Consolidate build_client into one shared module
+  ([#90](https://github.com/mkranzlein/corpus-query/pull/90),
+  [`a52ba2e`](https://github.com/mkranzlein/corpus-query/commit/a52ba2e3407be7b29138096848f866108b402eda))
+
+- Fold the three author-on-roster checks into one helper
+  ([#86](https://github.com/mkranzlein/corpus-query/pull/86),
+  [`ec3f023`](https://github.com/mkranzlein/corpus-query/commit/ec3f0234509e413b03564b8b8c5db0354d943f95))
+
+- Keep runtime state in its own database, not the corpus
+  ([#103](https://github.com/mkranzlein/corpus-query/pull/103),
+  [`951be5d`](https://github.com/mkranzlein/corpus-query/commit/951be5dd070e22f5b7ed88d2a5186c230f45f0ca))
+
+### Testing
+
+- Cover the agent's lifespan, its model seam, and the prompt loader
+  ([#103](https://github.com/mkranzlein/corpus-query/pull/103),
+  [`951be5d`](https://github.com/mkranzlein/corpus-query/commit/951be5dd070e22f5b7ed88d2a5186c230f45f0ca))
+
+
 ## v2.8.0 (2026-09-21)
 
 ### Documentation
