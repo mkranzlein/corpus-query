@@ -51,8 +51,9 @@ run with the steps dropped. What each step is called and carries is
 
 from __future__ import annotations
 
+import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import (
@@ -68,8 +69,9 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from opentelemetry import trace
 
 from corpus_query import tracing
-from corpus_query.agent import corrections
+from corpus_query.agent import corrections, measures
 from corpus_query.agent.prompts import load
+from corpus_query.agent.retrieval import found
 from corpus_query.agent.rewriting import resolved_query as read_rewrite
 from corpus_query.agent.routing import drafted_question, suggestion
 from corpus_query.agent.verification import read_verdict
@@ -179,6 +181,33 @@ class Answer:
     it here, which is what ties the row to how the answer was produced; see
     :mod:`corpus_query.tracing`."""
 
+    top_score: float | None = None
+    """The best rerank score any of this turn's searches returned, or
+    ``None`` when nothing was searched or nothing came back. See
+    :func:`corpus_query.agent.measures.strongest_search`."""
+
+    margin: float | None = None
+    """The gap between the first and second result of the search
+    :attr:`top_score` came from, or ``None`` when it returned fewer than
+    two."""
+
+    citation_coverage: float | None = None
+    """The share of the answer's sentences this turn's passages bear out,
+    from 0 to 1, or ``None`` when nothing was retrieved to check against.
+    See :func:`corpus_query.agent.measures.citation_coverage`."""
+
+    latency_ms: int | None = None
+    """How long the turn took, in milliseconds, from the question reaching
+    the agent to the finished answer. Set by :meth:`Agent.stream`."""
+
+    backend: str | None = None
+    """The provider of the model that answered, as OpenTelemetry names it —
+    ``ollama`` or ``aws.bedrock``, or ``unknown`` for a model that does not
+    say."""
+
+    model: str | None = None
+    """The model that answered, as its provider names it, when it says."""
+
 
 @dataclass(frozen=True)
 class Agent:
@@ -257,6 +286,7 @@ class Agent:
             :class:`Progress` for each step, in the order the graph took
             them, and then the :class:`Answer`, last.
         """
+        started = time.perf_counter()
         thread = thread_id or uuid.uuid4().hex
         # The answer's id is the question's message id, so the conversation
         # itself records which answer row each earlier turn became. See
@@ -279,6 +309,10 @@ class Agent:
             steps = self._run(question, thread, answer_id, run, thread_id)
             async for item in steps:
                 if isinstance(item, Answer):
+                    item = replace(
+                        item,
+                        latency_ms=round((time.perf_counter() - started) * 1000),
+                    )
                     tracing.annotate(
                         run,
                         {
@@ -346,6 +380,7 @@ class Agent:
             "verification": None,
             "verify_attempts": 0,
             "correction": None,
+            "served_by": None,
         }
         watch = _Watch()
         state: dict[str, Any] = {}
@@ -366,8 +401,14 @@ class Agent:
             for progress in watch.saw(chunk):
                 yield progress
         turn = _this_turn(state["messages"])
+        text = _final_text(turn)
+        searched = [found(message.artifact) for message in _searches(turn)]
+        top_score, margin = measures.strongest_search(
+            search["confidence"] for search in searched
+        )
+        served_by = state.get("served_by") or {}
         yield Answer(
-            answer=_final_text(turn),
+            answer=text,
             citations=_citations(turn),
             searches=_search_count(turn),
             routing=state.get("routing"),
@@ -378,6 +419,14 @@ class Agent:
             answer_id=answer_id,
             correction=state.get("correction"),
             trace_id=tracing.trace_id(run),
+            top_score=top_score,
+            margin=margin,
+            citation_coverage=measures.citation_coverage(
+                text,
+                [passage for search in searched for passage in search["passages"]],
+            ),
+            backend=served_by.get("backend"),
+            model=served_by.get("model"),
         )
 
     async def _abandoned(self, config: dict[str, Any]) -> list[RemoveMessage]:
@@ -539,7 +588,7 @@ class _Watch:
         for message in messages:
             if not isinstance(message, ToolMessage):
                 continue
-            citations = list(message.artifact or [])
+            citations = found(message.artifact)["citations"]
             self.cited = self.cited or bool(citations)
             progress.append(
                 Progress(
@@ -587,6 +636,11 @@ class State(MessagesState):
     verification: dict[str, Any] | None
     verify_attempts: int
     correction: dict[str, Any] | None
+    served_by: dict[str, Any] | None
+    """Which model drafted this turn's answer: ``backend`` and ``model``.
+    Written by ``think``, the one node every turn passes through, from the
+    model it called, so the answer's row names the model the turn ran on
+    rather than whatever the environment says the backend should be."""
 
 
 def build_graph(
@@ -711,7 +765,10 @@ def build_graph(
             speaker = with_correction
             system = f"{system}\n\n{corrections.numbered(earlier)}"
         messages = [SystemMessage(system), *state["messages"]]
-        return {"messages": [await ask_model(speaker, messages, "think")]}
+        return {
+            "messages": [await ask_model(speaker, messages, "think")],
+            "served_by": {"backend": identity.provider, "model": identity.model},
+        }
 
     async def correct(state: State) -> dict[str, Any]:
         """Record the correction the model recognized, and say what was recorded.
@@ -971,6 +1028,18 @@ def _history(messages: list[Any]) -> list[Any]:
 def _search_count(messages: list[Any]) -> int:
     """Return how many searches this turn ran.
 
+    Args:
+        messages: This turn's messages.
+
+    Returns:
+        How many searches ran.
+    """
+    return len(_searches(messages))
+
+
+def _searches(messages: list[Any]) -> list[ToolMessage]:
+    """Return the tool messages this turn's searches answered with.
+
     Every tool message is a search except the one recording a correction,
     which reaches no retrieval.
 
@@ -978,12 +1047,13 @@ def _search_count(messages: list[Any]) -> int:
         messages: This turn's messages.
 
     Returns:
-        How many searches ran.
+        One tool message per search, in the order they ran.
     """
-    return sum(
-        isinstance(message, ToolMessage) and message.name != corrections.TOOL_NAME
+    return [
+        message
         for message in messages
-    )
+        if isinstance(message, ToolMessage) and message.name != corrections.TOOL_NAME
+    ]
 
 
 def _question(messages: list[Any]) -> str:
@@ -1046,7 +1116,7 @@ def _citations(messages: list[Any]) -> list[dict[str, Any]]:
     for message in messages:
         if not isinstance(message, ToolMessage) or not message.artifact:
             continue
-        for entry in message.artifact:
+        for entry in found(message.artifact)["citations"]:
             if entry["chunk_id"] in seen:
                 continue
             seen.add(entry["chunk_id"])

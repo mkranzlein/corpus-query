@@ -16,6 +16,7 @@ import pytest
 from corpus_query.store import capture
 from corpus_query.store.capture import (
     KINDS,
+    MEASUREMENTS,
     SCHEMA_VERSION,
     SCHEMA_VERSION_KEY,
     CaptureSchemaVersionError,
@@ -460,11 +461,12 @@ def test_marking_an_id_that_is_not_there_is_refused(records) -> None:
         mark_reviewed(records, "corrections", 404)
 
 
-def a_version_one_file(path) -> None:
-    """Write a usage database as version 1 left it, with one of each record.
+def a_version_two_file(path) -> None:
+    """Write a usage database as version 2 left it, with one of each record.
 
-    It is made by taking the column back off a current file, which leaves
-    exactly the tables that version wrote.
+    It is made by taking the per-query columns, and the index on one of
+    them, back off a current file, which leaves exactly the tables that
+    version wrote.
 
     Args:
         path: Where to write it.
@@ -475,6 +477,29 @@ def a_version_one_file(path) -> None:
         record_gap(old, answer_id, routing=A_ROUTING)
         record_correction(old, answer_id, what_was_wrong="x", what_is_right="y")
         record_feedback(old, answer_id, verdict="down", note="stale")
+        old.execute("DROP INDEX idx_answers_trace_id")
+        for column, _ in MEASUREMENTS:
+            old.execute(f"ALTER TABLE answers DROP COLUMN {column}")
+        old.execute(
+            "UPDATE capture_meta SET value = '2' WHERE key = ?", (SCHEMA_VERSION_KEY,)
+        )
+        old.commit()
+    finally:
+        old.close()
+
+
+def a_version_one_file(path) -> None:
+    """Write a usage database as version 1 left it, with one of each record.
+
+    It is a version-2 file with the review mark taken back off, which leaves
+    exactly the tables version 1 wrote.
+
+    Args:
+        path: Where to write it.
+    """
+    a_version_two_file(path)
+    old = sqlite3.connect(path)
+    try:
         for table in KINDS:
             old.execute(f"ALTER TABLE {table} DROP COLUMN reviewed_at")
         old.execute(
@@ -547,3 +572,166 @@ def test_an_upgrade_that_fails_partway_leaves_the_file_as_it_was(
     finally:
         upgraded.close()
     assert all(row["reviewed_at"] is None for row in rows)
+
+
+def test_a_file_from_before_the_per_query_numbers_is_brought_up_to_date(
+    tmp_path,
+) -> None:
+    """An answer written before the numbers existed is kept, with them null.
+
+    Null reads as not measured. A zero would claim a latency of nothing and
+    a coverage of none, and would drag every average taken over the table.
+    """
+    path = tmp_path / "usage.db"
+    a_version_two_file(path)
+
+    upgraded = connect(path)
+    try:
+        (version,) = upgraded.execute(
+            "SELECT value FROM capture_meta WHERE key = ?", (SCHEMA_VERSION_KEY,)
+        ).fetchone()
+        (pragma,) = upgraded.execute("PRAGMA user_version").fetchone()
+        [row] = upgraded.execute("SELECT * FROM answers").fetchall()
+        indexes = {index[1] for index in upgraded.execute("PRAGMA index_list(answers)")}
+        rows = [gaps(upgraded)[0], corrections(upgraded)[0], feedback(upgraded)[0]]
+    finally:
+        upgraded.close()
+
+    assert int(version) == SCHEMA_VERSION
+    # The file-level pragma is still nobody's.
+    assert pragma == 0
+    assert row["query"] == "Where are the rev B boards?"
+    assert all(row[column] is None for column, _ in MEASUREMENTS)
+    assert "idx_answers_trace_id" in indexes
+    assert [record["answer_id"] for record in rows] == [row["id"]] * 3
+
+
+def test_an_upgraded_file_has_the_same_tables_as_a_new_one(tmp_path) -> None:
+    """Upgrading from any older version ends where creating one starts.
+
+    Otherwise which columns a file has would depend on how old it was, and
+    a query written against one would fail on another.
+
+    A version-2 file comes out column for column in the same order, since
+    the per-query numbers sit last in a new table exactly as ALTER TABLE
+    appends them. A version-1 file has the same columns, but its review
+    mark lands after ``created_at`` rather than before it, as it did before
+    these numbers existed; nothing reads these tables by position.
+    """
+
+    def shape(path) -> dict[str, list]:
+        connection = sqlite3.connect(path)
+        try:
+            return {
+                table: [
+                    tuple(row)
+                    for row in connection.execute(f"PRAGMA table_info({table})")
+                ]
+                + sorted(
+                    tuple(row[1:3])
+                    for row in connection.execute(f"PRAGMA index_list({table})")
+                )
+                for table in ("answers", *KINDS)
+            }
+        finally:
+            connection.close()
+
+    def unordered(tables: dict[str, list]) -> dict[str, set]:
+        return {
+            table: {row[1:] if len(row) == 6 else row for row in rows}
+            for table, rows in tables.items()
+        }
+
+    connect(tmp_path / "new.db").close()
+    a_version_one_file(tmp_path / "one.db")
+    connect(tmp_path / "one.db").close()
+    a_version_two_file(tmp_path / "two.db")
+    connect(tmp_path / "two.db").close()
+
+    new = shape(tmp_path / "new.db")
+    assert shape(tmp_path / "two.db") == new
+    assert unordered(shape(tmp_path / "one.db")) == unordered(new)
+
+
+def test_an_upgrade_from_version_two_that_fails_leaves_the_file_as_it_was(
+    tmp_path, monkeypatch
+) -> None:
+    """The second upgrade is all or nothing, like the first."""
+    path = tmp_path / "usage.db"
+    a_version_two_file(path)
+    original = capture._MIGRATIONS[2]
+    monkeypatch.setitem(
+        capture._MIGRATIONS, 2, (*original, "ALTER TABLE no_such_table ADD x TEXT")
+    )
+
+    with pytest.raises(sqlite3.OperationalError):
+        connect(path)
+
+    untouched = sqlite3.connect(path)
+    try:
+        (version,) = untouched.execute(
+            "SELECT value FROM capture_meta WHERE key = ?", (SCHEMA_VERSION_KEY,)
+        ).fetchone()
+        columns = {row[1] for row in untouched.execute("PRAGMA table_info(answers)")}
+    finally:
+        untouched.close()
+    assert version == "2"
+    assert not columns & {column for column, _ in MEASUREMENTS}
+
+    monkeypatch.setitem(capture._MIGRATIONS, 2, original)
+    connect(path).close()
+
+
+def test_an_answer_row_carries_the_per_query_numbers(records) -> None:
+    """Every number the row has a column for comes back as it was written."""
+    answer_id = record_answer(
+        records,
+        query="Where are the rev B boards?",
+        answer="Marcus put them two weeks out.",
+        citations=[A_CITATION],
+        thread_id="thread-1",
+        abstained=False,
+        searches=2,
+        top_score=4.5,
+        margin=1.25,
+        citation_coverage=0.75,
+        latency_ms=1834,
+        backend="ollama",
+        model="granite4.1:8b",
+        trace_id="0af7651916cd43dd8448eb211c80319c",
+    )
+
+    row = records.execute("SELECT * FROM answers WHERE id = ?", (answer_id,)).fetchone()
+
+    assert {column: row[column] for column, _ in MEASUREMENTS} == {
+        "searches": 2,
+        "top_score": 4.5,
+        "margin": 1.25,
+        "citation_coverage": 0.75,
+        "latency_ms": 1834,
+        "backend": "ollama",
+        "model": "granite4.1:8b",
+        "trace_id": "0af7651916cd43dd8448eb211c80319c",
+    }
+
+
+def test_an_answer_without_a_trace_records_no_trace_id(records) -> None:
+    """Tracing off hands over an empty id, which is stored as no id at all.
+
+    An empty string joins to no span just as a null does, but it would count
+    as present in ``count(trace_id)``.
+    """
+    answer_id = record_answer(
+        records,
+        query="q",
+        answer="a",
+        citations=[],
+        thread_id="thread-1",
+        abstained=True,
+        trace_id="",
+    )
+
+    (trace_id,) = records.execute(
+        "SELECT trace_id FROM answers WHERE id = ?", (answer_id,)
+    ).fetchone()
+    assert trace_id is None

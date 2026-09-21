@@ -595,6 +595,10 @@ def _wants_events(request: Request) -> bool:
 def _recorded(opened: Resources, question: str, result: Answer) -> AnswerResponse:
     """Record one answer, and the gap it leaves if it left one.
 
+    Both ways of asking — one JSON body and a stream of events — record
+    through here, so every question answered writes one row, with the same
+    per-query numbers, an abstention included.
+
     Args:
         opened: The resources opened at startup, for the usage database.
         question: The question as it was asked.
@@ -611,6 +615,14 @@ def _recorded(opened: Resources, question: str, result: Answer) -> AnswerRespons
         thread_id=result.thread_id,
         abstained=result.abstained,
         answer_id=result.answer_id or None,
+        searches=result.searches,
+        top_score=result.top_score,
+        margin=result.margin,
+        citation_coverage=result.citation_coverage,
+        latency_ms=result.latency_ms,
+        backend=result.backend,
+        model=result.model,
+        trace_id=result.trace_id,
     )
     # A gap is written by the system rather than reported by anybody, so
     # this is the only place it can come from. The suggestion is stored as
