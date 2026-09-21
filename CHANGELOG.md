@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.22.0 (2026-09-21)
+
+### Features
+
+- Rename the company and regenerate the corpus
+  ([#123](https://github.com/mkranzlein/corpus-query/pull/123),
+  [`29b44e1`](https://github.com/mkranzlein/corpus-query/commit/29b44e18c6c1fc2d078dddc8c208d8a95a15b36e))
+
+
 ## v2.21.0 (2026-09-21)
 
 ### Documentation
