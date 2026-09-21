@@ -113,7 +113,7 @@ def search_tool(
         results = payload["results"]
         confidence = payload.get("confidence") or {}
         return (
-            render_passages(results, confidence.get("unmatched_terms") or []),
+            render_passages(query, results, confidence.get("unmatched_terms") or []),
             [citation(result) for result in results],
         )
 
@@ -154,14 +154,27 @@ def citation(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def render_passages(
-    results: list[dict[str, Any]], unmatched_terms: list[str] | None = None
+    query: str,
+    results: list[dict[str, Any]],
+    unmatched_terms: list[str] | None = None,
 ) -> str:
     """Render search results as the text the model reads.
 
     Each passage is labelled with where it came from, so a model told to
     attribute every claim to a passage has something to attribute it to.
 
+    The block opens with a line saying what was searched for and that
+    ranking is not relevance. That instruction is also in the system
+    prompt, and it is repeated here on purpose: retrieval cannot return
+    nothing, so a question the corpus never covered still comes back with
+    five confident-looking passages, and a small model reading a page of
+    business writing will summarize it unless something close at hand says
+    not to. The tool result is the last thing it reads before answering,
+    which is where the reminder does the most work.
+
     Args:
+        query: What was searched for, echoed so a model that ran two
+            searches can tell the results apart.
         results: The results from one search, best first.
         unmatched_terms: Query terms that matched nothing lexically.
             Reported because a name the corpus does not have is usually the
@@ -172,14 +185,13 @@ def render_passages(
         saying so — which is a result the model is meant to act on, not an
         empty string it might read as a glitch.
     """
+    missing = (
+        f" Nothing in the record contains: {', '.join(unmatched_terms)}."
+        if unmatched_terms
+        else ""
+    )
     if not results:
-        empty = "No passages in the record matched that search."
-        if unmatched_terms:
-            empty += (
-                " These terms appear nowhere in the record: "
-                f"{', '.join(unmatched_terms)}."
-            )
-        return empty
+        return f'No passages matched "{query}".{missing}'
 
     blocks = []
     for index, result in enumerate(results, start=1):
@@ -188,9 +200,9 @@ def render_passages(
             source += f", {result['author']}"
         source += f", {result['location']})"
         blocks.append(f"[{index}] {source}\n{result['text']}")
-    rendered = "\n\n".join(blocks)
-    if unmatched_terms:
-        rendered += (
-            f"\n\nNot found anywhere in the record: {', '.join(unmatched_terms)}."
-        )
-    return rendered
+    return (
+        f'The {len(results)} closest passages to "{query}".{missing} Closest is '
+        f"not the same as relevant: read them against the question you were "
+        f"asked, and if none of them answers it, say the record does not say "
+        f"rather than summarizing what is here.\n\n" + "\n\n".join(blocks)
+    )

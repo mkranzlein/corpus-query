@@ -28,19 +28,36 @@ DEFAULT_MODEL = "granite4.1:8b"
 #: model left free to wander is a small model inventing a date.
 DEFAULT_TEMPERATURE = 0.0
 
+#: How large a context window to ask Ollama for.
+#:
+#: This has to be set, and it has to be set here. Ollama defaults to a 4096
+#: token window regardless of what the model supports, and it makes room by
+#: dropping tokens from the front — which is where the system prompt is. Five
+#: retrieved passages are enough to go over, so the instructions that say to
+#: abstain are the first thing evicted, precisely when they matter most. What
+#: that looks like from outside is an agent that follows its prompt on short
+#: questions and summarizes whatever retrieval returned on long ones.
+#:
+#: 32k is well inside what this model supports and leaves room for several
+#: rounds of passages on top of the conversation.
+DEFAULT_CONTEXT_WINDOW = 32768
+
 
 def load_chat_model(
-    model: str = DEFAULT_MODEL, temperature: float = DEFAULT_TEMPERATURE
+    model: str = DEFAULT_MODEL,
+    temperature: float = DEFAULT_TEMPERATURE,
+    context_window: int = DEFAULT_CONTEXT_WINDOW,
 ) -> BaseChatModel:
     """Build the chat model the agent runs on.
 
     Args:
         model: Which local model to answer from, as Ollama names it.
         temperature: How much the model is allowed to wander.
+        context_window: How many tokens to give the model to work in.
 
     Returns:
         The chat model, as LangChain's interface to it.
     """
     from langchain_ollama import ChatOllama
 
-    return ChatOllama(model=model, temperature=temperature)
+    return ChatOllama(model=model, temperature=temperature, num_ctx=context_window)

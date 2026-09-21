@@ -273,8 +273,8 @@ def test_abstains_when_the_corpus_does_not_answer() -> None:
     # The model was shown that the search came back empty, and which term
     # the corpus has never seen, rather than an empty string.
     shown = model.prompts[-1][-1].content
-    assert "No passages in the record matched" in shown
-    assert "kalamazoo" in shown
+    assert 'No passages matched "kalamazoo office"' in shown
+    assert "Nothing in the record contains: kalamazoo." in shown
 
 
 def test_declines_an_out_of_scope_question_without_searching() -> None:
@@ -446,6 +446,7 @@ def test_the_tool_is_described_to_the_model_once() -> None:
 def test_passages_carry_where_they_came_from() -> None:
     """A passage is rendered with the document, date, and place behind it."""
     rendered = render_passages(
+        "rev B boards",
         [
             {
                 "title": "Rev B schedule",
@@ -454,14 +455,21 @@ def test_passages_carry_where_they_came_from() -> None:
                 "location": "turns 0-1",
                 "text": "Two weeks out.",
             }
-        ]
+        ],
     )
-    assert rendered == "[1] Rev B schedule (2026-03-04, turns 0-1)\nTwo weeks out."
+    assert rendered.endswith(
+        "[1] Rev B schedule (2026-03-04, turns 0-1)\nTwo weeks out."
+    )
+    # The passages open with what was searched for and a reminder that
+    # ranking is not relevance, which is the whole point of the header.
+    assert rendered.startswith('The 1 closest passages to "rev B boards".')
+    assert "Closest is not the same as relevant" in rendered
 
 
 def test_an_authored_passage_names_its_author() -> None:
     """A document with an author shows it; a transcript has attendees instead."""
     rendered = render_passages(
+        "connector tolerances",
         [
             {
                 "title": "Connector spec",
@@ -470,7 +478,7 @@ def test_an_authored_passage_names_its_author() -> None:
                 "location": "Scope > Tolerances",
                 "text": "0.2mm.",
             }
-        ]
+        ],
     )
     assert "(2026-02-01, Devon, Scope > Tolerances)" in rendered
 
