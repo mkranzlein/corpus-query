@@ -3,7 +3,8 @@
 Nothing binds a socket: uvicorn is replaced with a recorder, so the tests see
 what it would have been asked to serve and with what. Opening the store and
 the index is real; loading the models is not, so none of this needs the
-models extra.
+models extra. The chat model is built for real — which opens no connection —
+so what the script prints about it is what a run would print.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from typing import Any
 
 import pytest
 
+from corpus_query.agent.model import BACKEND_VARIABLE
 from corpus_query.api.app import Resources, open_resources
 from corpus_query.store.db import connect
 from scripts.serve import main, parse_args
@@ -183,3 +185,32 @@ def test_the_corpus_and_the_usage_database_are_separate_files():
     moved = parse_args(["--db", "/tmp/elsewhere/corpus.db"])
     assert moved.usage_db.name == "usage.db"
     assert moved.usage_db.parent != moved.db.parent
+
+
+def test_the_model_that_will_answer_is_named_on_the_way_up(
+    corpus, no_model_loading, tmp_path, capsys, monkeypatch
+):
+    """Starting the service says which model is about to answer questions.
+
+    The two backends differ in what they cost, so which one a running
+    service picked up should not be something you infer from a bill.
+    """
+    monkeypatch.delenv(BACKEND_VARIABLE, raising=False)
+
+    main(["--db", str(corpus), "--index", str(tmp_path / "chroma")], run=FakeServer())
+
+    assert "answering from granite4.1:8b on ollama" in capsys.readouterr().out
+
+
+def test_a_backend_that_does_not_exist_is_reported_and_nothing_is_served(
+    corpus, no_model_loading, tmp_path, capsys, monkeypatch
+):
+    """A misspelled backend fails before the socket, not on the first question."""
+    monkeypatch.setenv(BACKEND_VARIABLE, "bedrok")
+    server = FakeServer()
+
+    code = main(["--db", str(corpus), "--index", str(tmp_path / "chroma")], run=server)
+
+    assert code == 1
+    assert server.calls == []
+    assert "bedrok" in capsys.readouterr().err
