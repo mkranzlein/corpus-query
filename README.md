@@ -60,12 +60,7 @@ uv sync --extra models
 > cp /path/to/your/.env .env
 > ```
 >
-> It is gitignored, so it stays on your machine. No `.env`? Start from the
-> template with `cp -n .env.example .env` and fill in
-> `AWS_BEARER_TOKEN_BEDROCK` and `AWS_REGION`; [docs/setup.md](docs/setup.md#bedrock)
-> says what each one is.
->
-> Rather run inference on your own machine, with no `.env`? See [Answering
+> No `.env`, or rather run inference on your own machine? See [Answering
 > from a local model instead](#answering-from-a-local-model-instead), just
 > below.
 
