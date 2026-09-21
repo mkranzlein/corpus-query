@@ -2,6 +2,31 @@
 
 <!-- version list -->
 
+## v2.8.0 (2026-09-21)
+
+### Documentation
+
+- Say how a workbook is chunked in the ingestion note
+  ([#78](https://github.com/mkranzlein/corpus-query/pull/78),
+  [`3fd2005`](https://github.com/mkranzlein/corpus-query/commit/3fd2005eaab69b0e5848c2e33fce16509d213576))
+
+### Features
+
+- Read Excel workbooks into per-sheet row windows
+  ([#78](https://github.com/mkranzlein/corpus-query/pull/78),
+  [`3fd2005`](https://github.com/mkranzlein/corpus-query/commit/3fd2005eaab69b0e5848c2e33fce16509d213576))
+
+### Testing
+
+- Count blocks rather than lines when checking for repeats
+  ([#78](https://github.com/mkranzlein/corpus-query/pull/78),
+  [`3fd2005`](https://github.com/mkranzlein/corpus-query/commit/3fd2005eaab69b0e5848c2e33fce16509d213576))
+
+- Cover workbook reading, windowing, and enrichment
+  ([#78](https://github.com/mkranzlein/corpus-query/pull/78),
+  [`3fd2005`](https://github.com/mkranzlein/corpus-query/commit/3fd2005eaab69b0e5848c2e33fce16509d213576))
+
+
 ## v2.7.0 (2026-09-21)
 
 ### Features
