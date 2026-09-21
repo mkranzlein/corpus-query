@@ -117,11 +117,15 @@ describe("the question page", () => {
     const [meeting, report] = passages();
 
     // Where each passage came from, and who was behind it.
-    expect(meeting.textContent).toContain("Q2 Pricing Review");
+    expect(meeting.textContent).toContain(
+      "Q2 Pricing Review — GX-7 and RV-2 List Price Adjustment",
+    );
     expect(meeting.textContent).toContain("Meeting transcript");
     expect(meeting.textContent).toContain("Attendees");
-    expect(meeting.textContent).toContain("Priya, Elena, Renata");
-    expect(meeting.textContent).toContain("q2-pricing-review");
+    expect(meeting.textContent).toContain("Priya, Elena, Renata, Jamal, Nadia");
+    expect(meeting.textContent).toContain(
+      "q2-pricing-review-gx-7-and-rv-2-list-price-adjustment",
+    );
     expect(meeting.textContent).toContain("turns 22-30");
     expect(meeting.querySelector("time")?.getAttribute("dateTime")).toBe(
       "2026-03-11",
@@ -129,9 +133,7 @@ describe("the question page", () => {
     expect(report.textContent).toContain("Document");
     expect(report.textContent).toContain("Author");
     expect(report.textContent).toContain("Sofia");
-    expect(report.textContent).toContain(
-      "Results > Extended Soak",
-    );
+    expect(report.textContent).toContain("Field Rollout");
 
     // What was derived about each, read from the passage's own record.
     await waitFor(() => expect(meeting.textContent).toContain("Near term"));
@@ -153,15 +155,19 @@ describe("the question page", () => {
       name: "Read the passage",
     });
     expect(
-      screen.queryByText("The passage behind Q2 Pricing Review."),
+      screen.queryByText(
+        "The passage behind Q2 Pricing Review — GX-7 and RV-2 List Price Adjustment.",
+      ),
     ).toBeNull();
     fireEvent.click(open);
 
     const text = screen.getByText(
-      "The passage behind Q2 Pricing Review.",
+      "The passage behind Q2 Pricing Review — GX-7 and RV-2 List Price Adjustment.",
     );
     const quote = text.closest("blockquote") as HTMLElement;
-    expect(quote.textContent).toContain("Q2 Pricing Review");
+    expect(quote.textContent).toContain(
+      "Q2 Pricing Review — GX-7 and RV-2 List Price Adjustment",
+    );
     expect(quote.textContent).toContain("turns 22-30");
     expect(quote.textContent).toMatch(/2026/);
     expect(

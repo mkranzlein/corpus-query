@@ -162,7 +162,9 @@ describe("reading a passage", () => {
 
     const chunk = await readChunk(CITATION.chunk_id);
 
-    expect(chunk.text).toBe("The passage behind Q2 Pricing Review.");
+    expect(chunk.text).toBe(
+      "The passage behind Q2 Pricing Review — GX-7 and RV-2 List Price Adjustment.",
+    );
   });
 
   it("fails for an id the corpus does not hold", async () => {

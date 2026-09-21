@@ -16,12 +16,12 @@ import type {
 
 export const CITATION: Citation = {
   chunk_id: 113,
-  document_slug: "q2-pricing-review",
+  document_slug: "q2-pricing-review-gx-7-and-rv-2-list-price-adjustment",
   source_kind: "transcript",
-  title: "Q2 Pricing Review",
+  title: "Q2 Pricing Review — GX-7 and RV-2 List Price Adjustment",
   document_date: "2026-03-11",
   author: null,
-  attendees: ["Priya", "Elena", "Renata"],
+  attendees: ["Priya", "Elena", "Renata", "Jamal", "Nadia"],
   location: "turns 22-30",
 };
 
@@ -33,7 +33,7 @@ export const AUTHORED: Citation = {
   document_date: "2026-04-14",
   author: "Sofia",
   attendees: [],
-  location: "Results > Extended Soak",
+  location: "Field Rollout",
 };
 
 /** The full record behind a citation, as `GET /chunks/{id}` returns it. */

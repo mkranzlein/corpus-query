@@ -6,6 +6,8 @@
  * from the page is what lets them be tested without a DOM.
  */
 
+import type { Routing } from "../ask/api.ts";
+
 /** The three kinds of record, by the path each is listed at. */
 export type Kind = "gaps" | "corrections" | "feedback";
 
@@ -35,21 +37,6 @@ export interface Citation {
   author: string | null;
   attendees: string[];
   location: string;
-}
-
-/** Someone the system suggested asking, and why. */
-export interface RoutingCandidate {
-  name: string;
-  role: string;
-  department: string;
-  passages: number;
-  evidence: Citation[];
-}
-
-/** Who the system suggested asking about a question it could not settle. */
-export interface Routing {
-  candidates: RoutingCandidate[];
-  question: string;
 }
 
 /** What every kind of record carries. */
