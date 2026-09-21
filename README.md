@@ -575,6 +575,14 @@ The two billed steps need a Bedrock key; see
 [docs/provisioning.md](docs/provisioning.md) for where one comes from and how
 the spend is bounded.
 
+A `.doc`, `.ppt`, or `.xls` file is converted to its modern equivalent with
+LibreOffice headless before it is read, so the corpus never needs a separate
+reader for the legacy binary formats. LibreOffice is optional: the committed
+corpus is all modern files, needs none of it, and nothing here requires it to
+be installed. It only matters if a legacy file is added to the corpus later,
+in which case ingesting it needs LibreOffice on `PATH` or, on macOS, in the
+usual place the app installs it.
+
 The Word, PowerPoint, and Excel files in `data/office/` came from three
 independent Claude Code sessions running Opus, one per file type. Each session
 was told only to read its prompt and follow it exactly:

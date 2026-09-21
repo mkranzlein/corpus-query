@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v2.13.0 (2026-09-21)
+
+### Bug Fixes
+
+- Repair core properties on files converted from legacy formats
+  ([#109](https://github.com/mkranzlein/corpus-query/pull/109),
+  [`e16521c`](https://github.com/mkranzlein/corpus-query/commit/e16521c4b0f3dd3b765d8cd33f4b5b5bdfb829d1))
+
+### Documentation
+
+- Record what the office documents actually planted
+  ([#108](https://github.com/mkranzlein/corpus-query/pull/108),
+  [`7deb696`](https://github.com/mkranzlein/corpus-query/commit/7deb6968241bf959b2b41d3f8e029dbbcb60608f))
+
+### Features
+
+- Convert legacy office files at ingest with LibreOffice
+  ([#109](https://github.com/mkranzlein/corpus-query/pull/109),
+  [`e16521c`](https://github.com/mkranzlein/corpus-query/commit/e16521c4b0f3dd3b765d8cd33f4b5b5bdfb829d1))
+
+
 ## v2.12.0 (2026-09-21)
 
 ### Documentation
