@@ -339,7 +339,6 @@ server, tests, and build.
 - [docs/models.md](docs/models.md) — the local and hosted models
 - [docs/tracing.md](docs/tracing.md) — per-query traces
 - [docs/answer-metrics.md](docs/answer-metrics.md) — answer quality over time
-- [docs/retention.md](docs/retention.md) — the metric to watch after launch
 - [docs/corpus.md](docs/corpus.md) — building a corpus
 - [docs/planted-imperfections.md](docs/planted-imperfections.md) — the flaws
   the corpus was given on purpose, and where they are
