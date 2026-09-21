@@ -16,18 +16,27 @@ corpus is committed and read-only in normal use; conversations are local,
 grow with use, and belong to whoever is running the service. See
 :mod:`corpus_query.store.usage`. The file does not have to exist beforehand —
 ``setup()`` creates LangGraph's tables in it on the way up.
+
+The same file holds the captured records — gaps, corrections, feedback — and
+the agent opens its own connection to them, because a correction the user
+types in conversation is recorded by the agent rather than by the endpoint.
+It writes through :mod:`corpus_query.store.capture`, the same store ``POST
+/corrections`` writes to, so a correction reads back the same way whichever
+of the two recorded it.
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from corpus_query.agent.graph import Agent, build_graph
 from corpus_query.agent.model import load_chat_model
 from corpus_query.agent.retrieval import in_process_client, search_tool
+from corpus_query.store import capture
 from corpus_query.store.usage import usage_database
 
 if TYPE_CHECKING:
@@ -55,9 +64,10 @@ async def open_agent(
         model: The chat model to answer with. Defaults to the project's
             local model.
         checkpoint_database: The usage database graph state is persisted
-            to. Created, with its directory, if it is not there yet.
-            None resolves to the project's default when the agent opens,
-            not when this module is imported.
+            to, and corrections typed in conversation are recorded in.
+            Created, with its directory, if it is not there yet. None
+            resolves to the project's default when the agent opens, not
+            when this module is imported.
 
     Yields:
         The agent, ready to answer.
@@ -71,11 +81,21 @@ async def open_agent(
     try:
         checkpointer = AsyncSqliteSaver(connection)
         await checkpointer.setup()
-        yield Agent(
-            graph=build_graph(
-                chat_model, [search_tool(client)], checkpointer=checkpointer
+        # Opened on the event loop's thread, which is the thread every node
+        # of the graph runs on, so the connection is never used from a
+        # thread other than the one that opened it.
+        captured = capture.connect(checkpoint_database)
+        try:
+            yield Agent(
+                graph=build_graph(
+                    chat_model,
+                    [search_tool(client)],
+                    checkpointer=checkpointer,
+                    record_correction=partial(capture.record_correction, captured),
+                )
             )
-        )
+        finally:
+            captured.close()
     finally:
         await connection.close()
         await client.aclose()

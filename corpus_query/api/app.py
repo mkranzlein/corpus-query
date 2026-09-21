@@ -316,6 +316,7 @@ def create_app(
             citations=result.citations,
             thread_id=result.thread_id,
             abstained=result.abstained,
+            answer_id=result.answer_id or None,
         )
         # A gap is written by the system rather than reported by anybody, so
         # this is the only place it can come from. The suggestion is stored
@@ -332,6 +333,11 @@ def create_app(
             ),
             thread_id=result.thread_id,
             answer_id=answer_id,
+            correction=(
+                CorrectionModel(**result.correction)
+                if result.correction is not None
+                else None
+            ),
         )
 
     @app.post(
