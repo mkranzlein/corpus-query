@@ -51,10 +51,10 @@ uv sync --extra models
 ```
 
 > [!IMPORTANT]
-> **3. Put your `.env` in the clone.** The credentials `/answer` uses live in
-> a file named `.env` at the root of the clone — the `corpus-query` directory
-> you just changed into, next to this README. Copy the `.env` you were given
-> there:
+> **3. Put your `.env` in the clone.** The `.env` you were given holds the
+> credentials that let `/answer` run inference on Bedrock. It goes at the
+> root of the clone — the `corpus-query` directory you just changed into,
+> next to this README:
 >
 > ```bash
 > cp /path/to/your/.env .env
@@ -64,6 +64,10 @@ uv sync --extra models
 > template with `cp -n .env.example .env` and fill in
 > `AWS_BEARER_TOKEN_BEDROCK` and `AWS_REGION`; [docs/setup.md](docs/setup.md#bedrock)
 > says what each one is.
+>
+> Rather run inference on your own machine, with no `.env`? See [Answering
+> from a local model instead](#answering-from-a-local-model-instead), just
+> below.
 
 ```bash
 # 4. Fetch the embedding and reranking weights (~215 MB, once).
