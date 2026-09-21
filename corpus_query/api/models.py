@@ -219,3 +219,86 @@ class HealthResponse(BaseModel):
     )
     database: DatabaseHealth
     index: IndexHealth
+
+
+class AnswerRequest(BaseModel):
+    """A question to answer out of the corpus."""
+
+    question: str = Field(
+        description="The question, in natural language.",
+        examples=["What did we decide about the connector lead time?"],
+    )
+    thread_id: str | None = Field(
+        default=None,
+        description="A conversation to continue, as a previous answer "
+        "returned it. Omit it to start a new one. Continuing a conversation "
+        "is what lets a follow-up be answered from what was already "
+        "retrieved, without searching again.",
+    )
+
+    @field_validator("question")
+    @classmethod
+    def _reject_empty(cls, value: str) -> str:
+        """Reject a question that is empty or only whitespace.
+
+        Args:
+            value: The submitted question.
+
+        Returns:
+            The question, with surrounding whitespace removed.
+
+        Raises:
+            ValueError: If nothing but whitespace was submitted.
+        """
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("question must not be empty")
+        return stripped
+
+
+class CitationModel(BaseModel):
+    """One passage an answer was drawn from, as a reader would look it up."""
+
+    chunk_id: int = Field(description="Row id of the chunk in the store.")
+    document_slug: str = Field(description="Slug of the document it came from.")
+    source_kind: str = Field(
+        description="What the document was read out of: transcript, docx, "
+        "pptx, or xlsx."
+    )
+    title: str = Field(description="The document's title, or a meeting's subject.")
+    document_date: str = Field(description="The document's date, ISO 8601.")
+    author: str | None = Field(
+        description="Who wrote it, or null for a transcript, which has "
+        "attendees rather than an author."
+    )
+    location: str = Field(
+        description="Where in the document the passage sits: a turn range, "
+        "a heading path, a slide number, a sheet and row range."
+    )
+
+
+class AnswerResponse(BaseModel):
+    """What ``POST /answer`` returns: prose, and what it rests on."""
+
+    question: str = Field(
+        description="The question as it was asked, whitespace trimmed."
+    )
+    answer: str = Field(
+        description="The answer in prose. A statement that the record does "
+        "not settle the question is a normal answer, not an error — and a "
+        "question outside the corpus is declined here too."
+    )
+    citations: list[CitationModel] = Field(
+        description="The passages retrieved while answering, best first. "
+        "Empty when the agent answered without searching, which is what an "
+        "out-of-scope question and a follow-up already covered both do."
+    )
+    searches: int = Field(
+        description="How many searches the agent ran for this question. "
+        "Zero when it did not search, more than one when the question had "
+        "more than one part."
+    )
+    thread_id: str = Field(
+        description="The conversation this answer belongs to. Send it back "
+        "to ask a follow-up against the same history."
+    )

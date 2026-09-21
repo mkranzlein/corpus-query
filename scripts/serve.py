@@ -13,8 +13,10 @@ Run it with::
     uv run scripts/serve.py             # http://127.0.0.1:8000
     uv run scripts/serve.py --port 9000
 
-Nothing here calls a hosted model and nothing costs anything: search runs
-locally against the store and the local models.
+Nothing here calls a hosted model and nothing costs anything. Search runs
+locally against the store and the local models, and ``/answer`` runs against
+a model served locally by Ollama, which needs to be running and to have that
+model pulled.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ from pathlib import Path
 
 import uvicorn
 
+from corpus_query.agent.runtime import open_agent
 from corpus_query.api.app import StartupError, create_app, open_resources
 from corpus_query.retrieval.index import DEFAULT_INDEX_DIR
 from corpus_query.store.db import DEFAULT_DATABASE_FILE, SchemaVersionError
@@ -92,7 +95,10 @@ def main(argv: list[str] | None = None, run=uvicorn.run) -> int:
     # The resources are opened here rather than inside the application's
     # lifespan so that a bad corpus is reported as one clear line before
     # uvicorn starts, instead of a traceback out of a startup hook.
-    app = create_app(resources=lambda: resources)
+    app = create_app(
+        resources=lambda: resources,
+        agent=lambda application: open_agent(application, checkpoint_database=args.db),
+    )
     print(f"Serving {args.db} on http://{args.host}:{args.port}")
     run(app, host=args.host, port=args.port)
     return 0
