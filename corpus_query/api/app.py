@@ -11,6 +11,14 @@ out of those passages, with the passages it rests on. It is a caller of
 like any other client, so the two can be asked the same question and compared,
 and the endpoint that ranks is still curlable on its own.
 
+``POST /corrections`` and ``POST /feedback`` record what an answer got
+wrong, against the id ``/answer`` returned, and ``GET /gaps``,
+``GET /corrections``, and ``GET /feedback`` read the three kinds back, most
+recent first. A gap needs no endpoint to be written: the service records one
+itself whenever the record did not settle a question. All of it goes in the
+usage database, which is the local uncommitted file beside the corpus — using
+the system never modifies a file under version control.
+
 ``GET /`` serves the browser application, built from ``frontend/`` and
 committed under ``static/`` beside this module. It is mounted last, so the
 JSON endpoints and the generated OpenAPI documents keep their paths and
@@ -46,9 +54,10 @@ from collections.abc import Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from chromadb.api.models.Collection import Collection
-from fastapi import FastAPI, Request, Response, status
+from fastapi import FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -58,7 +67,15 @@ from corpus_query.api.models import (
     AnswerResponse,
     CitationModel,
     ConfidenceModel,
+    CorrectionModel,
+    CorrectionRequest,
+    CorrectionsResponse,
     DatabaseHealth,
+    FeedbackModel,
+    FeedbackRequest,
+    FeedbackResponse,
+    GapModel,
+    GapsResponse,
     HealthResponse,
     IndexHealth,
     RoutingModel,
@@ -69,6 +86,8 @@ from corpus_query.api.models import (
 from corpus_query.retrieval.index import DEFAULT_INDEX_DIR, open_index
 from corpus_query.retrieval.search import SearchResult
 from corpus_query.retrieval.search import search as run_search
+from corpus_query.store import capture
+from corpus_query.store.capture import DEFAULT_RECORDS, MAX_RECORDS, UnknownAnswerError
 from corpus_query.store.db import DEFAULT_DATABASE_FILE, connect
 
 #: Runs one query against the store and the index. The project's retrieval
@@ -95,19 +114,29 @@ class Resources:
     """What the service holds open for its whole lifetime."""
 
     connection: sqlite3.Connection
+    """The document store. Read to answer questions and never written to."""
+
     collection: Collection
 
+    captured: sqlite3.Connection
+    """The usage database, where what the system got wrong is recorded. A
+    second file, opened here for the same reason the first one is: a
+    connection belongs to the thread that opened it, and requests are served
+    on the thread that ran startup."""
+
     def close(self) -> None:
-        """Release the document store connection."""
+        """Release both connections."""
         self.connection.close()
+        self.captured.close()
 
 
 def open_resources(
     database: Path | str = DEFAULT_DATABASE_FILE,
     index_dir: Path | str = DEFAULT_INDEX_DIR,
     warm_models: bool = True,
+    usage_database: Path | str | None = None,
 ) -> Resources:
-    """Open the store and the index, and load the models.
+    """Open the stores and the index, and load the models.
 
     Args:
         database: The document store to serve queries against.
@@ -116,9 +145,12 @@ def open_resources(
         warm_models: Whether to load the embedder and the reranker now.
             False leaves them to load on first use, which is only what a
             test wants.
+        usage_database: Where to record what the system got wrong. Created,
+            with its directory, if it is not there yet. None resolves to the
+            project's default when the service starts.
 
     Returns:
-        The open store and index.
+        The open stores and index.
 
     Raises:
         StartupError: If the store is missing, unreadable, or holds no
@@ -145,12 +177,17 @@ def open_resources(
                 f"corpus first: uv run scripts/ingest.py"
             )
         collection = open_index(connection, index_dir)
-        if warm_models:
-            _warm_models()
+        captured = capture.connect(usage_database)
+        try:
+            if warm_models:
+                _warm_models()
+        except BaseException:
+            captured.close()
+            raise
     except BaseException:
         connection.close()
         raise
-    return Resources(connection=connection, collection=collection)
+    return Resources(connection=connection, collection=collection, captured=captured)
 
 
 def create_app(
@@ -257,8 +294,22 @@ def create_app(
             comes back with a suggestion of who to ask; the second routes
             to nobody.
         """
+        opened: Resources = request.app.state.resources
         agent = request.app.state.agent
         result = await agent.answer(payload.question, thread_id=payload.thread_id)
+        answer_id = capture.record_answer(
+            opened.captured,
+            query=payload.question,
+            answer=result.answer,
+            citations=result.citations,
+            thread_id=result.thread_id,
+            abstained=result.abstained,
+        )
+        # A gap is written by the system rather than reported by anybody, so
+        # this is the only place it can come from. The suggestion is stored
+        # as it was made, since the roster and the corpus both move on.
+        if result.abstained or result.routing is not None:
+            capture.record_gap(opened.captured, answer_id, routing=result.routing)
         return AnswerResponse(
             question=payload.question,
             answer=result.answer,
@@ -268,7 +319,118 @@ def create_app(
                 RoutingModel(**result.routing) if result.routing is not None else None
             ),
             thread_id=result.thread_id,
+            answer_id=answer_id,
         )
+
+    @app.post(
+        "/corrections",
+        response_model=CorrectionModel,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def record_correction_endpoint(payload: CorrectionRequest, request: Request):
+        """Record what an answer got wrong, and what is right.
+
+        Args:
+            payload: The answer being corrected, and both halves of the
+                correction.
+            request: The live request, for the resources opened at startup.
+
+        Returns:
+            The correction as a read of it would return it.
+
+        Raises:
+            HTTPException: 404 if no answer has that id.
+        """
+        opened: Resources = request.app.state.resources
+        try:
+            written = capture.record_correction(
+                opened.captured,
+                payload.answer_id,
+                what_was_wrong=payload.what_was_wrong,
+                what_is_right=payload.what_is_right,
+            )
+        except UnknownAnswerError as exc:
+            raise _unknown_answer(exc) from exc
+        return CorrectionModel(**written)
+
+    @app.post(
+        "/feedback",
+        response_model=FeedbackModel,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def record_feedback_endpoint(payload: FeedbackRequest, request: Request):
+        """Record a verdict on an answer.
+
+        Args:
+            payload: The answer being judged, the verdict, and any note.
+            request: The live request, for the resources opened at startup.
+
+        Returns:
+            The verdict as a read of it would return it.
+
+        Raises:
+            HTTPException: 404 if no answer has that id.
+        """
+        opened: Resources = request.app.state.resources
+        try:
+            written = capture.record_feedback(
+                opened.captured,
+                payload.answer_id,
+                verdict=payload.verdict,
+                note=payload.note,
+            )
+        except UnknownAnswerError as exc:
+            raise _unknown_answer(exc) from exc
+        return FeedbackModel(**written)
+
+    @app.get("/gaps", response_model=GapsResponse)
+    async def gaps_endpoint(request: Request, limit: int = _limit()):
+        """Read back the questions the record did not settle.
+
+        Args:
+            request: The live request, for the resources opened at startup.
+            limit: How many to return at most.
+
+        Returns:
+            Gaps, most recent first, each with the question that produced
+            it, the answer that was given, and the suggestion made at the
+            time.
+        """
+        opened: Resources = request.app.state.resources
+        rows = capture.gaps(opened.captured, limit=limit)
+        return GapsResponse(gaps=[GapModel(**row) for row in rows])
+
+    @app.get("/corrections", response_model=CorrectionsResponse)
+    async def corrections_endpoint(request: Request, limit: int = _limit()):
+        """Read back what users said the answers got wrong.
+
+        Args:
+            request: The live request, for the resources opened at startup.
+            limit: How many to return at most.
+
+        Returns:
+            Corrections, most recent first, each with the question and
+            answer it was written against.
+        """
+        opened: Resources = request.app.state.resources
+        rows = capture.corrections(opened.captured, limit=limit)
+        return CorrectionsResponse(corrections=[CorrectionModel(**row) for row in rows])
+
+    @app.get("/feedback", response_model=FeedbackResponse)
+    async def feedback_endpoint(request: Request, limit: int = _limit()):
+        """Read back the verdicts users gave.
+
+        Args:
+            request: The live request, for the resources opened at startup.
+            limit: How many to return at most.
+
+        Returns:
+            Verdicts, most recent first, each with the question and answer
+            it was given on.
+        """
+        opened: Resources = request.app.state.resources
+        rows = capture.feedback(opened.captured, limit=limit)
+        return FeedbackResponse(feedback=[FeedbackModel(**row) for row in rows])
 
     @app.get("/health", response_model=HealthResponse)
     async def health_endpoint(request: Request, response: Response):
@@ -309,6 +471,33 @@ def create_app(
 
     _mount_frontend(app, DEFAULT_STATIC_DIR if static_dir is None else Path(static_dir))
     return app
+
+
+def _limit() -> Any:
+    """Build the ``limit`` parameter the three reads share.
+
+    Returns:
+        The query parameter, bounded. These reads are for a person catching
+        up on what the system got wrong, so an unbounded one would be a
+        table export behind a page of prose.
+    """
+    return Query(default=DEFAULT_RECORDS, ge=1, le=MAX_RECORDS)
+
+
+def _unknown_answer(exc: UnknownAnswerError) -> HTTPException:
+    """Turn an unknown answer id into the status that says so.
+
+    A record pointing at an answer that does not exist is a caller naming
+    the wrong thing, not a server fault, and it is refused rather than
+    stored as an orphan nothing could read back.
+
+    Args:
+        exc: What the store raised.
+
+    Returns:
+        The 404 to raise in its place.
+    """
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
 
 def _mount_frontend(app: FastAPI, directory: Path) -> None:

@@ -15,8 +15,9 @@ Run it with::
 
 Two SQLite files are involved and they are not the same one. ``--db`` is the
 corpus, which is read to answer questions and never written to here.
-``--usage-db`` is where conversations are checkpointed; it is created on first
-use, it is not committed, and it is the only file serving modifies.
+``--usage-db`` is where conversations are checkpointed and where gaps,
+corrections, and feedback are recorded; it is created on first use, it is not
+committed, and it is the only file serving modifies.
 
 Nothing here calls a hosted model and nothing costs anything. Search runs
 locally against the store and the local models, and ``/answer`` runs against
@@ -35,6 +36,7 @@ import uvicorn
 from corpus_query.agent.runtime import open_agent
 from corpus_query.api.app import StartupError, create_app, open_resources
 from corpus_query.retrieval.index import DEFAULT_INDEX_DIR
+from corpus_query.store.capture import CaptureSchemaVersionError
 from corpus_query.store.db import DEFAULT_DATABASE_FILE, SchemaVersionError
 from corpus_query.store.usage import DEFAULT_USAGE_DATABASE_FILE
 
@@ -64,8 +66,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--usage-db",
         type=Path,
         default=DEFAULT_USAGE_DATABASE_FILE,
-        help=f"where conversations are checkpointed, created if it is not "
-        f"there (default: {DEFAULT_USAGE_DATABASE_FILE})",
+        help=f"where conversations, gaps, corrections, and feedback are "
+        f"recorded, created if it is not there "
+        f"(default: {DEFAULT_USAGE_DATABASE_FILE})",
     )
     parser.add_argument(
         "--index",
@@ -100,8 +103,8 @@ def main(argv: list[str] | None = None, run=uvicorn.run) -> int:
     """
     args = parse_args(argv)
     try:
-        resources = open_resources(args.db, args.index)
-    except (StartupError, SchemaVersionError) as exc:
+        resources = open_resources(args.db, args.index, usage_database=args.usage_db)
+    except (StartupError, SchemaVersionError, CaptureSchemaVersionError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 

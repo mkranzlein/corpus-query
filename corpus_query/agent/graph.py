@@ -36,7 +36,7 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from corpus_query.agent.prompts import load
-from corpus_query.agent.routing import suggestion
+from corpus_query.agent.routing import drafted_question, suggestion
 
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
@@ -73,6 +73,14 @@ class Answer:
     drafted question. ``None`` for an answered question, for one declined
     without a search, and for one whose passages name nobody on the
     roster."""
+
+    abstained: bool
+    """Whether the record failed to settle the question. True when the turn
+    searched and the answer did not settle what was asked, which includes
+    the search that came back empty and the one whose passages named nobody
+    to route to. False for an answered question, and false for one declined
+    without a search — a question this organization was never going to be
+    asked is out of scope rather than a gap in its record."""
 
     thread_id: str
     """The conversation this turn belongs to. Passing it back continues the
@@ -115,6 +123,7 @@ class Agent:
                 # suggestion left over from an earlier question would
                 # otherwise come back attached to the answer to this one.
                 "routing": None,
+                "abstained": False,
             },
             config={"configurable": {"thread_id": thread}},
         )
@@ -124,6 +133,7 @@ class Agent:
             citations=_citations(turn),
             searches=sum(isinstance(message, ToolMessage) for message in turn),
             routing=state.get("routing"),
+            abstained=bool(state.get("abstained")),
             thread_id=thread,
         )
 
@@ -140,6 +150,7 @@ class State(MessagesState):
     system_prompt: str
     routing_prompt: str
     routing: dict[str, Any] | None
+    abstained: bool
 
 
 def build_graph(
@@ -205,16 +216,22 @@ def build_graph(
         able to answer rather than for questions it was never going to be
         asked.
 
+        The same call says whether the turn abstained, since deciding that
+        is the question it was asked. A turn that searched and got nothing
+        back needs no call to know: nothing came back to cite, so the
+        record did not settle the question.
+
         Args:
             state: The conversation and the prompts above it.
 
         Returns:
-            The routing to attach to this turn, or ``None``.
+            The routing to attach to this turn, or ``None``, and whether
+            the turn abstained.
         """
         turn = _this_turn(state["messages"])
         citations = _citations(turn)
         if not citations:
-            return {"routing": None}
+            return {"routing": None, "abstained": _searched(turn)}
         judgement = await model.ainvoke(
             [
                 SystemMessage(state["routing_prompt"]),
@@ -224,7 +241,15 @@ def build_graph(
                 ),
             ]
         )
-        return {"routing": suggestion(citations, _text_of(judgement))}
+        reply = _text_of(judgement)
+        # A suggestion is None both for an answer that settled the question
+        # and for one that did not while naming nobody on the roster, so
+        # whether the turn abstained is read from the reply rather than
+        # from whether there was anyone to suggest.
+        return {
+            "routing": suggestion(citations, reply),
+            "abstained": drafted_question(reply) is not None,
+        }
 
     builder = StateGraph(State)
     builder.add_node("think", think)
@@ -256,6 +281,18 @@ def _this_turn(messages: list[Any]) -> list[Any]:
         if isinstance(messages[index], HumanMessage):
             return messages[index:]
     return messages
+
+
+def _searched(messages: list[Any]) -> bool:
+    """Return whether this turn reached retrieval at all.
+
+    Args:
+        messages: This turn's messages.
+
+    Returns:
+        Whether any search ran.
+    """
+    return any(isinstance(message, ToolMessage) for message in messages)
 
 
 def _question(messages: list[Any]) -> str:

@@ -13,6 +13,11 @@ runs goes through routing, validation, and JSON serialization exactly as a
 ``curl`` would. Ranking itself is stubbed, for the same reason the API tests
 stub it: what ranks above what is settled in the retrieval tests.
 
+What answering records is asserted here rather than in the API tests,
+because whether a turn abstained is the graph's judgement and a gap is
+written from it. The records go to a temporary usage database, as they do
+for every test in the suite.
+
 Nothing here loads a model, reaches Ollama, or calls anything hosted.
 """
 
@@ -38,8 +43,16 @@ from corpus_query.agent.retrieval import (
 )
 from corpus_query.api.app import Resources, create_app
 from corpus_query.retrieval.search import Confidence, SearchResult
+from corpus_query.store import capture
 from corpus_query.store.db import connect
-from test_api import FakeCollection, StubSearch, a_confidence, a_result, request
+from test_api import (
+    FakeCollection,
+    StubSearch,
+    a_confidence,
+    a_result,
+    captured_records,
+    request,
+)
 
 
 @dataclass
@@ -160,7 +173,9 @@ def answering_app(model: ScriptedModel, search: StubSearch):
 
     return create_app(
         resources=lambda: Resources(
-            connection=connect(":memory:"), collection=FakeCollection()
+            connection=connect(":memory:"),
+            collection=FakeCollection(),
+            captured=captured_records(),
         ),
         search=search,
         agent=open_scripted,
@@ -409,7 +424,9 @@ def test_the_search_ceiling_makes_the_model_answer() -> None:
 
     app = create_app(
         resources=lambda: Resources(
-            connection=connect(":memory:"), collection=FakeCollection()
+            connection=connect(":memory:"),
+            collection=FakeCollection(),
+            captured=captured_records(),
         ),
         search=search,
         agent=open_scripted,
@@ -677,3 +694,191 @@ def test_a_failing_search_is_reported_not_narrated_around() -> None:
         await client.aclose()
 
     asyncio.run(run())
+
+
+def recorded():
+    """Read back what answering wrote to the usage database.
+
+    The application records into the project's default usage database,
+    which the suite points at a temporary file for every test, so this
+    opens the same file the request just wrote to.
+
+    Returns:
+        The answers, gaps, corrections, and feedback in it.
+    """
+    connection = capture.connect()
+    try:
+        return {
+            "answers": connection.execute(
+                "SELECT * FROM answers ORDER BY rowid"
+            ).fetchall(),
+            "gaps": capture.gaps(connection),
+        }
+    finally:
+        connection.close()
+
+
+def test_an_answered_question_is_recorded_and_is_not_a_gap() -> None:
+    """One row per question, with the id the caller needs to correct it."""
+    model = ScriptedModel(
+        [
+            searches("connector lead time"),
+            says("Marcus put the rev B boards two weeks out."),
+            answered(),
+        ]
+    )
+    body = request(
+        answering_app(model, StubSearch(result=found())),
+        "POST",
+        "/answer",
+        json={"question": "Where are the rev B boards?"},
+    ).json()
+
+    written = recorded()
+    [answer] = written["answers"]
+    assert body["answer_id"] == answer["id"]
+    assert answer["query"] == "Where are the rev B boards?"
+    assert answer["answer"] == "Marcus put the rev B boards two weeks out."
+    assert answer["thread_id"] == body["thread_id"]
+    assert answer["abstained"] == 0
+    assert "rev-b-schedule" in answer["citations"]
+    assert answer["created_at"]
+    # The record settled the question, so there is nothing missing from it.
+    assert written["gaps"] == []
+
+
+def test_an_abstention_records_a_gap_carrying_the_suggestion() -> None:
+    """A gap is detected rather than reported, and keeps what was suggested."""
+    model = ScriptedModel(
+        [
+            searches("rev B connector tolerance"),
+            says("The record does not give a tolerance for the rev B connector."),
+            says(
+                "CONTEXT: The record covers the schedule without naming a "
+                "figure.\nQUESTION: What tolerance did we settle on?"
+            ),
+        ]
+    )
+    body = request(
+        answering_app(model, StubSearch(result=found())),
+        "POST",
+        "/answer",
+        json={"question": "What tolerance did we set on the rev B connector?"},
+    ).json()
+
+    written = recorded()
+    [answer] = written["answers"]
+    [gap] = written["gaps"]
+    assert answer["abstained"] == 1
+    assert gap["answer_id"] == body["answer_id"]
+    assert gap["question"] == "What tolerance did we set on the rev B connector?"
+    # The suggestion is stored as it was made, rather than rebuilt later
+    # against a roster and a corpus that have both moved on.
+    assert gap["routing"] == body["routing"]
+    assert [person["name"] for person in gap["routing"]["candidates"]] == [
+        "Priya",
+        "Marcus",
+        "Sofia",
+    ]
+
+
+def test_a_search_that_found_nothing_is_a_gap_without_a_suggestion() -> None:
+    """Nothing came back, so nobody was named, and the gap is recorded anyway."""
+    model = ScriptedModel(
+        [
+            searches("kalamazoo office"),
+            says("The record does not say anything about a Kalamazoo office."),
+        ]
+    )
+    request(
+        answering_app(model, StubSearch(result=nothing())),
+        "POST",
+        "/answer",
+        json={"question": "What is the Kalamazoo office working on?"},
+    )
+
+    written = recorded()
+    [answer] = written["answers"]
+    [gap] = written["gaps"]
+    assert answer["abstained"] == 1
+    assert gap["routing"] is None
+    assert gap["question"] == "What is the Kalamazoo office working on?"
+
+
+def test_an_abstention_naming_nobody_is_still_a_gap() -> None:
+    """The passages named no colleague, which costs the suggestion, not the gap."""
+    model = ScriptedModel(
+        [
+            searches("connector tolerance"),
+            says("The record does not say."),
+            says("What tolerance did we settle on?"),
+        ]
+    )
+    body = request(
+        answering_app(
+            model,
+            StubSearch(
+                result=found(author="wm-scanner-01", attendees=[], source_kind="docx")
+            ),
+        ),
+        "POST",
+        "/answer",
+        json={"question": "What tolerance did we set on the rev B connector?"},
+    ).json()
+
+    written = recorded()
+    [gap] = written["gaps"]
+    assert body["routing"] is None
+    assert gap["routing"] is None
+    assert written["answers"][0]["abstained"] == 1
+
+
+def test_an_out_of_scope_question_is_recorded_but_is_not_a_gap() -> None:
+    """A question this record was never going to hold is not missing from it."""
+    model = ScriptedModel(
+        [says("I answer from this organization's own record, and that is outside it.")]
+    )
+    request(
+        answering_app(model, StubSearch(result=found())),
+        "POST",
+        "/answer",
+        json={"question": "What is the capital of France?"},
+    )
+
+    written = recorded()
+    [answer] = written["answers"]
+    assert answer["abstained"] == 0
+    assert answer["query"] == "What is the capital of France?"
+    assert written["gaps"] == []
+
+
+def test_a_correction_can_name_the_answer_that_came_back() -> None:
+    """The id the response carries is the id a correction is written against.
+
+    This is the whole point of the answer row: a correction typed later
+    names an answer rather than a question string that may have been asked
+    more than once.
+    """
+    model = ScriptedModel(
+        [
+            searches("connector lead time"),
+            says("The freeze is March 12th."),
+            answered(),
+        ]
+    )
+    app = answering_app(model, StubSearch(result=found()))
+
+    [asked] = conversation(app, {"question": "When is the firmware freeze?"})
+    response = request(
+        app,
+        "POST",
+        "/corrections",
+        json={
+            "answer_id": asked["answer_id"],
+            "what_was_wrong": "It said the freeze is March 12th.",
+            "what_is_right": "The freeze moved to March 19th.",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["question"] == "When is the firmware freeze?"
