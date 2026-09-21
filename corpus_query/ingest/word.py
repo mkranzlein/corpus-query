@@ -46,14 +46,10 @@ from docx.document import Document as WordDocument
 from docx.table import Table
 from docx.text.paragraph import Paragraph
 
+from corpus_query.ingest.author import ROSTER_PATH, resolve_author
 from corpus_query.ingest.chunk import TARGET_WORDS, Chunk, count_words
 from corpus_query.ingest.reader import IngestError, ReadDocument
 from corpus_query.store.kinds import DOCX, DOCX_SECTION
-from corpus_query.transcripts.roster import (
-    DEFAULT_ROSTER_FILE,
-    RosterError,
-    read_roster,
-)
 
 #: What this reader claims.
 DOCX_SUFFIX = ".docx"
@@ -120,7 +116,7 @@ class ParsedWordDocument:
 def read_word_document(
     path: Path,
     target_words: int = TARGET_WORDS,
-    roster_path: Path | str = DEFAULT_ROSTER_FILE,
+    roster_path: Path | str = ROSTER_PATH,
 ) -> ReadDocument:
     """Read one Word document into a document ready to be written.
 
@@ -142,7 +138,7 @@ def read_word_document(
 
 
 def parse_word_document(
-    path: Path | str, roster_path: Path | str = DEFAULT_ROSTER_FILE
+    path: Path | str, roster_path: Path | str = ROSTER_PATH
 ) -> ParsedWordDocument:
     """Read a Word document's header fields and its blocks.
 
@@ -167,7 +163,7 @@ def parse_word_document(
     return ParsedWordDocument(
         title=_title(properties.title, blocks, path),
         date=_date(path, properties.modified, properties.created),
-        author=_author(path, properties.author, roster_path),
+        author=resolve_author(path, properties.author, roster_path),
         blocks=blocks,
     )
 
@@ -427,38 +423,3 @@ def _date(path: Path, modified, created) -> str:
             f"so there is nothing to date it by."
         )
     return stamp.date().isoformat()
-
-
-def _author(path: Path, author: str | None, roster_path: Path | str) -> str:
-    """Resolve the document's author to one person on the roster.
-
-    Args:
-        path: The file, for the error messages.
-        author: The ``author`` core property.
-        roster_path: The roster to resolve against.
-
-    Returns:
-        The author's name, spelled as the roster spells it.
-
-    Raises:
-        IngestError: If the property is empty, names more than one person, or
-            names someone the roster does not have.
-    """
-    name = (author or "").strip()
-    if not name:
-        raise IngestError(
-            f"{path} names no author in its core properties. A document is "
-            f"attributed to the person who wrote it."
-        )
-    try:
-        roster = read_roster(roster_path)
-    except RosterError as exc:
-        raise IngestError(str(exc)) from exc
-    for person in roster:
-        if person.first_name.casefold() == name.casefold():
-            return person.first_name
-    known = ", ".join(person.first_name for person in roster)
-    raise IngestError(
-        f"{path} names {name!r} as its author, who is not on the roster at "
-        f"{roster_path}. The roster has {known}."
-    )

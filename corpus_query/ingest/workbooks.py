@@ -54,15 +54,10 @@ from openpyxl.utils.exceptions import InvalidFileException
 from openpyxl.workbook.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
+from corpus_query.ingest.author import ROSTER_PATH, resolve_author
 from corpus_query.ingest.chunk import TARGET_WORDS, Chunk, count_words
 from corpus_query.ingest.reader import IngestError, ReadDocument, span_location
 from corpus_query.store.kinds import ROW_WINDOW, SHEET_SUMMARY, XLSX
-from corpus_query.transcripts.roster import (
-    DEFAULT_ROSTER_FILE,
-    RosterError,
-    first_names,
-    read_roster,
-)
 
 #: The extension this reader claims.
 XLSX_SUFFIX = ".xlsx"
@@ -84,10 +79,6 @@ HEADER_ROW = 1
 #: A text column with at most this many distinct values is described by
 #: listing them, as a category; one with more is described as free text.
 MAX_LISTED_VALUES = 10
-
-#: The roster, found from the package rather than the working directory, so
-#: ingesting from anywhere resolves authors against the same file.
-ROSTER_FILE = Path(__file__).resolve().parents[2] / DEFAULT_ROSTER_FILE
 
 #: Where a workbook's core properties live inside the file.
 CORE_PROPERTIES = "docProps/core.xml"
@@ -121,7 +112,7 @@ class Sheet:
 def read_workbook(
     path: Path,
     target_words: int = TARGET_WORDS,
-    roster_path: Path = ROSTER_FILE,
+    roster_path: Path = ROSTER_PATH,
 ) -> ReadDocument:
     """Read one workbook into a document ready to be written.
 
@@ -144,7 +135,7 @@ def read_workbook(
     values = _load(path, data_only=True)
     formulas = _load(path, data_only=False)
 
-    author = _author(path, values, roster_path)
+    author = resolve_author(path, values.properties.creator, roster_path)
     document_date = _document_date(path, values)
     sheets = [
         _read_sheet(path, sheet, formulas[sheet.title]) for sheet in values.worksheets
@@ -245,36 +236,6 @@ def _load(path: Path, data_only: bool) -> Workbook:
         return openpyxl.load_workbook(path, data_only=data_only)
     except (OSError, InvalidFileException, zipfile.BadZipFile, KeyError) as exc:
         raise IngestError(f"Could not read {path} as a workbook: {exc}") from exc
-
-
-def _author(path: Path, workbook: Workbook, roster_path: Path) -> str:
-    """Return the workbook's author, checked against the roster.
-
-    Args:
-        path: The workbook, for error messages.
-        workbook: The opened workbook.
-        roster_path: The roster the author has to be on.
-
-    Returns:
-        The author's first name, exactly as the roster spells it.
-
-    Raises:
-        IngestError: If the author is missing, or is not someone on the
-            roster.
-    """
-    author = (workbook.properties.creator or "").strip()
-    if not author:
-        raise IngestError(f"{path} has no author in its core properties.")
-    try:
-        names = first_names(read_roster(roster_path))
-    except RosterError as exc:
-        raise IngestError(f"Could not check the author of {path}: {exc}") from exc
-    if author not in names:
-        raise IngestError(
-            f"{path} names {author!r} as its author, who is not on the roster "
-            f"at {roster_path}. The author has to be one of: {', '.join(names)}."
-        )
-    return author
 
 
 def _document_date(path: Path, workbook: Workbook) -> str:
