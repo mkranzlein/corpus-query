@@ -440,6 +440,8 @@ def test_the_default_embed_and_rerank_are_the_projects(
     )
     reranker_module = types.ModuleType("corpus_query.models.reranker")
     reranker_module.score = lambda query, documents: [1.0 for _ in documents]
+    embedder_module.EMBEDDING_MODEL_ID = "stand-in-embedder"
+    reranker_module.RERANKER_MODEL_ID = "stand-in-reranker"
     monkeypatch.setitem(sys.modules, "corpus_query.models.embedder", embedder_module)
     monkeypatch.setitem(sys.modules, "corpus_query.models.reranker", reranker_module)
 

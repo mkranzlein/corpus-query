@@ -167,6 +167,7 @@ def test_the_default_embed_is_the_projects_query_side_embedder(
     module.embed_queries = lambda texts: np.array(
         [[1.0, 0.0, 0.0] for _ in texts], dtype=np.float32
     )
+    module.EMBEDDING_MODEL_ID = "stand-in-embedder"
     monkeypatch.setitem(sys.modules, "corpus_query.models.embedder", module)
 
     hits = search_dense(collection, "supplier delays")

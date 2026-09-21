@@ -17,10 +17,12 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from typing import Any
 
 from chromadb.api.models.Collection import Collection
 
+from corpus_query import tracing
 from corpus_query.retrieval.dense import EmbedQueries, search_dense
 from corpus_query.retrieval.fuse import RRF_RANK_CONSTANT, reciprocal_rank_fusion
 from corpus_query.retrieval.lexical import search_lexical, unmatched_terms
@@ -135,7 +137,57 @@ def search(
     Returns:
         The ranked results and the confidence signals about them.
     """
-    lexical_hits = search_lexical(connection, query, limit=candidates)
+    with tracing.span(
+        "retrieval corpus",
+        {
+            tracing.OPERATION: "retrieval",
+            tracing.DATA_SOURCE: "corpus",
+            tracing.RETRIEVAL_TOP_K: results,
+            tracing.RETRIEVAL_QUERY: query,
+            "corpus_query.retrieval.candidates": candidates,
+        },
+    ) as searching:
+        result, ranks = _search(
+            connection, collection, query, candidates, results, rrf_k, embed, rerank
+        )
+        tracing.annotate(searching, _explained(result, ranks))
+        return result
+
+
+def _search(
+    connection: sqlite3.Connection,
+    collection: Collection,
+    query: str,
+    candidates: int,
+    results: int,
+    rrf_k: int,
+    embed: EmbedQueries | None,
+    rerank: RerankScore | None,
+) -> tuple[SearchResult, dict[str, dict[int, int]]]:
+    """Run the pipeline, with a span around each stage.
+
+    Arguments are :func:`search`'s.
+
+    Returns:
+        The search's result, and where each chunk stood in the lexical,
+        dense, and fused rankings, by chunk id, for the span that explains
+        the result.
+    """
+    with tracing.span(
+        "lexical_search", {"corpus_query.retrieval.limit": candidates}
+    ) as lexical:
+        lexical_hits = search_lexical(connection, query, limit=candidates)
+        missing_terms = unmatched_terms(connection, query)
+        tracing.annotate(
+            lexical,
+            {
+                "corpus_query.retrieval.hit_count": len(lexical_hits),
+                "corpus_query.retrieval.top_score": (
+                    lexical_hits[0].score if lexical_hits else None
+                ),
+                "corpus_query.retrieval.unmatched_terms": missing_terms,
+            },
+        )
     dense_hits = search_dense(collection, query, limit=candidates, embed=embed)
     lexical_ranking = [hit.chunk_id for hit in lexical_hits]
     dense_ranking = [hit.chunk_id for hit in dense_hits]
@@ -143,10 +195,22 @@ def search(
     lexical_dense_agree = bool(
         lexical_ranking and dense_ranking and lexical_ranking[0] == dense_ranking[0]
     )
-    missing_terms = unmatched_terms(connection, query)
 
-    fused = reciprocal_rank_fusion([lexical_ranking, dense_ranking], k=rrf_k)
+    with tracing.span("fuse", {"corpus_query.fusion.rrf_k": rrf_k}) as fusing:
+        fused = reciprocal_rank_fusion([lexical_ranking, dense_ranking], k=rrf_k)
+        tracing.annotate(
+            fusing,
+            {
+                "corpus_query.retrieval.hit_count": len(fused),
+                "corpus_query.retrieval.top_score": fused[0][1] if fused else None,
+            },
+        )
     candidate_ids = [chunk_id for chunk_id, _ in fused]
+    ranks = {
+        "lexical": _positions(lexical_ranking),
+        "dense": _positions(dense_ranking),
+        "fused": _positions(candidate_ids),
+    }
 
     if not candidate_ids:
         return SearchResult(
@@ -157,17 +221,34 @@ def search(
                 lexical_dense_agree=lexical_dense_agree,
                 unmatched_terms=missing_terms,
             ),
-        )
+        ), ranks
 
-    texts = _chunk_texts(connection, candidate_ids)
+    rerank_model = None
     if rerank is None:
         rerank = _project_rerank()
-    scores = list(rerank(query, [texts[chunk_id] for chunk_id in candidate_ids]))
-
-    ranked = sorted(
-        zip(candidate_ids, scores, strict=True), key=lambda pair: pair[1], reverse=True
-    )
-    top = ranked[:results]
+        rerank_model = _project_rerank_model()
+    with tracing.span(
+        "rerank",
+        {
+            "corpus_query.rerank.model": rerank_model,
+            "corpus_query.rerank.candidate_count": len(candidate_ids),
+        },
+    ) as reranking:
+        texts = _chunk_texts(connection, candidate_ids)
+        scores = list(rerank(query, [texts[chunk_id] for chunk_id in candidate_ids]))
+        ranked = sorted(
+            zip(candidate_ids, scores, strict=True),
+            key=lambda pair: pair[1],
+            reverse=True,
+        )
+        top = ranked[:results]
+        tracing.annotate(
+            reranking,
+            {
+                "corpus_query.retrieval.hit_count": len(top),
+                "corpus_query.retrieval.top_score": top[0][1] if top else None,
+            },
+        )
 
     metadata = _chunk_metadata(connection, [chunk_id for chunk_id, _ in top])
     result_rows = [
@@ -207,7 +288,55 @@ def search(
             lexical_dense_agree=lexical_dense_agree,
             unmatched_terms=missing_terms,
         ),
-    )
+    ), ranks
+
+
+def _positions(ranking: Sequence[int]) -> dict[int, int]:
+    """Map each chunk in a ranking to its 1-indexed position in it."""
+    return {chunk_id: position for position, chunk_id in enumerate(ranking, 1)}
+
+
+def _explained(
+    result: SearchResult, ranks: dict[str, dict[int, int]]
+) -> dict[str, Any]:
+    """Describe a search's result, as the attributes of its span.
+
+    Each list is parallel to the results, best first, so the n-th entry of
+    each is about the n-th passage returned: which chunk it was, what the
+    reranker scored it, and where lexical search, dense search, and fusion
+    had put it before the reranker saw it. A position of 0 means that side
+    did not propose the chunk at all. Together they say why a chunk ranked
+    where it did — a passage the reranker lifted from fifteenth, or one
+    only one side found.
+
+    The confidence signals are the ones the search already computed,
+    carried over as they are.
+
+    Args:
+        result: What the search returned.
+        ranks: Where each chunk stood in each ranking.
+
+    Returns:
+        The attributes.
+    """
+    chunk_ids = [row.chunk_id for row in result.results]
+    return {
+        "corpus_query.retrieval.result_count": len(result.results),
+        "corpus_query.retrieval.chunk_ids": chunk_ids,
+        "corpus_query.retrieval.document_slugs": [
+            row.document_slug for row in result.results
+        ],
+        "corpus_query.retrieval.rerank_scores": [
+            float(row.rerank_score) for row in result.results
+        ],
+        **{
+            f"corpus_query.retrieval.{side}_ranks": [
+                ranks[side].get(chunk_id, 0) for chunk_id in chunk_ids
+            ]
+            for side in ("lexical", "dense", "fused")
+        },
+        **tracing.confidence_attributes(asdict(result.confidence)),
+    }
 
 
 @dataclass(frozen=True)
@@ -380,3 +509,14 @@ def _project_rerank() -> RerankScore:
     from corpus_query.models.reranker import score
 
     return score
+
+
+def _project_rerank_model() -> str:
+    """Return the name of the project's cross-encoder, for its span.
+
+    Returns:
+        :data:`~corpus_query.models.reranker.RERANKER_MODEL_ID`.
+    """
+    from corpus_query.models.reranker import RERANKER_MODEL_ID
+
+    return RERANKER_MODEL_ID

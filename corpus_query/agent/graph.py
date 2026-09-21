@@ -62,9 +62,12 @@ from langchain_core.messages import (
     SystemMessage,
     ToolMessage,
 )
+from langgraph.config import get_config
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
+from opentelemetry import trace
 
+from corpus_query import tracing
 from corpus_query.agent import corrections
 from corpus_query.agent.prompts import load
 from corpus_query.agent.rewriting import resolved_query as read_rewrite
@@ -97,6 +100,10 @@ MAX_SEARCHES = 6
 #: says outright that it was not cleared, rather than the turn either
 #: looping or silently keeping a claim nobody checked.
 MAX_REGENERATIONS = 2
+
+#: What the agent is called on the span of each run, as
+#: ``gen_ai.agent.name``.
+AGENT_NAME = "corpus-query"
 
 
 @dataclass(frozen=True)
@@ -166,6 +173,12 @@ class Answer:
     every turn that asked a question, and a correction turn that could not
     yet say which answer it was for."""
 
+    trace_id: str = ""
+    """The trace this turn's spans were recorded under, as 32 hex digits, or
+    an empty string when tracing is off. Whoever writes the answer's row has
+    it here, which is what ties the row to how the answer was produced; see
+    :mod:`corpus_query.tracing`."""
+
 
 @dataclass(frozen=True)
 class Agent:
@@ -228,6 +241,13 @@ class Agent:
         half a turn. The next question asked on that thread clears it first;
         see :meth:`_abandoned`.
 
+        The run is one trace: a span for the run itself, with every model
+        call and tool call the graph makes under it. The span ends before
+        the answer is handed over, and a run that stops partway ends it on
+        the way out, as failed or cancelled, so a trace is never left with a
+        span that did not end. The answer carries the trace's id; see
+        :mod:`corpus_query.tracing`.
+
         Args:
             question: The question, in natural language.
             thread_id: The conversation to continue. A new one is started
@@ -238,13 +258,78 @@ class Agent:
             them, and then the :class:`Answer`, last.
         """
         thread = thread_id or uuid.uuid4().hex
-        config = {"configurable": {"thread_id": thread}}
-        yield Progress("started", {"thread_id": thread})
-        cleared = await self._abandoned(config) if thread_id else []
         # The answer's id is the question's message id, so the conversation
         # itself records which answer row each earlier turn became. See
         # corpus_query.agent.corrections.
         answer_id = uuid.uuid4().hex
+        run = tracing.tracer.start_span(
+            f"invoke_agent {AGENT_NAME}",
+            attributes={
+                tracing.OPERATION: "invoke_agent",
+                tracing.AGENT_NAME: AGENT_NAME,
+                tracing.CONVERSATION: thread,
+                "corpus_query.answer_id": answer_id,
+            },
+        )
+        # Ended exactly once: before the answer is handed over when the run
+        # finishes, and on the way out otherwise.
+        ended = False
+        try:
+            yield Progress("started", {"thread_id": thread})
+            steps = self._run(question, thread, answer_id, run, thread_id)
+            async for item in steps:
+                if isinstance(item, Answer):
+                    tracing.annotate(
+                        run,
+                        {
+                            "corpus_query.answer.searches": item.searches,
+                            "corpus_query.answer.abstained": item.abstained,
+                            "corpus_query.answer.citations": len(item.citations),
+                        },
+                    )
+                    run.end()
+                    ended = True
+                yield item
+        except BaseException as exc:
+            if not ended:
+                tracing.failed(run, exc)
+            raise
+        finally:
+            if not ended:
+                run.end()
+
+    async def _run(
+        self,
+        question: str,
+        thread: str,
+        answer_id: str,
+        run: Any,
+        thread_id: str | None,
+    ) -> AsyncIterator[Progress | Answer]:
+        """Run the graph for one turn, under the span of the agent's run.
+
+        The span is not made current around this generator as a whole: a
+        context change made inside an async generator leaks into whoever is
+        iterating it, and can be undone from a different context than the
+        one it was made in if the consumer is cancelled. It is attached
+        around each step the graph is advanced by instead, which is when the
+        graph starts the tasks that inherit it.
+
+        Args:
+            question: The question.
+            thread: The conversation, resolved.
+            answer_id: The id the answer will be recorded under.
+            run: The span of the agent's run.
+            thread_id: The conversation as the caller named it, or None for
+                a new one.
+
+        Yields:
+            :class:`Progress` for each step, then the :class:`Answer`.
+        """
+        config = {"configurable": {"thread_id": thread}}
+        parent = trace.set_span_in_context(run)
+        with tracing.attached(parent):
+            cleared = await self._abandoned(config) if thread_id else []
         turn_input = {
             "messages": [*cleared, HumanMessage(question, id=answer_id)],
             "system_prompt": self.system_prompt,
@@ -264,9 +349,17 @@ class Agent:
         }
         watch = _Watch()
         state: dict[str, Any] = {}
-        async for mode, chunk in self.graph.astream(
-            turn_input, config=config, stream_mode=["tasks", "values"]
-        ):
+        stream = aiter(
+            self.graph.astream(
+                turn_input, config=config, stream_mode=["tasks", "values"]
+            )
+        )
+        while True:
+            with tracing.attached(parent):
+                try:
+                    mode, chunk = await anext(stream)
+                except StopAsyncIteration:
+                    break
             if mode == "values":
                 state = chunk
                 continue
@@ -284,6 +377,7 @@ class Agent:
             verification=state.get("verification"),
             answer_id=answer_id,
             correction=state.get("correction"),
+            trace_id=tracing.trace_id(run),
         )
 
     async def _abandoned(self, config: dict[str, Any]) -> list[RemoveMessage]:
@@ -538,6 +632,22 @@ def build_graph(
         if record_correction is not None
         else None
     )
+    identity = tracing.identify(model)
+
+    async def ask_model(speaker: Any, messages: list[Any], step: str) -> Any:
+        """Call the model, inside a span of its own.
+
+        Args:
+            speaker: The model, with or without tools bound.
+            messages: The prompt.
+            step: Which node is calling.
+
+        Returns:
+            The model's reply.
+        """
+        return await tracing.call_model(
+            speaker, messages, identity, step, conversation=_conversation()
+        )
 
     async def rewrite(state: State) -> dict[str, str]:
         """Expand the newest turn into a question that stands on its own.
@@ -560,12 +670,14 @@ def build_graph(
         history = _history(state["messages"])
         if not history:
             return {"resolved_query": question}
-        reply = await model.ainvoke(
+        reply = await ask_model(
+            model,
             [
                 SystemMessage(state["rewrite_prompt"]),
                 *history,
                 HumanMessage(f"Newest question: {question}"),
-            ]
+            ],
+            "rewrite",
         )
         return {"resolved_query": read_rewrite(_text_of(reply), fallback=question)}
 
@@ -599,7 +711,7 @@ def build_graph(
             speaker = with_correction
             system = f"{system}\n\n{corrections.numbered(earlier)}"
         messages = [SystemMessage(system), *state["messages"]]
-        return {"messages": [await speaker.ainvoke(messages)]}
+        return {"messages": [await ask_model(speaker, messages, "think")]}
 
     async def correct(state: State) -> dict[str, Any]:
         """Record the correction the model recognized, and say what was recorded.
@@ -621,11 +733,25 @@ def build_graph(
         messages = state["messages"]
         called = messages[-1]
         call = corrections.correction_call(called)
-        outcome = await corrections.handle(
-            call,
-            corrections.earlier_answers(_history(messages)),
-            record_correction,
-        )
+        with tracing.span(
+            f"execute_tool {corrections.TOOL_NAME}",
+            {
+                tracing.OPERATION: "execute_tool",
+                tracing.TOOL_NAME: corrections.TOOL_NAME,
+                tracing.TOOL_TYPE: "function",
+                tracing.TOOL_CALL_ID: call.get("id"),
+                tracing.CONVERSATION: _conversation(),
+            },
+        ) as recording:
+            outcome = await corrections.handle(
+                call,
+                corrections.earlier_answers(_history(messages)),
+                record_correction,
+            )
+            tracing.annotate(
+                recording,
+                {"corpus_query.correction.recorded": outcome.correction is not None},
+            )
         return {
             "messages": [
                 called.model_copy(update={"tool_calls": [call]}),
@@ -669,13 +795,15 @@ def build_graph(
         if not _citations(turn):
             return {}
         passages = _passages_text(turn)
-        judgement = await model.ainvoke(
+        judgement = await ask_model(
+            model,
             [
                 SystemMessage(state["verify_prompt"]),
                 HumanMessage(
                     f"Passages:\n{passages}\n\nDrafted answer:\n{_final_text(turn)}"
                 ),
-            ]
+            ],
+            "verify",
         )
         reply = _text_of(judgement)
         verdict = read_verdict(reply)
@@ -723,14 +851,16 @@ def build_graph(
         citations = _citations(turn)
         if not citations:
             return {"routing": None, "abstained": _search_count(turn) > 0}
-        judgement = await model.ainvoke(
+        judgement = await ask_model(
+            model,
             [
                 SystemMessage(state["routing_prompt"]),
                 HumanMessage(
                     f"Question asked:\n{_question(turn)}\n\n"
                     f"Answer given:\n{_final_text(turn)}"
                 ),
-            ]
+            ],
+            "route",
         )
         reply = _text_of(judgement)
         # A suggestion is None both for an answer that settled the question
@@ -792,6 +922,19 @@ def build_graph(
     builder.add_edge("route", END)
     builder.add_edge("correct", END)
     return builder.compile(checkpointer=checkpointer)
+
+
+def _conversation() -> str | None:
+    """Return the thread the running node belongs to, for its spans.
+
+    Returns:
+        The thread id from the graph's config, or None when called outside
+        a running graph.
+    """
+    try:
+        return get_config().get("configurable", {}).get("thread_id")
+    except RuntimeError:
+        return None
 
 
 def _this_turn(messages: list[Any]) -> list[Any]:

@@ -77,6 +77,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.sse import EventSourceResponse, format_sse_event
 from fastapi.staticfiles import StaticFiles
 
+from corpus_query import tracing
 from corpus_query.agent.graph import EVENTS, Agent, Answer
 from corpus_query.agent.runtime import OpenAgent, open_agent
 from corpus_query.api.models import (
@@ -121,6 +122,9 @@ type SearchFn = Callable[..., SearchResult]
 
 #: Opens everything the service needs, once, at startup.
 type OpenResources = Callable[[], "Resources"]
+
+#: Starts recording spans, once, at startup.
+type OpenTracing = Callable[[], tracing.Tracing]
 
 #: The built browser application. Vite writes here and the result is
 #: committed, which is what lets a clone run the whole system with Python
@@ -225,6 +229,7 @@ def create_app(
     search: SearchFn | None = None,
     agent: OpenAgent | None = None,
     static_dir: Path | str | None = None,
+    traces: OpenTracing | None = None,
 ) -> FastAPI:
     """Build the application.
 
@@ -244,6 +249,10 @@ def create_app(
         static_dir: The built browser application to serve at ``/``.
             Defaults to :data:`DEFAULT_STATIC_DIR`, the bundle committed
             beside this module.
+        traces: What to start recording spans with. Defaults to
+            :func:`corpus_query.tracing.open_tracing` against the project's
+            usage database, which reads from the environment whether
+            tracing is on and where else spans go.
 
     Returns:
         The application, ready to be served.
@@ -251,6 +260,7 @@ def create_app(
     open_them = resources if resources is not None else open_resources
     run = search if search is not None else run_search
     open_it = agent if agent is not None else open_agent
+    open_traces = traces if traces is not None else tracing.open_tracing
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -260,15 +270,24 @@ def create_app(
         it reaches retrieval by posting to ``/search`` on it. That is a
         cycle only in the object graph: the routes are registered by the
         time the lifespan runs, and no request is served until it yields.
+
+        Tracing is started first and stopped last, so every span a request
+        opens has somewhere to go, and the spans still queued when the
+        service stops are written once the agent's connection to the same
+        file has closed.
         """
-        opened = open_them()
-        app.state.resources = opened
+        recording = open_traces()
         try:
-            async with AsyncExitStack() as stack:
-                app.state.agent = await stack.enter_async_context(open_it(app))
-                yield
+            opened = open_them()
+            app.state.resources = opened
+            try:
+                async with AsyncExitStack() as stack:
+                    app.state.agent = await stack.enter_async_context(open_it(app))
+                    yield
+            finally:
+                opened.close()
         finally:
-            opened.close()
+            await recording.aclose()
 
     app = FastAPI(
         title="corpus-query",
@@ -291,12 +310,15 @@ def create_app(
             empty result list rather than an error.
         """
         opened: Resources = request.app.state.resources
-        result = run(
-            opened.connection,
-            opened.collection,
-            payload.query,
-            results=payload.limit,
-        )
+        # The agent's search tool sends its trace along with the request, so
+        # the retrieval spans below belong to the answer that asked for them.
+        with tracing.continued(request.headers):
+            result = run(
+                opened.connection,
+                opened.collection,
+                payload.query,
+                results=payload.limit,
+            )
         return SearchResponse(
             query=payload.query,
             results=[SearchResultModel.from_result(row) for row in result.results],
