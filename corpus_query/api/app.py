@@ -9,7 +9,11 @@ pipeline reports. It returns passages, not prose.
 out of those passages, with the passages it rests on. It is a caller of
 ``/search`` rather than a replacement for it: the agent posts to that endpoint
 like any other client, so the two can be asked the same question and compared,
-and the endpoint that ranks is still curlable on its own.
+and the endpoint that ranks is still curlable on its own. A client that asks
+for ``text/event-stream`` gets the same answer as server-sent events, preceded
+by one event per step the agent takes, since a local model can take tens of
+seconds and a page that shows nothing for that long reads as broken. Anything
+else gets one JSON body.
 
 ``POST /corrections`` and ``POST /feedback`` record what an answer got
 wrong, against the id ``/answer`` returned, and ``GET /gaps``,

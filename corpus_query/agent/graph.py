@@ -35,6 +35,12 @@ The system prompt is prepended at each model call rather than stored in the
 graph's state. State is checkpointed and replayed, and a prompt that lives in
 it is a prompt that gets frozen into every thread ever started, so editing the
 file would change new conversations and not resumed ones.
+
+A turn can be watched as it runs. :meth:`Agent.stream` reports each step as a
+:class:`Progress` — a search asked for, what it returned, a draft started, a
+verification finished — and the answer last; :meth:`Agent.answer` is the same
+run with the steps dropped. What each step is called and carries is
+:data:`EVENTS`.
 """
 
 from __future__ import annotations
