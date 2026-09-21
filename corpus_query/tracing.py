@@ -61,6 +61,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import sys
 import threading
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -79,6 +80,7 @@ from opentelemetry.sdk.trace.export import (
     SpanExporter,
     SpanExportResult,
 )
+from opentelemetry.sdk.trace.sampling import Decision, Sampler, SamplingResult
 from opentelemetry.trace import (
     Span,
     SpanKind,
@@ -274,12 +276,52 @@ class _Destinations(SpanProcessor):
         for processor in self._processors:
             processor.on_end(span)
 
+    @property
+    def open(self) -> bool:
+        """Whether anything is listening."""
+        return bool(self._processors)
+
     def shutdown(self) -> None:
         """Leave each destination to whoever opened it."""
 
     def force_flush(self, timeout_millis: int = 30000) -> bool:
         """Flush every open destination."""
         return all(p.force_flush(timeout_millis) for p in self._processors)
+
+
+class _WhileOpen(Sampler):
+    """Records spans while a destination is open, and none otherwise.
+
+    Once the provider is installed it stays installed, so without this a
+    process that closed its tracing — or opened it with tracing off after an
+    earlier application had it on — would go on building spans nobody
+    receives, each with a trace id that leads nowhere. A span this drops is
+    a no-op with no trace id; see :func:`trace_id`.
+    """
+
+    def should_sample(
+        self,
+        parent_context: Any,
+        trace_id: int,
+        name: str,
+        kind: Any = None,
+        attributes: Any = None,
+        links: Any = None,
+        trace_state: Any = None,
+    ) -> SamplingResult:
+        """Record and sample while anything is listening, drop otherwise."""
+        if not _DESTINATIONS.open:
+            return SamplingResult(Decision.DROP)
+        parent = trace.get_current_span(parent_context).get_span_context()
+        return SamplingResult(
+            Decision.RECORD_AND_SAMPLE,
+            attributes,
+            parent.trace_state if parent.is_valid else None,
+        )
+
+    def get_description(self) -> str:
+        """Name the sampler, as the SDK reports it."""
+        return "WhileOpen"
 
 
 _DESTINATIONS = _Destinations()
@@ -302,7 +344,8 @@ def _install() -> None:
             current.add_span_processor(_DESTINATIONS)
         else:
             provider = TracerProvider(
-                resource=Resource.create({"service.name": SERVICE_NAME})
+                resource=Resource.create({"service.name": SERVICE_NAME}),
+                sampler=_WhileOpen(),
             )
             provider.add_span_processor(_DESTINATIONS)
             trace.set_tracer_provider(provider)
@@ -383,7 +426,9 @@ def open_tracing(
     exporters: list[SpanExporter] = [UsageDatabaseExporter(resolved)]
     processors: list[SpanProcessor] = [BatchSpanProcessor(exporters[0])]
     if settings.get(CONSOLE_VARIABLE, "").strip().lower() in ("1", "true", "yes"):
-        console = ConsoleSpanExporter(service_name=SERVICE_NAME)
+        # Standard output as it is now, not as it was when the SDK was
+        # imported, which is what the exporter would default to.
+        console = ConsoleSpanExporter(service_name=SERVICE_NAME, out=sys.stdout)
         exporters.append(console)
         # Printed as each span ends, which is what watching a run wants.
         processors.append(SimpleSpanProcessor(console))
@@ -505,16 +550,21 @@ def attached(parent: otel_context.Context) -> Iterator[None]:
 
 
 def trace_id(current: Span) -> str:
-    """Return a span's trace id as 32 hex digits, or "" when not recording.
+    """Return a span's trace id as 32 hex digits, or "" when it went nowhere.
 
     Args:
         current: A span, possibly a no-op one.
 
     Returns:
-        The id, as the usage database stores it.
+        The id, as the usage database stores it, for a span that was
+        sampled. An empty string when tracing is off, since an id for a
+        trace that was never written would send whoever follows it looking
+        for nothing.
     """
     context = current.get_span_context()
-    return format_trace_id(context.trace_id) if context.is_valid else ""
+    if not (context.is_valid and context.trace_flags.sampled):
+        return ""
+    return format_trace_id(context.trace_id)
 
 
 def headers() -> dict[str, str]:

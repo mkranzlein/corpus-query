@@ -156,7 +156,13 @@ def main(argv: list[str] | None = None, run=uvicorn.run) -> int:
     print(f"Serving {args.db} on http://{args.host}:{args.port}")
     print(f"/answer is answering from {chat_model_name(chat_model)} on {backend}.")
     print("The page is at that address; /search, /answer, and /health are below it.")
-    run(app, host=args.host, port=args.port)
+    try:
+        run(app, host=args.host, port=args.port)
+    finally:
+        # The application's lifespan closes this when it stops serving. A
+        # server that never got as far as starting it leaves that to here;
+        # closing twice is harmless.
+        recording.close()
     return 0
 
 
