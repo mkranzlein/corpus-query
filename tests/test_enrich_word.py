@@ -66,7 +66,10 @@ def test_the_document_a_model_sees_is_the_document_in_order(store, report):
 
     lines = text.splitlines()
     assert lines[0] == "Scope of This Qualification"
-    assert len(lines) == len(set(lines)), "no block is shown to the model twice"
+    # Blank lines are left out: sections are separated by one, so counting
+    # them would report a separator as a repeated block.
+    blocks = [line for line in lines if line.strip()]
+    assert len(blocks) == len(set(blocks)), "no block is shown to the model twice"
     assert lines.index("Findings") > lines.index("Test Method")
 
 

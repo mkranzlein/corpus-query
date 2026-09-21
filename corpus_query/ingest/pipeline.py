@@ -34,6 +34,7 @@ from corpus_query.ingest.decks import DECK_SUFFIX, read_deck
 from corpus_query.ingest.reader import IngestError, ReadDocument, Reader
 from corpus_query.ingest.transcripts import TRANSCRIPT_SUFFIX, read_transcript
 from corpus_query.ingest.word import DOCX_SUFFIX, read_word_document
+from corpus_query.ingest.workbooks import XLSX_SUFFIX, read_workbook
 
 #: Where the corpus lives, relative to the repository root: the transcripts
 #: the generator writes, and the office documents committed beside them. A
@@ -48,6 +49,7 @@ READERS: dict[str, Reader] = {
     TRANSCRIPT_SUFFIX: read_transcript,
     DOCX_SUFFIX: read_word_document,
     DECK_SUFFIX: read_deck,
+    XLSX_SUFFIX: read_workbook,
 }
 
 

@@ -9,8 +9,10 @@ overlap by one turn on purpose — an exchange split between two windows is
 whole in neither — so joining them blindly would repeat a turn. Because a
 chunk carries the span it covers, and a transcript chunk's text is one line
 per turn, the overlap is dropped by counting lines rather than by comparing
-text. A format whose chunks do not overlap passes through that arithmetic
-unchanged.
+text. That arithmetic is applied to turn windows alone: it is right only for
+a format whose chunks are one line per unit and whose units are numbered
+across the whole document, and a format whose chunks do not overlap has
+nothing for it to do anyway.
 
 The header a prompt sees depends on what the document is. A meeting has a
 subject and the people who sat in it; a document written by one person has a
@@ -25,7 +27,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from corpus_query.enrich.errors import EnrichmentError
-from corpus_query.store.kinds import SUMMARY, TRANSCRIPT
+from corpus_query.store.kinds import SUMMARY_CHUNK_KINDS, TRANSCRIPT, TURN_WINDOW
 
 
 @dataclass(frozen=True)
@@ -142,45 +144,64 @@ def document_text(connection: sqlite3.Connection, document_id: int) -> str:
     """Reassemble a document's text from its chunks.
 
     Every chunk cut out of the document goes in, in ordinal order. The
-    summary chunk enrichment writes is left out: it is about the document
-    rather than part of it, and feeding a summary back in as source material
-    is how the next summary comes to summarize the last one.
+    chunks written about a document rather than taken from it are left out:
+    the summary enrichment writes, because feeding a summary back in as
+    source material is how the next summary comes to summarize the last one,
+    and a workbook's per-sheet summaries, because they are derived from the
+    rows that are already here and would have the model read the same sheet
+    twice, once counted for it.
+
+    Only a turn window's overlap is removed, because only turn windows
+    overlap. The arithmetic that removes it counts lines against turn
+    numbers, and both halves of that hold for a transcript alone: a row
+    window carries a repeated header as well as its rows, and its span is
+    spreadsheet row numbers that start again at the top of every sheet, so
+    running it through the same subtraction would drop most of a workbook.
 
     Args:
         connection: An open document store.
         document_id: The document to reassemble.
 
     Returns:
-        The document's own text, each line appearing once. Empty when the
-        document has no chunks but a summary.
+        The document's own text, each line appearing once. Chunks that are
+        not turn windows are separated by a blank line, so two tables do not
+        run together into one. Empty when the document has no chunks but a
+        summary.
     """
+    placeholders = ", ".join("?" for _ in SUMMARY_CHUNK_KINDS)
     rows = connection.execute(
-        """
-        SELECT text, span_start, span_end
+        f"""
+        SELECT text, kind, span_start, span_end
         FROM chunks
-        WHERE document_id = ? AND kind <> ?
+        WHERE document_id = ? AND kind NOT IN ({placeholders})
         ORDER BY ordinal
         """,
-        (document_id, SUMMARY),
+        (document_id, *SUMMARY_CHUNK_KINDS),
     ).fetchall()
 
-    lines: list[str] = []
-    next_unit = 0
+    pieces: list[str] = []
+    previous_kind: str | None = None
+    next_turn = 0
     for row in rows:
-        chunk_lines = row["text"].split("\n")
-        # How many of this chunk's leading lines the previous chunk already
-        # carried, for a format whose chunks overlap. Negative never happens
-        # for chunks from one ingest, but a gap would only mean units are
-        # missing, not repeated, so it is clamped rather than treated as an
-        # error.
-        start = row["span_start"]
-        overlap = (
-            0 if start is None else max(0, min(len(chunk_lines), next_unit - start))
-        )
-        lines.extend(chunk_lines[overlap:])
-        if row["span_end"] is not None:
-            next_unit = max(next_unit, row["span_end"] + 1)
-    return "\n".join(lines)
+        text = row["text"]
+        if row["kind"] == TURN_WINDOW:
+            lines = text.split("\n")
+            # How many of this window's leading turns the one before it
+            # already carried. Negative never happens for chunks from one
+            # ingest, but a gap would only mean turns are missing, not
+            # repeated, so it is clamped rather than treated as an error.
+            start = row["span_start"] or 0
+            overlap = max(0, min(len(lines), next_turn - start))
+            text = "\n".join(lines[overlap:])
+            next_turn = max(next_turn, (row["span_end"] or 0) + 1)
+            if not text:
+                continue
+        if pieces:
+            both_turns = row["kind"] == previous_kind == TURN_WINDOW
+            pieces.append("\n" if both_turns else "\n\n")
+        pieces.append(text)
+        previous_kind = row["kind"]
+    return "".join(pieces)
 
 
 def describe(document: StoredDocument) -> str:
