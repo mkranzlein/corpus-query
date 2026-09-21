@@ -131,6 +131,16 @@ def answered() -> AIMessage:
     return AIMessage("ANSWERED")
 
 
+def verified() -> AIMessage:
+    """Build the verification model's reply for a fully supported answer."""
+    return AIMessage("VERIFIED")
+
+
+def rejects(*claims: str) -> AIMessage:
+    """Build the verification model's reply naming unsupported claims."""
+    return AIMessage("\n".join(f"UNSUPPORTED: {claim}" for claim in claims))
+
+
 def searches(query: str, call_id: str = "call-1") -> AIMessage:
     """Build a model reply that asks for one search.
 
@@ -218,6 +228,31 @@ def conversation(app, *payloads: dict[str, Any]) -> list[dict[str, Any]]:
     return asyncio.run(run())
 
 
+def answer_directly(app, question: str, thread_id: str | None = None) -> Any:
+    """Ask the agent a question without going through the HTTP endpoint.
+
+    ``/answer`` reports a fixed, published shape, and fields the rewrite and
+    verification steps add — the resolved query, what verification found —
+    are not part of it, and adding them is out of scope for this change. A
+    test that wants to see one of those fields reaches the agent directly,
+    the way :func:`corpus_query.agent.runtime.open_agent` opens it.
+
+    Args:
+        app: The application to open the agent against.
+        question: The question to ask.
+        thread_id: The conversation to continue, if any.
+
+    Returns:
+        The :class:`~corpus_query.agent.graph.Answer` the agent produced.
+    """
+
+    async def run() -> Any:
+        async with app.router.lifespan_context(app):
+            return await app.state.agent.answer(question, thread_id=thread_id)
+
+    return asyncio.run(run())
+
+
 def found(**overrides: Any) -> SearchResult:
     """Build a search result holding one ranked passage."""
     return SearchResult(results=[a_result(**overrides)], confidence=a_confidence())
@@ -247,6 +282,7 @@ def test_answers_a_question_the_corpus_covers() -> None:
         [
             searches("connector lead time"),
             says("Marcus put the rev B boards two weeks out, pending connectors."),
+            verified(),
             answered(),
         ]
     )
@@ -341,6 +377,7 @@ def test_a_multi_part_question_searches_more_than_once() -> None:
             searches("connector lead time", call_id="a"),
             searches("firmware freeze date", call_id="b"),
             says("The boards are two weeks out and the freeze holds."),
+            verified(),
             answered(),
         ]
     )
@@ -371,7 +408,9 @@ def test_a_follow_up_continues_the_thread() -> None:
         [
             searches("connector lead time"),
             says("Two weeks out, pending connectors."),
+            verified(),
             answered(),
+            says("Who said the rev B boards were two weeks out?"),
             says("Marcus said it."),
         ]
     )
@@ -393,6 +432,123 @@ def test_a_follow_up_continues_the_thread() -> None:
     assert len(model.prompts[-1]) > len(model.prompts[0])
 
 
+def test_a_follow_up_is_resolved_before_it_searches() -> None:
+    """A follow-up's standalone form is what actually reaches retrieval.
+
+    "What about the refinery one?" means nothing to ``search_corpus`` on its
+    own. The rewrite step is what turns it into something worth searching
+    for before the model ever decides what to search — this drives that
+    through the real graph and checks what was actually posted to
+    ``/search``.
+    """
+    resolved = "What did the refinery review decide about the compressor?"
+    model = ScriptedModel(
+        [
+            searches("connector lead time"),
+            says("Two weeks out, pending connectors."),
+            verified(),
+            answered(),
+            # The rewrite model's reply for the second question.
+            says(resolved),
+            searches(resolved, call_id="b"),
+            says("The refinery review approved the compressor spec."),
+            verified(),
+            answered(),
+        ]
+    )
+    search = StubSearch(result=found())
+    app = answering_app(model, search)
+
+    first, second = conversation(
+        app,
+        {"question": "Where are the rev B boards?"},
+        {"question": "What about the refinery one?", "_thread_from": 0},
+    )
+
+    assert search.calls[0]["query"] == "connector lead time"
+    # The follow-up itself was never posted to /search; its resolved form
+    # was.
+    assert search.calls[-1]["query"] == resolved
+    assert "What about the refinery one?" not in [
+        call["query"] for call in search.calls
+    ]
+    assert second["answer"] == "The refinery review approved the compressor spec."
+
+
+def test_the_resolved_query_is_recorded_even_when_unchanged() -> None:
+    """A question with nothing to resolve is recorded as itself.
+
+    The first question on a thread has no earlier conversation to rewrite
+    against, so it costs no extra model call — this is the case, not the
+    exception, since most threads open with a standalone question.
+    """
+    model = ScriptedModel([says("Two weeks out.")])
+    app = answering_app(model, StubSearch(result=found()))
+
+    answer = answer_directly(app, "Where are the rev B boards?")
+
+    assert answer.resolved_query == "Where are the rev B boards?"
+    # Nothing was searched or drafted for this question, so nothing was
+    # verified either.
+    assert answer.verification is None
+    # No rewrite call was spent on a question that had nothing to resolve.
+    assert len(model.prompts) == 1
+
+
+def test_an_unsupported_claim_sends_the_answer_back_for_a_redraft() -> None:
+    """A citation that does not support its claim triggers a redraft.
+
+    The first draft states something the passages never said. Verification
+    catches it and the model is asked again; the redraft is what the caller
+    actually sees.
+    """
+    model = ScriptedModel(
+        [
+            searches("connector lead time"),
+            says("Marcus said the freeze moved to March 19th."),
+            rejects("Marcus said the freeze moved to March 19th."),
+            says("Two weeks out, pending connectors."),
+            verified(),
+            answered(),
+        ]
+    )
+    app = answering_app(model, StubSearch(result=found()))
+
+    answer = answer_directly(app, "Where are the rev B boards?")
+
+    assert answer.answer == "Two weeks out, pending connectors."
+    assert answer.verification is None
+
+
+def test_regeneration_stops_at_the_bound_and_says_so() -> None:
+    """A claim that keeps failing does not loop forever.
+
+    Past the bound, the last draft is returned as it stands rather than
+    being redrafted again, and the caller is told outright that
+    verification never cleared it — the deliberate, documented behavior the
+    bound exists for.
+    """
+    claim = "Marcus said the freeze moved to March 19th."
+    model = ScriptedModel(
+        [
+            searches("connector lead time"),
+            says(claim),
+            rejects(claim),
+            says(claim),
+            rejects(claim),
+            says(claim),
+            rejects(claim),
+            answered(),
+        ]
+    )
+    app = answering_app(model, StubSearch(result=found()))
+
+    answer = answer_directly(app, "Where are the rev B boards?")
+
+    assert answer.answer == claim
+    assert answer.verification == {"rejected": [claim], "exhausted": True}
+
+
 def test_the_search_ceiling_makes_the_model_answer() -> None:
     """A model that keeps searching is eventually called without its tools.
 
@@ -402,7 +558,7 @@ def test_the_search_ceiling_makes_the_model_answer() -> None:
     """
     model = ScriptedModel(
         [searches(f"round {index}", call_id=str(index)) for index in range(2)]
-        + [says("Two weeks out."), answered()]
+        + [says("Two weeks out."), verified(), answered()]
     )
     search = StubSearch(result=found())
 
@@ -437,9 +593,10 @@ def test_the_search_ceiling_makes_the_model_answer() -> None:
 
     assert body["searches"] == 2
     assert body["answer"] == "Two weeks out."
-    # The last call was made without tools attached, which is what left the
-    # model no move but to answer.
-    assert model.with_tools == [True, True, False, False]
+    # The last two calls were made without tools attached: one is the model
+    # being made to answer once the ceiling was hit, the other is
+    # verification, which never gets tools.
+    assert model.with_tools == [True, True, False, False, False]
 
 
 def test_an_empty_question_is_rejected() -> None:
@@ -567,6 +724,7 @@ def test_an_abstention_suggests_who_to_ask() -> None:
         [
             searches("rev B connector tolerance"),
             says("The record does not give a tolerance for the rev B connector."),
+            verified(),
             # The routing model answers in the two labelled lines its prompt
             # asks for; what the response carries is the prose inside them.
             says(
@@ -617,6 +775,7 @@ def test_routing_ranks_by_how_much_of_the_material_each_person_owns() -> None:
         [
             searches("connector tolerance"),
             says("The record does not say what the tolerance was set to."),
+            verified(),
             says("What tolerance did we settle on for the rev B connector?"),
         ]
     )
@@ -662,6 +821,7 @@ def test_a_name_the_roster_does_not_have_is_not_suggested() -> None:
         [
             searches("connector tolerance"),
             says("The record does not say."),
+            verified(),
             says("What tolerance did we settle on?"),
         ]
     )
@@ -724,6 +884,7 @@ def test_an_answered_question_is_recorded_and_is_not_a_gap() -> None:
         [
             searches("connector lead time"),
             says("Marcus put the rev B boards two weeks out."),
+            verified(),
             answered(),
         ]
     )
@@ -753,6 +914,7 @@ def test_an_abstention_records_a_gap_carrying_the_suggestion() -> None:
         [
             searches("rev B connector tolerance"),
             says("The record does not give a tolerance for the rev B connector."),
+            verified(),
             says(
                 "CONTEXT: The record covers the schedule without naming a "
                 "figure.\nQUESTION: What tolerance did we settle on?"
@@ -811,6 +973,7 @@ def test_an_abstention_naming_nobody_is_still_a_gap() -> None:
         [
             searches("connector tolerance"),
             says("The record does not say."),
+            verified(),
             says("What tolerance did we settle on?"),
         ]
     )
@@ -863,6 +1026,7 @@ def test_a_correction_can_name_the_answer_that_came_back() -> None:
         [
             searches("connector lead time"),
             says("The freeze is March 12th."),
+            verified(),
             answered(),
         ]
     )
