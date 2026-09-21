@@ -314,6 +314,82 @@ question. The gaps, corrections, and feedback below go in that same file.
 Deleting it costs you the threads and the records it held and nothing else.
 Point `--usage-db` somewhere else to keep it elsewhere.
 
+### Watching it work
+
+A local answer can take tens of seconds, most of it spent waiting on the
+model. Ask for `text/event-stream` and the same endpoint reports each step as
+it happens, as [server-sent
+events](https://html.spec.whatwg.org/multipage/server-sent-events.html), and
+sends the answer last:
+
+```bash
+curl -sN localhost:8000/answer \
+  -H 'content-type: application/json' \
+  -H 'accept: text/event-stream' \
+  -d '{"question": "What did we decide about the XT-9 rev B thermal drift?"}'
+```
+
+```
+event: started
+data: {"thread_id": "bafccadb164e4447b21f7a8899f11390"}
+
+event: drafting
+data: {}
+
+event: searching
+data: {"query": "XT-9 rev B thermal drift decision"}
+
+event: searched
+data: {"query": "XT-9 rev B thermal drift decision", "citations": [{"chunk_id": 98, ...}, ...]}
+
+event: drafting
+data: {}
+
+event: verifying
+data: {}
+
+event: verified
+data: {"verification": null, "redraft": false}
+
+event: routing
+data: {}
+
+event: answer
+data: {"question": "What did we decide about the XT-9 rev B thermal drift?", "answer": "The team settled on a two-track response ...", ...}
+```
+
+`-N` stops curl buffering, so each event prints as it arrives. What each one
+means:
+
+| Event | When | Data |
+|---|---|---|
+| `started` | The question was received. | `thread_id`, known before anything runs. |
+| `drafting` | The model was asked to answer. It may ask for a search instead, so this comes again after a search and after a rejected draft. | — |
+| `searching` | Retrieval started. | `query`, what the model asked to search for. |
+| `searched` | Retrieval returned. | `query`, and `citations` in the shape an answer cites them. |
+| `verifying` | The draft's claims are being checked against the passages. Skipped when nothing was cited. | — |
+| `verified` | The check finished. | `verification`, null when every claim held up; `redraft`, whether the model is drafting again. |
+| `routing` | The answer is being judged against the question, to decide who to ask if it did not settle it. Skipped when nothing was cited. | — |
+| `answer` | Done. | Exactly the JSON body the request without the header gets. |
+| `error` | The run failed partway. | `detail`, what went wrong. |
+
+The stream ends after `answer` or `error`. Once events have started the status
+is already `200`, so a failure arrives as an `error` event rather than a status
+code, with the traceback in the service's log as usual; a question that fails
+validation is still a `422` before any stream starts. A client that
+disconnects stops the run where it is, and nothing is recorded, since nothing
+was answered. The thread stays usable: the next question asked on it clears
+the half-finished turn and starts clean.
+
+The events are steps, not tokens. The answer arrives whole, in `answer`.
+
+Without the header — or with curl's default `*/*` — nothing changes: the
+requests above get the single JSON response they always have.
+
+The stream is a response to a `POST`, so a browser reads it with `fetch` and
+the response body's reader rather than with `EventSource`, which only makes
+`GET` requests.
+
 ### Which model answers
 
 `/answer` runs on one of two models, and which one is yours to choose:
