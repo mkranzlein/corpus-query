@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/mkranzlein/corpus-query/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mkranzlein/corpus-query/actions/workflows/ci.yml) [![codecov](https://codecov.io/gh/mkranzlein/corpus-query/graph/badge.svg?token=ZGULR6SXPA)](https://codecov.io/gh/mkranzlein/corpus-query)
 
+![The browser application answering "why was q1 margin missed?": progress steps appear as the agent searches the record, then the answer streams in with the passages it rests on.](docs/demo.gif)
+
 Ask a corpus of meeting transcripts and documents a question in plain English.
 `/search` gives you back the passages that bear on it; `/answer` gives you an
 answer written out of those passages, with the passages it rests on.
