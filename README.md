@@ -131,6 +131,7 @@ curl -s localhost:8000/search \
       "title": "Rev B schedule",
       "document_date": "2026-03-04",
       "author": null,
+      "attendees": ["Priya", "Marcus", "Sofia"],
       "location": "turns 0-1",
       "span_start": 0,
       "span_end": 1,
@@ -189,11 +190,13 @@ curl -s localhost:8000/answer \
       "title": "XT-9 Rev B Thermal Drift - Firmware Workaround Feasibility",
       "document_date": "2026-03-05",
       "author": null,
+      "attendees": ["Marcus", "Sofia", "Devon"],
       "location": "turns 4-13"
     }
     // ...the rest of what it read
   ],
   "searches": 1,
+  "routing": null,
   "thread_id": "bafccadb164e4447b21f7a8899f11390"
 }
 ```
@@ -210,6 +213,61 @@ detail.
 so the agent's job includes deciding that they do not actually address what
 was asked and saying so, rather than summarizing whatever came back. That
 comes back as a `200` with no citations, like any other answer.
+
+### Not knowing also suggests who to ask
+
+A decline is a better place to stop than a made-up answer, and still a poor
+place to stop. The passages that scored well without settling the question
+each name the person who wrote them or the people who were in the room, so
+the search that failed already identifies who would know. When the agent
+searched and could not answer from what came back, `routing` carries that:
+
+```jsonc
+{
+  "answer": "The record does not say which Rev B units are installed in high-temperature environments. ...",
+  "routing": {
+    "candidates": [
+      {
+        "name": "Sofia",
+        "role": "Firmware Engineer",
+        "department": "Engineering",
+        "passages": 5,
+        "evidence": [
+          {
+            "chunk_id": 214,
+            "document_slug": "xt-9-rev-b-thermal-qualification-report",
+            "source_kind": "docx",
+            "title": "XT-9 Rev B Thermal Qualification Report",
+            "document_date": "2026-03-12",
+            "author": "Sofia",
+            "attendees": [],
+            "location": "Recommendation > Rev C Replacement Threshold"
+          }
+          // ...the rest of what put Sofia here
+        ]
+      }
+      // ...Marcus and Devon, one passage each
+    ],
+    "question": "I was looking for a list of Rev B units that are deployed in high-temperature settings. The available documentation only mentions the thermal limits for Rev B units and notes that a minority of the approximately 340 field units have documented installation temperatures, but it does not specify which ones are in high-temperature environments. Which of the Rev B units in the field are installed in high-temperature environments?"
+  }
+}
+```
+
+Candidates are ranked by how much of the matched material each person wrote
+or attended, and every name is resolved against `data/roster.md`, so a
+suggestion is a colleague rather than whatever string sat in a file's
+properties. `evidence` is the same citation shape an answer's claims carry,
+which is what makes a suggestion as traceable as an answer.
+
+`question` is the user's question restated to stand on its own, with the
+context that made it unanswerable, for someone who has not seen the original.
+It is text to edit. Nothing is sent anywhere, nothing is recorded, and the
+suggestion is gone when the response is.
+
+A question the corpus answers gets no routing, and neither does one declined
+without a search: the capital of France is not something anyone here should
+be asked. Routing is for the questions this organization ought to be able to
+answer and the record does not.
 
 `thread_id` is the conversation. Send it back with the next question and the
 agent answers against everything already said — which is how a follow-up gets

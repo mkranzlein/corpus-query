@@ -149,6 +149,7 @@ def citation(result: dict[str, Any]) -> dict[str, Any]:
         "title": result["title"],
         "document_date": result["document_date"],
         "author": result["author"],
+        "attendees": list(result.get("attendees") or []),
         "location": result["location"],
     }
 
@@ -198,6 +199,8 @@ def render_passages(
         source = f"{result['title']} ({result['document_date']}"
         if result["author"]:
             source += f", {result['author']}"
+        elif result.get("attendees"):
+            source += f", {', '.join(result['attendees'])}"
         source += f", {result['location']})"
         blocks.append(f"[{index}] {source}\n{result['text']}")
     return (

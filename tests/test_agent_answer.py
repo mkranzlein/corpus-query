@@ -113,6 +113,11 @@ def says(text: str) -> AIMessage:
     return AIMessage(text)
 
 
+def answered() -> AIMessage:
+    """Build the routing model's reply for an answer that settled it."""
+    return AIMessage("ANSWERED")
+
+
 def searches(query: str, call_id: str = "call-1") -> AIMessage:
     """Build a model reply that asks for one search.
 
@@ -203,6 +208,11 @@ def found(**overrides: Any) -> SearchResult:
     return SearchResult(results=[a_result(**overrides)], confidence=a_confidence())
 
 
+def all_of(*results: Any) -> SearchResult:
+    """Build a search result holding several ranked passages, best first."""
+    return SearchResult(results=list(results), confidence=a_confidence())
+
+
 def nothing() -> SearchResult:
     """Build a search result holding no passages at all."""
     return SearchResult(
@@ -222,6 +232,7 @@ def test_answers_a_question_the_corpus_covers() -> None:
         [
             searches("connector lead time"),
             says("Marcus put the rev B boards two weeks out, pending connectors."),
+            answered(),
         ]
     )
     search = StubSearch(result=found())
@@ -240,6 +251,9 @@ def test_answers_a_question_the_corpus_covers() -> None:
     assert body["citations"][0]["location"] == "turns 0-1"
     assert body["thread_id"]
     assert [call["query"] for call in search.calls] == ["connector lead time"]
+    # A question the corpus answered routes to nobody. There is nothing to
+    # ask a colleague once the record has said it.
+    assert body["routing"] is None
 
 
 def test_abstains_when_the_corpus_does_not_answer() -> None:
@@ -270,6 +284,9 @@ def test_abstains_when_the_corpus_does_not_answer() -> None:
     )
     assert body["citations"] == []
     assert body["searches"] == 1
+    # Nothing came back, so no passage named anybody, and a suggestion
+    # naming nobody is not a suggestion.
+    assert body["routing"] is None
     # The model was shown that the search came back empty, and which term
     # the corpus has never seen, rather than an empty string.
     shown = model.prompts[-1][-1].content
@@ -295,7 +312,11 @@ def test_declines_an_out_of_scope_question_without_searching() -> None:
     assert "outside it" in body["answer"]
     assert body["citations"] == []
     assert body["searches"] == 0
+    assert body["routing"] is None
     assert search.calls == []
+    # Judging an answer costs a second model call, and a question that was
+    # never going to be in the record does not pay for one.
+    assert len(model.prompts) == 1
 
 
 def test_a_multi_part_question_searches_more_than_once() -> None:
@@ -305,6 +326,7 @@ def test_a_multi_part_question_searches_more_than_once() -> None:
             searches("connector lead time", call_id="a"),
             searches("firmware freeze date", call_id="b"),
             says("The boards are two weeks out and the freeze holds."),
+            answered(),
         ]
     )
     search = StubSearch(result=found())
@@ -334,6 +356,7 @@ def test_a_follow_up_continues_the_thread() -> None:
         [
             searches("connector lead time"),
             says("Two weeks out, pending connectors."),
+            answered(),
             says("Marcus said it."),
         ]
     )
@@ -364,7 +387,7 @@ def test_the_search_ceiling_makes_the_model_answer() -> None:
     """
     model = ScriptedModel(
         [searches(f"round {index}", call_id=str(index)) for index in range(2)]
-        + [says("Two weeks out.")]
+        + [says("Two weeks out."), answered()]
     )
     search = StubSearch(result=found())
 
@@ -399,7 +422,7 @@ def test_the_search_ceiling_makes_the_model_answer() -> None:
     assert body["answer"] == "Two weeks out."
     # The last call was made without tools attached, which is what left the
     # model no move but to answer.
-    assert model.with_tools == [True, True, False]
+    assert model.with_tools == [True, True, False, False]
 
 
 def test_an_empty_question_is_rejected() -> None:
@@ -494,6 +517,7 @@ def test_a_citation_drops_the_text_and_the_scores() -> None:
             "title": result.title,
             "document_date": result.document_date,
             "author": result.author,
+            "attendees": result.attendees,
             "location": result.location,
             "text": result.text,
             "rerank_score": result.rerank_score,
@@ -506,8 +530,135 @@ def test_a_citation_drops_the_text_and_the_scores() -> None:
         "title",
         "document_date",
         "author",
+        "attendees",
         "location",
     }
+
+
+def test_an_abstention_suggests_who_to_ask() -> None:
+    """A question the passages did not settle comes back with a routing.
+
+    The passage that failed to answer the question is a meeting, and a
+    meeting names who was in the room. Those are the people to ask.
+    """
+    draft = (
+        "I was looking for what the rev B connector tolerance was set to, and "
+        "the record covers the schedule for that board without naming a "
+        "figure. What tolerance did we settle on?"
+    )
+    model = ScriptedModel(
+        [
+            searches("rev B connector tolerance"),
+            says("The record does not give a tolerance for the rev B connector."),
+            # The routing model answers in the two labelled lines its prompt
+            # asks for; what the response carries is the prose inside them.
+            says(
+                "CONTEXT: I was looking for what the rev B connector tolerance "
+                "was set to, and the record covers the schedule for that board "
+                "without naming a figure.\n"
+                "QUESTION: What tolerance did we settle on?"
+            ),
+        ]
+    )
+    search = StubSearch(result=found())
+    body = request(
+        answering_app(model, search),
+        "POST",
+        "/answer",
+        json={"question": "What tolerance did we set on the rev B connector?"},
+    ).json()
+
+    routing = body["routing"]
+    assert routing["question"] == draft
+    # Everyone in the room, each with the passage that put them there.
+    assert [person["name"] for person in routing["candidates"]] == [
+        "Priya",
+        "Marcus",
+        "Sofia",
+    ]
+    priya = routing["candidates"][0]
+    assert priya["role"] == "CEO"
+    assert priya["department"] == "Executive"
+    assert priya["passages"] == 1
+    # The why cites the way an answer's claims cite.
+    [evidence] = priya["evidence"]
+    assert evidence["title"] == "Rev B schedule"
+    assert evidence["document_slug"] == "rev-b-schedule"
+    assert evidence["location"] == "turns 0-1"
+    assert evidence["attendees"] == ["Priya", "Marcus", "Sofia"]
+    assert evidence["author"] is None
+    # The routing model was shown the question and the answer, and nothing
+    # it said joined the conversation the user is having.
+    judged = model.prompts[-1][-1].content
+    assert "What tolerance did we set on the rev B connector?" in judged
+    assert "The record does not give a tolerance" in judged
+
+
+def test_routing_ranks_by_how_much_of_the_material_each_person_owns() -> None:
+    """Whoever wrote or attended more of what matched is suggested first."""
+    model = ScriptedModel(
+        [
+            searches("connector tolerance"),
+            says("The record does not say what the tolerance was set to."),
+            says("What tolerance did we settle on for the rev B connector?"),
+        ]
+    )
+    search = StubSearch(
+        result=all_of(
+            a_result(rank=1, chunk_id=7, attendees=["Priya", "Marcus"]),
+            a_result(
+                rank=2,
+                chunk_id=8,
+                score=3.1,
+                author="Marcus",
+                document_slug="connector-spec",
+                title="Connector spec",
+                source_kind="docx",
+                location="Scope > Tolerances",
+            ),
+        )
+    )
+    body = request(
+        answering_app(model, search),
+        "POST",
+        "/answer",
+        json={"question": "What tolerance did we set on the rev B connector?"},
+    ).json()
+
+    candidates = body["routing"]["candidates"]
+    assert [person["name"] for person in candidates] == ["Marcus", "Priya"]
+    marcus, priya = candidates
+    assert marcus["passages"] == 2
+    assert priya["passages"] == 1
+    # Marcus's evidence is both the meeting he sat in and the document he
+    # wrote, each cited where it is.
+    assert [row["location"] for row in marcus["evidence"]] == [
+        "turns 0-1",
+        "Scope > Tolerances",
+    ]
+    assert marcus["evidence"][1]["author"] == "Marcus"
+
+
+def test_a_name_the_roster_does_not_have_is_not_suggested() -> None:
+    """A suggestion names a person, not a string out of a file's properties."""
+    model = ScriptedModel(
+        [
+            searches("connector tolerance"),
+            says("The record does not say."),
+            says("What tolerance did we settle on?"),
+        ]
+    )
+    search = StubSearch(
+        result=found(author="wm-scanner-01", attendees=[], source_kind="docx")
+    )
+    body = request(
+        answering_app(model, search),
+        "POST",
+        "/answer",
+        json={"question": "What tolerance did we set on the rev B connector?"},
+    ).json()
+
+    assert body["routing"] is None
 
 
 def test_a_failing_search_is_reported_not_narrated_around() -> None:

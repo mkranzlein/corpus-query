@@ -17,14 +17,13 @@ from pathlib import Path
 
 from corpus_query.ingest.reader import IngestError
 from corpus_query.transcripts.roster import (
-    DEFAULT_ROSTER_FILE,
+    ROSTER_PATH,
     RosterError,
+    find_person,
     read_roster,
 )
 
-#: Where the roster lives, resolved from the package's own location rather
-#: than the working directory, so ingesting from any directory finds it.
-ROSTER_PATH = Path(__file__).resolve().parents[2] / DEFAULT_ROSTER_FILE
+__all__ = ["ROSTER_PATH", "resolve_author"]
 
 
 def resolve_author(
@@ -53,9 +52,9 @@ def resolve_author(
         raise IngestError(
             f"Could not check {path}'s author against the roster: {exc}"
         ) from exc
-    for person in roster:
-        if person.first_name.casefold() == name.casefold():
-            return person.first_name
+    person = find_person(roster, name)
+    if person is not None:
+        return person.first_name
     known = ", ".join(person.first_name for person in roster)
     raise IngestError(
         f"{path} names {name!r} as its author, who is not on the roster at "

@@ -14,6 +14,10 @@ from pathlib import Path
 #: Where the roster lives, relative to the repository root.
 DEFAULT_ROSTER_FILE = Path("data/roster.md")
 
+#: The same roster, resolved from the package's own location rather than the
+#: working directory, so code that runs from anywhere still finds it.
+ROSTER_PATH = Path(__file__).resolve().parents[2] / DEFAULT_ROSTER_FILE
+
 _HEADER_FIRST_CELL = "first name"
 _EXPECTED_CELLS = 3
 
@@ -74,6 +78,31 @@ def read_roster(path: Path | str = DEFAULT_ROSTER_FILE) -> tuple[Person, ...]:
             f"document would not resolve to one person."
         )
     return tuple(people)
+
+
+def find_person(people: tuple[Person, ...], name: str) -> Person | None:
+    """Look one name up on the roster.
+
+    Names reach this from a file's core properties, a transcript header, or
+    a search result, so they are matched without regard to case. Nothing
+    else is guessed at: a name that is not on the roster comes back as
+    ``None`` rather than as the closest person to it.
+
+    Args:
+        people: The roster.
+        name: The name to resolve.
+
+    Returns:
+        The person, spelled the way the roster spells them, or ``None`` if
+        the roster does not have them.
+    """
+    wanted = name.strip().casefold()
+    if not wanted:
+        return None
+    for person in people:
+        if person.first_name.casefold() == wanted:
+            return person
+    return None
 
 
 def first_names(people: tuple[Person, ...]) -> tuple[str, ...]:
