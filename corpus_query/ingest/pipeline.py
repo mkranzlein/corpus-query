@@ -32,16 +32,20 @@ from pathlib import Path
 from corpus_query.ingest.chunk import TARGET_WORDS, Chunk
 from corpus_query.ingest.reader import IngestError, ReadDocument, Reader
 from corpus_query.ingest.transcripts import TRANSCRIPT_SUFFIX, read_transcript
+from corpus_query.ingest.word import DOCX_SUFFIX, read_word_document
 
-#: Where transcripts are written, relative to the repository root. The same
-#: directory the generator writes to.
-DEFAULT_TRANSCRIPT_DIR = Path("data/transcripts")
+#: Where the corpus lives, relative to the repository root: the transcripts
+#: the generator writes, and the office documents committed beside them. A
+#: run with no paths named reads all of it, because a corpus is every
+#: document in it rather than whichever directory came first.
+DEFAULT_DOCUMENT_DIRS = (Path("data/transcripts"), Path("data/office"))
 
 #: What each file extension is read by. A format is added by writing a
 #: reader and naming it here; nothing below this table knows how many
 #: formats there are.
 READERS: dict[str, Reader] = {
     TRANSCRIPT_SUFFIX: read_transcript,
+    DOCX_SUFFIX: read_word_document,
 }
 
 
@@ -63,28 +67,42 @@ class Ingested:
     """Whether a document with this slug was already in the store."""
 
 
-def document_paths(directory: Path | str = DEFAULT_TRANSCRIPT_DIR) -> list[Path]:
-    """List the documents in a directory that some reader can read.
+def document_paths(
+    directories: Path | str | Iterable[Path | str] = DEFAULT_DOCUMENT_DIRS,
+) -> list[Path]:
+    """List the documents in some directories that a reader can read.
 
     A file whose extension no reader claims is left out rather than reported.
     A corpus directory holds more than its documents — the JSON a transcript
-    was rendered from, a stray note — and none of that is a failed ingest.
+    was rendered from, a spreadsheet whose reader has not been written yet —
+    and none of that is a failed ingest.
 
     Args:
-        directory: Where the documents live.
+        directories: Where the documents live. One directory or several; a
+            lone path is taken as itself rather than iterated, since
+            iterating a ``Path`` gives its parts and would silently look in
+            the wrong places. A directory that does not exist contributes
+            nothing rather than failing the run.
 
     Returns:
-        Every readable file in the directory, in name order. Empty when the
-        directory does not exist.
+        Every readable file, in name order within each directory, the
+        directories in the order given.
     """
-    directory = Path(directory)
-    if not directory.is_dir():
-        return []
-    return sorted(
-        path
-        for path in directory.iterdir()
-        if path.is_file() and path.suffix.lower() in READERS
-    )
+    if isinstance(directories, (str, Path)):
+        directories = [directories]
+    found: list[Path] = []
+    for directory in directories:
+        directory = Path(directory)
+        if not directory.is_dir():
+            continue
+        found.extend(
+            sorted(
+                path
+                for path in directory.iterdir()
+                if path.is_file() and path.suffix.lower() in READERS
+            )
+        )
+    return found
 
 
 def reader_for(path: Path | str) -> Reader:
