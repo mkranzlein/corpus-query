@@ -9,10 +9,10 @@ describe("describing progress", () => {
     const steps: Progress[] = [
       { event: "started", data: { thread_id: "t" } },
       { event: "drafting", data: {} },
-      { event: "searching", data: { query: "thermal drift" } },
+      { event: "searching", data: { query: "introductory price" } },
       {
         event: "searched",
-        data: { query: "thermal drift", citations: [CITATION] },
+        data: { query: "introductory price", citations: [CITATION] },
       },
       { event: "drafting", data: {} },
       { event: "verifying", data: {} },
@@ -23,8 +23,8 @@ describe("describing progress", () => {
     expect(lines(steps)).toEqual([
       "Question received",
       "Drafting an answer",
-      "Searching the record for “thermal drift”",
-      "Found 1 passage for “thermal drift”",
+      "Searching the record for “introductory price”",
+      "Found 1 passage for “introductory price”",
       "Drafting an answer from what was found",
       "Checking each claim against the passages",
       "Every claim is supported by a passage",

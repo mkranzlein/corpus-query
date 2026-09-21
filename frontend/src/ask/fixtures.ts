@@ -8,25 +8,25 @@ import { vi } from "vitest";
 import type { AnswerBody, Chunk, Citation } from "./api.ts";
 
 export const CITATION: Citation = {
-  chunk_id: 98,
-  document_slug: "xt-9-rev-b-thermal-drift",
+  chunk_id: 113,
+  document_slug: "q2-pricing-review",
   source_kind: "transcript",
-  title: "XT-9 Rev B Thermal Drift",
-  document_date: "2026-03-05",
+  title: "Q2 Pricing Review",
+  document_date: "2026-03-11",
   author: null,
-  attendees: ["Marcus", "Sofia", "Devon"],
-  location: "turns 4-13",
+  attendees: ["Priya", "Elena", "Renata"],
+  location: "turns 22-30",
 };
 
 export const AUTHORED: Citation = {
-  chunk_id: 214,
-  document_slug: "xt-9-rev-b-thermal-qualification-report",
+  chunk_id: 170,
+  document_slug: "mx-3-firmware-2-4-2-soak-test-report",
   source_kind: "docx",
-  title: "XT-9 Rev B Thermal Qualification Report",
-  document_date: "2026-03-12",
+  title: "MX-3 Firmware 2.4.2 Soak Test Report",
+  document_date: "2026-04-14",
   author: "Sofia",
   attendees: [],
-  location: "Recommendation > Rev C Replacement Threshold",
+  location: "Results > Extended Soak",
 };
 
 /** The full record behind a citation, as `GET /chunks/{id}` returns it. */
@@ -37,9 +37,9 @@ export function chunkFor(
   return {
     ...citation,
     text: `The passage behind ${citation.title}.`,
-    span_start: 4,
-    span_end: 13,
-    topics: ["Firmware", "Thermal"],
+    span_start: 22,
+    span_end: 30,
+    topics: ["Pricing", "Sales"],
     time_sensitivity: "near_term",
     business_impact: "significant",
     ...overrides,
@@ -48,8 +48,8 @@ export function chunkFor(
 
 export function answered(overrides: Partial<AnswerBody> = {}): AnswerBody {
   return {
-    question: "What did we decide about the XT-9 rev B thermal drift?",
-    answer: "The team settled on a firmware workaround, per Marcus.",
+    question: "What did we decide about the RV-2 introductory price?",
+    answer: "The RV-2 launches at $189 for ninety days, per Priya.",
     citations: [CITATION, AUTHORED],
     searches: 1,
     abstained: false,
@@ -63,11 +63,11 @@ export function answered(overrides: Partial<AnswerBody> = {}): AnswerBody {
 
 export function abstained(overrides: Partial<AnswerBody> = {}): AnswerBody {
   return answered({
-    question: "Which rev B units run hot?",
-    answer: "The record does not say which Rev B units are installed hot.",
+    question: "Which sites are the remote Quennick units at?",
+    answer: "The record does not say which sites the remote Quennick units are at.",
     citations: [AUTHORED],
     abstained: true,
-    routing: { candidates: [], question: "Which units run hot?" },
+    routing: { candidates: [], question: "Which sites are the remote units at?" },
     answer_id: "answer-2",
     ...overrides,
   });
@@ -83,9 +83,9 @@ export function turn(answer: AnswerBody): string[] {
   return [
     sse("started", { thread_id: answer.thread_id }),
     sse("drafting", {}),
-    sse("searching", { query: "XT-9 thermal drift" }),
+    sse("searching", { query: "RV-2 introductory price" }),
     sse("searched", {
-      query: "XT-9 thermal drift",
+      query: "RV-2 introductory price",
       citations: answer.citations,
     }),
     sse("drafting", {}),

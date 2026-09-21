@@ -24,7 +24,7 @@ PASSAGE = (
 
 OTHER = (
     "Q1 Sales Pipeline Review (2026-03-02, Elena, Jamal, turns 3-5)\n"
-    "[Elena]: The Brannock renewal is the largest deal in the pipeline."
+    "[Elena]: The Drossick renewal is the largest deal in the pipeline."
 )
 
 
@@ -76,7 +76,7 @@ def test_support_has_to_come_from_one_passage() -> None:
     and three others in the sales one. Neither alone holds half of them;
     the two together would.
     """
-    answer = "Marcus overhead sixty Elena Brannock renewal Singapore."
+    answer = "Marcus overhead sixty Elena Drossick renewal Singapore."
 
     assert citation_coverage(answer, [PASSAGE, OTHER]) == 0.0
     assert citation_coverage(answer, [PASSAGE + "\n" + OTHER]) == 1.0

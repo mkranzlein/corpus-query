@@ -36,7 +36,7 @@ def test_a_deck_reads_back_with_its_author_and_its_slides(store, deck_id):
 
     assert document.source_kind == PPTX
     assert document.title == "Q1 2026 Board Review"
-    assert document.document_date == "2026-04-02"
+    assert document.document_date == "2026-04-28"
     assert document.author == "Priya"
     assert document.attendees == ()
     assert document.text.startswith("## Slide 1")
@@ -62,7 +62,7 @@ def test_the_prompt_carries_the_header_the_slides_and_the_notes(store, deck_id):
     assert "**Attendees:**" not in rendered
     assert rendered in prompt
     assert NOTES_LABEL in prompt
-    assert "$1.14 million against a $1.25 million plan" in prompt
+    assert "Revenue came in at $618,400 against a plan of $594,000" in prompt
 
 
 def test_enriching_a_deck_fills_the_summary_topics_and_priority(

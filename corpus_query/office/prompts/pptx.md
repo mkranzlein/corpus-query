@@ -1,8 +1,15 @@
-You are writing three PowerPoint decks for Widget Makers Incorporated, a
-ten-person hardware startup that designs and manufactures industrial sensors.
-They are internal decks from the working life of a real company: a quarter
-presented to the board, a launch plan, and a briefing on an account in
+You are writing three PowerPoint decks for Main St Widget Foundry LLC, a
+ten-person hardware startup that designs and makes widgets, gizmos, and
+gadgets. They are internal decks from the working life of a real company: a
+quarter presented to the board, a launch plan, and a briefing on an account in
 trouble. Somebody built each one to stand up and present it.
+
+What the products are is deliberately left vague. They are physical hardware —
+circuit boards, enclosures, firmware — built in volume and sold to business
+customers, and they go by model names. Nothing written about them says what one
+measures, controls, or is for: they come up in terms of revisions, costs,
+yields, defects, and prices. "Foundry" is only part of the company's name. It
+does no metal casting, and nothing in a deck should suggest that it does.
 
 Write all three with the `pptx` skill from the `document-skills` plugin. This
 run produces these three `.pptx` files and nothing else — no Word documents,
@@ -12,8 +19,9 @@ no Excel workbooks, no summary of what you did.
 
 - `data/roster.md` — the cast. Every person named on a slide or in the notes
   is a first name from this file, spelled exactly as it appears. Invent
-  nobody. Customers, suppliers, competitors, and product names may be invented
-  freely.
+  nobody. Customers, suppliers, competitors, and product names are
+  invented — never borrowed from a real company, product, or brand, and
+  never a name you recognize as belonging to one.
 - `data/topics.md` — the categories the corpus is filed under. Useful for
   knowing what this company's concerns are. Do not put the category names in
   the decks.
@@ -27,9 +35,9 @@ Write these three, to `data/office/`:
 
 | File | Author | Date | What it is |
 | --- | --- | --- | --- |
-| `q1-board-review.pptx` | Priya | 2026-04-02 | The quarter presented to the board: revenue against plan, pipeline, the state of the product line, what went wrong and what is being done about it. |
-| `fieldsense-200-launch-campaign-plan.pptx` | Nadia | 2026-02-10 | Go-to-market plan for the FieldSense 200 Series launch — positioning, channels, timeline, budget, how success is measured. |
-| `brannock-refinery-account-recovery-briefing.pptx` | Elena | 2026-04-14 | An internal briefing on a damaged account: what happened, where it stands, the recovery plan, what is being asked of other teams. |
+| `q1-board-review.pptx` | Priya | 2026-04-28 | The quarter presented to the board: revenue against plan, margin, pipeline, the state of the product line, what went wrong and what is being done about it. |
+| `rv-2-launch-campaign-plan.pptx` | Nadia | 2026-03-04 | Go-to-market plan for the RV-2 launch — positioning, channels, timeline, introductory pricing, budget, how success is measured. |
+| `quennick-account-recovery-briefing.pptx` | Elena | 2026-04-15 | An internal briefing on a damaged account: what happened, where it stands, the recovery plan, what is being asked of other teams. |
 
 ## Authorship
 
@@ -59,7 +67,7 @@ loud, and in this corpus that sentence lives in the speaker notes.
 
 - 12 to 18 slides each, including a title slide and section dividers.
 - Every slide has a real title that says what it is about. `Pipeline by Stage`
-  rather than `Pipeline`, `Why Brannock Escalated` rather than `Background`.
+  rather than `Pipeline`, `Why Quennick Escalated` rather than `Background`.
   The title is half of what a citation shows a reader.
 - Slide bodies are bullets, short phrases, and figures — how a slide is
   actually written. Do not write paragraphs on slides; that is what the notes
@@ -95,12 +103,16 @@ specific about who does what next.
 ## Imperfections
 
 `data/office_files_guidance.md` lists three imperfections planted across all
-nine office documents. One belongs here:
+nine office documents. Two belong here. Plant them without drawing attention
+to them:
 
-A figure quoted in one of these decks does not match the same figure as it
-appears in a workbook elsewhere in the corpus — a pipeline total, a deal
-value, a ticket count. Neither acknowledges the other, and neither reads as
-wrong on its own. Plant it without drawing attention to it.
+1. A figure quoted in one of these decks does not match the same figure as it
+   appears in a workbook elsewhere in the corpus — a pipeline total, a deal
+   value, a ticket count. Neither acknowledges the other, and neither reads as
+   wrong on its own.
+2. One of these decks states a figure that a later-dated meeting states
+   differently. Write it as the deck's author would have: correct as far as
+   they knew on the day.
 
 Write the three files, nothing else. No commentary, no notes about what you
 planted, no meta-text of any kind.

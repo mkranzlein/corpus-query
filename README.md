@@ -147,27 +147,27 @@ the page to be there; the endpoints below are what it calls.
 ```bash
 curl -s localhost:8000/search \
   -H 'content-type: application/json' \
-  -d '{"query": "What did we decide about the connector lead time?", "limit": 3}'
+  -d '{"query": "What is the lead time on the PM-4?", "limit": 3}'
 ```
 
 ```jsonc
 {
-  "query": "What did we decide about the connector lead time?",
+  "query": "What is the lead time on the PM-4?",
   "results": [
     {
       "rank": 1,
-      "chunk_id": 412,
-      "text": "Priya: Where are we on the rev B boards?\nMarcus: Two weeks out, assuming the connectors land. I'll confirm the lead time with Devon before we commit to the date.",
-      "document_slug": "rev-b-schedule",
+      "chunk_id": 101,
+      "text": "[Marcus]: There's a potential revision on the power management section. We've been looking at swapping the Kessendra PM-4 for the Tolvane equivalent because Kessendra lead times have stretched to sixteen weeks. ...\n[Renata]: Can you flag me when you have something more concrete? Even a range would help.\n...",
+      "document_slug": "gx-7-unit-cost-review-and-supplier-decision",
       "source_kind": "transcript",
-      "title": "Rev B schedule",
-      "document_date": "2026-03-04",
+      "title": "GX-7 Unit Cost Review and Supplier Decision",
+      "document_date": "2026-01-22",
       "author": null,
-      "attendees": ["Priya", "Marcus", "Sofia"],
-      "location": "turns 0-1",
-      "span_start": 0,
-      "span_end": 1,
-      "topics": ["Hardware", "Supply chain"],
+      "attendees": ["Priya", "Marcus", "Renata", "Devon"],
+      "location": "turns 24-27",
+      "span_start": 24,
+      "span_end": 27,
+      "topics": ["Manufacturing", "Supply Chain", "Pricing"],
       "time_sensitivity": "near_term",
       "business_impact": "moderate",
       "rerank_score": 8.41
@@ -207,23 +207,23 @@ the request, is at <http://localhost:8000/docs>.
 ```bash
 curl -s localhost:8000/answer \
   -H 'content-type: application/json' \
-  -d '{"question": "What did we decide about the XT-9 rev B thermal drift?"}'
+  -d '{"question": "What did we decide about the RV-2 introductory price?"}'
 ```
 
 ```jsonc
 {
-  "question": "What did we decide about the XT-9 rev B thermal drift?",
-  "answer": "The team settled on a two-track response ...",
+  "question": "What did we decide about the RV-2 introductory price?",
+  "answer": "The RV-2 launches at an introductory $189 for ninety days, then steps to $209 list ...",
   "citations": [
     {
-      "chunk_id": 98,
-      "document_slug": "xt-9-rev-b-thermal-drift-firmware-workaround-feasibility",
+      "chunk_id": 113,
+      "document_slug": "q2-pricing-review-gx-7-and-rv-2-list-price-adjustment",
       "source_kind": "transcript",
-      "title": "XT-9 Rev B Thermal Drift - Firmware Workaround Feasibility",
-      "document_date": "2026-03-05",
+      "title": "Q2 Pricing Review — GX-7 and RV-2 List Price Adjustment",
+      "document_date": "2026-03-11",
       "author": null,
-      "attendees": ["Marcus", "Sofia", "Devon"],
-      "location": "turns 4-13"
+      "attendees": ["Priya", "Elena", "Renata", "Jamal", "Nadia"],
+      "location": "turns 22-30"
     }
     // ...the rest of what it read
   ],
@@ -255,7 +255,7 @@ passage itself, and the topics, time sensitivity, and business impact derived
 for its document, by the citation's `chunk_id`:
 
 ```bash
-curl -s localhost:8000/chunks/98
+curl -s localhost:8000/chunks/113
 ```
 
 The body is a search result's fields without `rank` and `rerank_score`, since
@@ -272,31 +272,31 @@ searched and could not answer from what came back, `routing` carries that:
 
 ```jsonc
 {
-  "answer": "The record does not say which Rev B units are installed in high-temperature environments. ...",
+  "answer": "The record does not say which sites the two remaining faulted Quennick units are at. ...",
   "routing": {
     "candidates": [
       {
         "name": "Sofia",
         "role": "Firmware Engineer",
         "department": "Engineering",
-        "passages": 5,
+        "passages": 4,
         "evidence": [
           {
-            "chunk_id": 214,
-            "document_slug": "xt-9-rev-b-thermal-qualification-report",
+            "chunk_id": 170,
+            "document_slug": "mx-3-firmware-2-4-2-soak-test-report",
             "source_kind": "docx",
-            "title": "XT-9 Rev B Thermal Qualification Report",
-            "document_date": "2026-03-12",
+            "title": "MX-3 Firmware 2.4.2 Soak Test Report",
+            "document_date": "2026-04-14",
             "author": "Sofia",
             "attendees": [],
-            "location": "Recommendation > Rev C Replacement Threshold"
+            "location": "Field Rollout"
           }
           // ...the rest of what put Sofia here
         ]
       }
-      // ...Marcus and Devon, one passage each
+      // ...Theo and Elena, one passage each
     ],
-    "question": "I was looking for a list of Rev B units that are deployed in high-temperature settings. The available documentation only mentions the thermal limits for Rev B units and notes that a minority of the approximately 340 field units have documented installation temperatures, but it does not specify which ones are in high-temperature environments. Which of the Rev B units in the field are installed in high-temperature environments?"
+    "question": "I was looking for where Quennick's two remaining faulted MX-3 units are installed. The available documentation says nine of the eleven faulted units have been power cycled and updated and that the last two are at remote sites with visits scheduled, but it does not name the sites. Which sites are the two remote faulted Quennick units at?"
   }
 }
 ```
@@ -351,7 +351,7 @@ sends the answer last:
 curl -sN localhost:8000/answer \
   -H 'content-type: application/json' \
   -H 'accept: text/event-stream' \
-  -d '{"question": "What did we decide about the XT-9 rev B thermal drift?"}'
+  -d '{"question": "What did we decide about the RV-2 introductory price?"}'
 ```
 
 ```
@@ -362,10 +362,10 @@ event: drafting
 data: {}
 
 event: searching
-data: {"query": "XT-9 rev B thermal drift decision"}
+data: {"query": "RV-2 introductory price decision"}
 
 event: searched
-data: {"query": "XT-9 rev B thermal drift decision", "citations": [{"chunk_id": 98, ...}, ...]}
+data: {"query": "RV-2 introductory price decision", "citations": [{"chunk_id": 113, ...}, ...]}
 
 event: drafting
 data: {}
@@ -380,7 +380,7 @@ event: routing
 data: {}
 
 event: answer
-data: {"question": "What did we decide about the XT-9 rev B thermal drift?", "answer": "The team settled on a two-track response ...", ...}
+data: {"question": "What did we decide about the RV-2 introductory price?", "answer": "The RV-2 launches at an introductory $189 for ninety days, then steps to $209 list ...", ...}
 ```
 
 `-N` stops curl buffering, so each event prints as it arrives. What each one
@@ -785,14 +785,21 @@ be installed. It only matters if a legacy file is added to the corpus later,
 in which case ingesting it needs LibreOffice on `PATH` or, on macOS, in the
 usual place the app installs it.
 
-The Word, PowerPoint, and Excel files in `data/office/` came from three
-independent Claude Code sessions running Opus, one per file type. Each session
-was told only to read its prompt and follow it exactly:
+The Word, PowerPoint, and Excel files in `data/office/` were written by a
+Claude Code session running Opus, after the transcripts existed, working from
+one prompt per file type:
 [docx.md](corpus_query/office/prompts/docx.md),
-[pptx.md](corpus_query/office/prompts/pptx.md), or
+[pptx.md](corpus_query/office/prompts/pptx.md), and
 [xlsx.md](corpus_query/office/prompts/xlsx.md). The prompts build on
 [data/office_files_guidance.md](data/office_files_guidance.md), which specifies
-the nine documents.
+the nine documents and how each relates to the meetings.
+
+Every invented name in the corpus — customers, suppliers, competitors, and
+products — was checked with a web search after it was generated, and any that
+turned out to belong to a real company or product was replaced. In the
+transcripts the replacement was made in the JSON, and the markdown was
+re-rendered from it with the renderer the generator uses, so the two still
+agree.
 
 ## Development
 

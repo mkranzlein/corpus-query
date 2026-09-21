@@ -322,16 +322,16 @@ def test_the_pipeline_dispatches_docx_to_this_reader(word_file, store):
 def test_the_default_directories_cover_the_transcripts_and_the_office_files():
     names = [path.name for path in document_paths()]
 
-    assert "xt-9-rev-b-thermal-qualification-report.docx" in names
+    assert "mx-3-firmware-2-4-2-soak-test-report.docx" in names
     assert any(name.endswith(".md") for name in names)
 
 
 @pytest.mark.parametrize(
     "name",
     [
-        "contract-manufacturer-transition-plan.docx",
-        "iec-62443-certification-readiness-assessment.docx",
-        "xt-9-rev-b-thermal-qualification-report.docx",
+        "ce-marking-readiness-assessment.docx",
+        "end-of-line-test-station-upgrade-plan.docx",
+        "mx-3-firmware-2-4-2-soak-test-report.docx",
     ],
 )
 def test_a_committed_document_chunks_into_its_sections(name, roster_path):
@@ -348,9 +348,9 @@ def test_a_committed_document_chunks_into_its_sections(name, roster_path):
 @pytest.mark.parametrize(
     "name",
     [
-        "contract-manufacturer-transition-plan.docx",
-        "iec-62443-certification-readiness-assessment.docx",
-        "xt-9-rev-b-thermal-qualification-report.docx",
+        "ce-marking-readiness-assessment.docx",
+        "end-of-line-test-station-upgrade-plan.docx",
+        "mx-3-firmware-2-4-2-soak-test-report.docx",
     ],
 )
 def test_every_line_of_a_chunk_is_findable_in_the_document(name, roster_path):
@@ -370,7 +370,7 @@ def test_every_line_of_a_chunk_is_findable_in_the_document(name, roster_path):
 
 def test_the_committed_documents_use_three_heading_levels(roster_path):
     parsed = parse_word_document(
-        OFFICE_DIR / "xt-9-rev-b-thermal-qualification-report.docx",
+        OFFICE_DIR / "mx-3-firmware-2-4-2-soak-test-report.docx",
         roster_path=roster_path,
     )
 

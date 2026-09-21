@@ -26,8 +26,8 @@ from tests.conftest import REPO_ROOT
 #: The committed decks, by the slug they are ingested under.
 DECKS = (
     "q1-board-review",
-    "fieldsense-200-launch-campaign-plan",
-    "brannock-refinery-account-recovery-briefing",
+    "rv-2-launch-campaign-plan",
+    "quennick-account-recovery-briefing",
 )
 
 BLANK_LAYOUT = 6
@@ -326,7 +326,7 @@ def test_a_committed_deck_ingests_into_the_store(store, deck_paths):
     ).fetchone()
     assert row["author"] == "Priya"
     assert row["title"] == "Q1 2026 Board Review"
-    assert row["document_date"] == "2026-04-02"
+    assert row["document_date"] == "2026-04-28"
     (chunks,) = store.execute(
         "SELECT count(*) FROM chunks WHERE document_id = ? AND kind = ?",
         (result.document_id, SLIDE),

@@ -77,7 +77,7 @@ def test_prose_with_no_labelled_line_is_unreadable() -> None:
     """
     reply = (
         "The record mentions two specific support tickets related to the "
-        "Brannock Refinery account:\n"
+        "Drossick account:\n"
         "1. Ticket TKT-4138, opened 2026-04-08.\n"
         "2. Ticket TKT-4140, opened 2026-04-14.\n"
         "The record does not provide a total count or average resolution "
