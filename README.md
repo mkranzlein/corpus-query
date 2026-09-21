@@ -203,8 +203,10 @@ uv run scripts/enrich.py                 # billed; --dry-run prints the prompts
 ```
 
 Ingestion reads each document with the reader for its format — a transcript is
-split into chunks of whole turns — and writes documents, attendees, and
-chunks. Enrichment adds a summary, topics, a time sensitivity, a business
+split into chunks of whole turns, a Word document into its heading sections,
+so a citation can say which section a claim came from — and writes documents,
+attendees, and chunks. With no paths named it reads both `data/transcripts`
+and `data/office`. Enrichment adds a summary, topics, a time sensitivity, a business
 impact, and an embedding per chunk. Querying reads what those three leave
 behind and calls nothing.
 
