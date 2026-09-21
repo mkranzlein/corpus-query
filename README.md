@@ -128,10 +128,19 @@ service that has started is a service that works.
 
 ### Open the page
 
-<http://127.0.0.1:8000> serves the browser application. It is a shell for now
-— it tells you the service is up and what it is serving from — and the
-endpoints below it are where the answers come from. Nothing had to be built
-for it to be there.
+<http://127.0.0.1:8000> serves the browser application. Type a question and
+it is sent to `/answer` as a stream, so each step shows as it happens: what was
+searched for, how many passages came back, whether the claims held up. The
+answer follows, with every passage it rests on listed under it — the source
+file, the author or the people in the room, where in the document it sits, and
+the topics, time sensitivity, and business impact derived for it. Each one
+opens to the passage itself. A question the record does not settle says so, as
+an answer rather than an error. Follow-up questions continue the same
+conversation until you start a new one.
+
+Attribution is per passage, not per sentence: the answer is prose, and nothing
+in it marks which sentence came from which passage. Nothing had to be built for
+the page to be there; the endpoints below are what it calls.
 
 ### Ask it something
 
@@ -825,7 +834,7 @@ npm --prefix frontend run dev  # http://localhost:5173, against a live API
 ```
 
 `npm run dev` serves the application itself with hot module replacement and
-proxies `/search`, `/answer`, and `/health` through to `scripts/serve.py` on
+proxies `/search`, `/answer`, `/chunks`, and `/health` through to `scripts/serve.py` on
 port 8000, so run that in another terminal. Requests stay same-origin that
 way, which is why the API carries no CORS configuration for the sake of
 development.
