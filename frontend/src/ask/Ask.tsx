@@ -7,7 +7,13 @@ import {
 } from "react";
 
 import Answer from "./Answer.tsx";
-import { type AnswerBody, AskError, type Progress, ask } from "./api.ts";
+import {
+  type AnswerBody,
+  AskError,
+  type CorrectionRecord,
+  type Progress,
+  ask,
+} from "./api.ts";
 import { lines } from "./progress.ts";
 import "./ask.css";
 
@@ -42,6 +48,7 @@ export default function Ask() {
   useEffect(() => () => controller.current?.abort(), []);
 
   const asking = turns.some((turn) => turn.outcome.state === "asking");
+  const corrections = corrected(turns);
 
   function update(id: number, change: (turn: Turn) => Turn) {
     setTurns((current) =>
@@ -133,7 +140,7 @@ export default function Ask() {
       {turns.length > 0 && (
         <ol className="turns" aria-label="Conversation">
           {turns.map((turn) => (
-            <TurnView key={turn.id} turn={turn} />
+            <TurnView key={turn.id} turn={turn} corrections={corrections} />
           ))}
         </ol>
       )}
@@ -173,8 +180,33 @@ export default function Ask() {
   );
 }
 
+/**
+ * Every correction the conversation recorded, by the answer it corrects.
+ *
+ * A correction typed as a message is recorded by the agent against an
+ * earlier answer, and comes back on the turn that typed it rather than on
+ * the answer it is about. Gathering them here is what lets that earlier
+ * answer show it as recorded instead of offering to record it again.
+ */
+function corrected(turns: Turn[]): Map<string, CorrectionRecord> {
+  const found = new Map<string, CorrectionRecord>();
+  for (const turn of turns) {
+    if (turn.outcome.state === "answered" && turn.outcome.answer.correction) {
+      const correction = turn.outcome.answer.correction;
+      found.set(correction.answer_id, correction);
+    }
+  }
+  return found;
+}
+
+interface TurnViewProps {
+  turn: Turn;
+  /** Corrections the conversation recorded, by the answer they correct. */
+  corrections: Map<string, CorrectionRecord>;
+}
+
 /** One turn: the question, how it was answered, and the answer or failure. */
-function TurnView({ turn }: { turn: Turn }) {
+function TurnView({ turn, corrections }: TurnViewProps) {
   const said = lines(turn.steps);
   const { outcome } = turn;
 
@@ -203,7 +235,12 @@ function TurnView({ turn }: { turn: Turn }) {
         </div>
       )}
 
-      {outcome.state === "answered" && <Answer answer={outcome.answer} />}
+      {outcome.state === "answered" && (
+        <Answer
+          answer={outcome.answer}
+          corrected={corrections.get(outcome.answer.answer_id) ?? null}
+        />
+      )}
 
       {outcome.state === "failed" && (
         <div className="failure" role="alert">

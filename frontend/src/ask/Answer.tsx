@@ -1,22 +1,29 @@
-import type { AnswerBody } from "./api.ts";
+import type { AnswerBody, CorrectionRecord } from "./api.ts";
 import { useDetails } from "./details.ts";
+import Feedback from "./Feedback.tsx";
 import { Passage } from "./Passage.tsx";
 import Suggestion from "./Suggestion.tsx";
 
 interface AnswerProps {
   answer: AnswerBody;
+  /**
+   * A correction to this answer recorded by a later turn of the
+   * conversation, or null.
+   */
+  corrected?: CorrectionRecord | null;
 }
 
 /**
  * One finished answer: the prose, who to ask if it did not settle the
- * question, then every passage it rests on.
+ * question, every passage it rests on, and a way to say whether it was any
+ * good.
  *
  * Attribution is per passage. The answer is prose and nothing in it marks
  * which sentence came from which passage, so the page does not pretend to
  * know; it lists what the answer was drawn from, each with where it came
  * from and who was behind it.
  */
-export default function Answer({ answer }: AnswerProps) {
+export default function Answer({ answer, corrected = null }: AnswerProps) {
   const candidates = answer.routing?.candidates ?? [];
   // A suggestion's evidence is drawn from the passages the answer cites, but
   // nothing guarantees it, so every passage either one names is read.
@@ -74,6 +81,11 @@ export default function Answer({ answer }: AnswerProps) {
             ))}
           </ol>
         </section>
+      )}
+      {/* A turn that recorded a correction was not an answer to judge: it
+          says what it recorded, and the answer it corrected shows it. */}
+      {answer.correction === null && (
+        <Feedback answerId={answer.answer_id} corrected={corrected} />
       )}
     </div>
   );
