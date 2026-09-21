@@ -2,6 +2,35 @@
 
 <!-- version list -->
 
+## v2.12.0 (2026-09-21)
+
+### Documentation
+
+- Explain gaps, corrections, and feedback, and why corrections are not applied
+  ([#107](https://github.com/mkranzlein/corpus-query/pull/107),
+  [`951e46f`](https://github.com/mkranzlein/corpus-query/commit/951e46ffc7909538f5cb9b88286ea46032e22360))
+
+### Features
+
+- Record gaps, corrections, and feedback, and serve them back
+  ([#107](https://github.com/mkranzlein/corpus-query/pull/107),
+  [`951e46f`](https://github.com/mkranzlein/corpus-query/commit/951e46ffc7909538f5cb9b88286ea46032e22360))
+
+- **api**: Record every answer and write a gap when the record does not settle a question
+  ([#107](https://github.com/mkranzlein/corpus-query/pull/107),
+  [`951e46f`](https://github.com/mkranzlein/corpus-query/commit/951e46ffc7909538f5cb9b88286ea46032e22360))
+
+- **store**: Record answers, gaps, corrections, and feedback in the usage database
+  ([#107](https://github.com/mkranzlein/corpus-query/pull/107),
+  [`951e46f`](https://github.com/mkranzlein/corpus-query/commit/951e46ffc7909538f5cb9b88286ea46032e22360))
+
+### Testing
+
+- Cover recording and reading back gaps, corrections, and feedback
+  ([#107](https://github.com/mkranzlein/corpus-query/pull/107),
+  [`951e46f`](https://github.com/mkranzlein/corpus-query/commit/951e46ffc7909538f5cb9b88286ea46032e22360))
+
+
 ## v2.11.0 (2026-09-21)
 
 ### Features
