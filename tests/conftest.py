@@ -13,7 +13,9 @@ does with it is the same either way.
 
 from __future__ import annotations
 
+import hashlib
 import sqlite3
+import subprocess
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -31,6 +33,7 @@ from corpus_query.enrich.schema import (
 )
 from corpus_query.ingest.pipeline import write_document
 from corpus_query.ingest.transcripts import as_document
+from corpus_query.store import usage
 from corpus_query.store.db import connect
 from corpus_query.transcripts.parse import parse_transcript
 from corpus_query.transcripts.render import render_meeting
@@ -283,3 +286,87 @@ def ingest(make_meeting) -> Callable[..., int]:
         return result.document_id
 
     return factory
+
+
+@pytest.fixture(autouse=True)
+def usage_database_in_tmp_path(tmp_path, monkeypatch):
+    """Point the usage database somewhere disposable, for every test.
+
+    Anything that opens the agent without being told where to checkpoint
+    writes to ``data/usage.db``, which is where it belongs when the service
+    is actually running and not where it belongs during a test run. Rather
+    than asking every test that builds an application to remember to say so,
+    the default itself is moved for the duration of each test.
+
+    The constant is patched rather than a parameter passed because the
+    callers in between — ``create_app``, the lifespan, ``open_agent`` — have
+    no reason to thread a test's temporary path through them.
+    """
+    monkeypatch.setattr(usage, "DEFAULT_USAGE_DATABASE_FILE", tmp_path / "usage.db")
+
+
+#: Everything under ``data/`` that git tracks is part of the corpus: written
+#: by ingestion and enrichment, committed so a clone can query without
+#: building anything, and not something a test run has any business changing.
+COMMITTED_DATA = REPO_ROOT / "data"
+
+
+def _committed_data_digests() -> dict[Path, str]:
+    """Hash every tracked file under ``data/``.
+
+    Git is asked which files those are rather than the directory walked,
+    because the answer is exactly "what is committed" and it stays right as
+    files are added. A checkout without git, or one where the command fails,
+    hashes nothing and the guard quietly does not apply.
+
+    Returns:
+        A digest per tracked file, keyed by path. Empty when git could not
+        be asked.
+    """
+    try:
+        listed = subprocess.run(
+            ["git", "ls-files", "-z", "--", str(COMMITTED_DATA)],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            check=True,
+        )
+    except OSError, subprocess.CalledProcessError:
+        return {}
+    digests = {}
+    for name in listed.stdout.decode().split("\0"):
+        path = REPO_ROOT / name if name else None
+        if path is not None and path.is_file():
+            digests[path] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return digests
+
+
+@pytest.fixture(scope="session", autouse=True)
+def committed_data_is_not_written_to():
+    """Fail the run if a test modified a file that is under version control.
+
+    A test that writes to the committed corpus leaves the repository dirty
+    and the next person wondering what they did. It is easy to do by
+    accident — build an application without saying where its state goes and
+    it will use the project's real paths — and nothing else notices, because
+    the test itself passes.
+
+    Raises:
+        AssertionError: At the end of the session, naming the files that
+            changed.
+    """
+    before = _committed_data_digests()
+    yield
+    if not before:
+        return
+    changed = sorted(
+        str(path.relative_to(REPO_ROOT))
+        for path, digest in before.items()
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != digest
+    )
+    assert not changed, (
+        "a test wrote to committed repository state: "
+        + ", ".join(changed)
+        + ". These files are under version control and a test run must leave "
+        "them untouched — point whatever wrote to them at tmp_path instead. "
+        "Restore them with `git checkout --` before looking for the cause."
+    )

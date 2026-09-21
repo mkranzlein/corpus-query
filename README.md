@@ -206,8 +206,12 @@ curl -s localhost:8000/answer \
   -d '{"question": "Who owns that?", "thread_id": "bafccadb164e4447b21f7a8899f11390"}'
 ```
 
-Conversations are checkpointed into the same SQLite file the corpus lives in,
-so a thread survives a restart.
+Conversations are checkpointed to disk, so a thread survives a restart. That
+goes in a second SQLite file, `data/usage.db`, and not into the corpus. The
+corpus is a committed artifact and stays read-only in normal use; the usage
+database is local, is not committed, and is created the first time you ask a
+question. Deleting it costs you the threads it held and nothing else. Point
+`--usage-db` somewhere else to keep it elsewhere.
 
 The chat model is `granite4.1:8b`, served locally by Ollama, and it is the
 only moving part here that has to be installed separately. It is a small model
@@ -255,6 +259,11 @@ plausible-looking empty responses.
 The database ships with this repository, so a fresh clone already has one at
 `data/corpus.db`. Point `--db` elsewhere to use a different store, or build
 your own — see [Building a corpus](#building-a-corpus).
+
+`data/usage.db` needs nothing in place. It is created empty the first time
+`/answer` is asked something, it is not committed and is gitignored, and it is
+the only file the service writes to — running queries never modifies the
+corpus.
 
 ---
 

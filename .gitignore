@@ -31,6 +31,17 @@ node_modules/
 # working files under data/ that aren't part of the corpus stay ignored here;
 # see scripts/generate_transcripts.py to build a corpus of your own.
 
+# What the running service produces about itself — conversation checkpoints
+# today, captured records and telemetry later. It is per-installation, it
+# grows with use, and it is worth nothing to anyone else, which is exactly
+# why it is a separate file from the corpus: sharing one would mean asking a
+# question dirties a committed binary. Created on demand, so deleting it
+# costs nothing but the threads it held. The -wal and -shm siblings are
+# SQLite's, and appear while the service is running.
+data/usage.db
+data/usage.db-wal
+data/usage.db-shm
+
 # Model weights and the vector index built from them, both kept inside the
 # project instead of a user's home directory. Rebuilt on demand; see
 # corpus_query/models/hf_home.py and corpus_query/retrieval/index.py.

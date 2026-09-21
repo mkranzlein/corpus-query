@@ -125,3 +125,19 @@ def test_parse_args_defaults_to_the_projects_paths():
 
     assert args.db.name == "corpus.db"
     assert "chroma" in str(args.index)
+
+
+def test_the_corpus_and_the_usage_database_are_separate_files():
+    """Conversations are not checkpointed into the committed corpus.
+
+    The two used to be one file, which meant asking a question modified a
+    binary that is under version control. They are separate defaults and
+    separate flags now, and neither one follows the other.
+    """
+    args = parse_args([])
+    assert args.usage_db != args.db
+    assert args.usage_db.name == "usage.db"
+
+    moved = parse_args(["--db", "/tmp/elsewhere/corpus.db"])
+    assert moved.usage_db.name == "usage.db"
+    assert moved.usage_db.parent != moved.db.parent
