@@ -478,6 +478,8 @@ curl -s localhost:8000/feedback
       "question": "What tolerance did we set on the rev B connector?",
       "answer": "The record does not give a tolerance for the rev B connector.",
       "abstained": true,
+      "citations": [ /* the passages the answer rested on */ ],
+      "reviewed_at": null,
       "routing": { /* who to ask, as it was suggested at the time */ }
     }
   ]
@@ -485,6 +487,27 @@ curl -s localhost:8000/feedback
 ```
 
 `?limit=` bounds a read; the default is 50 and the ceiling is 200.
+
+### The review queue
+
+Open `http://localhost:8000/review` for all three kinds in one list, newest
+first. You can narrow it to one kind, and each row opens to the full record.
+The page is for someone reading through what the system got wrong and looking
+for patterns, not for the people asking questions, so the question page does
+not link to it.
+
+Its one write is the review mark. `reviewed_at` is null until someone marks
+the item seen, and marking it again keeps the first time. Setting it back to
+`false` returns the item to the new ones. The same thing over HTTP, with
+`GET` on the same path to read one record:
+
+```bash
+curl -s -X PATCH localhost:8000/corrections/3 \
+  -H 'content-type: application/json' -d '{"reviewed": true}'
+```
+
+A usage database from before the review mark existed is upgraded in place the
+first time the service opens it. Its rows are kept and come up as new.
 
 **Corrections are recorded, not applied.** Nothing here feeds them back into
 retrieval or generation, and an answer to the same question tomorrow will be
@@ -655,6 +678,7 @@ development.
 ```bash
 npm --prefix frontend run lint       # eslint
 npm --prefix frontend run typecheck  # tsc
+npm --prefix frontend test           # vitest, against a stubbed API
 npm --prefix frontend run build      # writes corpus_query/api/static/
 ```
 
