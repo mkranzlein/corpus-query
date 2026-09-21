@@ -1,6 +1,7 @@
 /**
  * What the question page asks the API, and what comes back: the answer as a
- * stream of server-sent events, and one passage read by id.
+ * stream of server-sent events, one passage read by id, and a verdict or a
+ * correction recorded against an answer.
  *
  * Nothing here renders. Keeping the reading of the stream apart from the page
  * is what lets it be tested without a DOM, against bytes split wherever a
@@ -50,8 +51,46 @@ export interface AnswerBody {
   routing: Routing | null;
   thread_id: string;
   answer_id: string;
-  /** A correction the turn recorded. Shown by the feedback view, not here. */
-  correction: unknown;
+  /**
+   * The correction this turn recorded, when the message was the user
+   * correcting an earlier answer rather than asking a question. It is
+   * recorded against that earlier answer's id, not this turn's. Null for
+   * every other turn.
+   */
+  correction: CorrectionRecord | null;
+}
+
+/** What every record written against an answer carries. */
+interface AnswerRecord {
+  /** Row id of this record. */
+  id: number;
+  /** The answer it was recorded against. */
+  answer_id: string;
+  /** When it was recorded, ISO 8601, UTC. */
+  created_at: string;
+  thread_id: string;
+  /** The question that answer was given to. */
+  question: string;
+  answer: string;
+  abstained: boolean;
+  citations: Citation[];
+  /** When someone marked it seen in the review queue, or null. */
+  reviewed_at: string | null;
+}
+
+/** A correction to one answer, as `POST /corrections` returns it. */
+export interface CorrectionRecord extends AnswerRecord {
+  what_was_wrong: string;
+  what_is_right: string;
+}
+
+/** Whether an answer was any good. */
+export type Verdict = "up" | "down";
+
+/** A verdict on one answer, as `POST /feedback` returns it. */
+export interface FeedbackRecord extends AnswerRecord {
+  verdict: Verdict;
+  note: string | null;
 }
 
 /** One passage read back by id: a citation's fields, its text, and what was
@@ -284,4 +323,60 @@ export async function readChunk(
     throw new AskError(await refusal(response));
   }
   return (await response.json()) as Chunk;
+}
+
+/**
+ * Send one record to be written, and return the row the service wrote.
+ *
+ * @throws AskError If the service could not be reached or refused it.
+ */
+async function record<T>(path: string, body: unknown): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new AskError("The service could not be reached. Is it running?");
+  }
+  if (!response.ok) {
+    throw new AskError(await refusal(response));
+  }
+  return (await response.json()) as T;
+}
+
+/**
+ * Record a verdict on one answer.
+ *
+ * @param answerId The answer being judged, as `/answer` returned it.
+ * @param verdict Up or down.
+ * @returns The verdict as the service wrote it.
+ * @throws AskError If it was not recorded.
+ */
+export function recordFeedback(
+  answerId: string,
+  verdict: Verdict,
+): Promise<FeedbackRecord> {
+  return record("/feedback", { answer_id: answerId, verdict });
+}
+
+/**
+ * Record what one answer got wrong, and what is right instead.
+ *
+ * @param answerId The answer being corrected, as `/answer` returned it.
+ * @returns The correction as the service wrote it.
+ * @throws AskError If it was not recorded.
+ */
+export function recordCorrection(
+  answerId: string,
+  whatWasWrong: string,
+  whatIsRight: string,
+): Promise<CorrectionRecord> {
+  return record("/corrections", {
+    answer_id: answerId,
+    what_was_wrong: whatWasWrong,
+    what_is_right: whatIsRight,
+  });
 }

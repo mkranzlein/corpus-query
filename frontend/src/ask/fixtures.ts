@@ -5,7 +5,14 @@
 
 import { vi } from "vitest";
 
-import type { AnswerBody, Chunk, Citation } from "./api.ts";
+import type {
+  AnswerBody,
+  Chunk,
+  Citation,
+  CorrectionRecord,
+  FeedbackRecord,
+  Verdict,
+} from "./api.ts";
 
 export const CITATION: Citation = {
   chunk_id: 113,
@@ -239,6 +246,85 @@ export function declined(overrides: Partial<AnswerBody> = {}): AnswerBody {
   });
 }
 
+/** The fields every record written against an answer carries. */
+function recordOf(answer: AnswerBody, id: number) {
+  return {
+    id,
+    answer_id: answer.answer_id,
+    created_at: "2026-09-21T14:02:11+00:00",
+    thread_id: answer.thread_id,
+    question: answer.question,
+    answer: answer.answer,
+    abstained: answer.abstained,
+    citations: answer.citations,
+    reviewed_at: null,
+  };
+}
+
+/** A verdict on an answer, as `POST /feedback` returns it. */
+export function feedbackOf(
+  answer: AnswerBody,
+  verdict: Verdict,
+  id = 1,
+): FeedbackRecord {
+  return { ...recordOf(answer, id), verdict, note: null };
+}
+
+/** A correction to an answer, as `POST /corrections` returns it. */
+export function correctionOf(
+  answer: AnswerBody,
+  whatWasWrong: string,
+  whatIsRight: string,
+  id = 1,
+): CorrectionRecord {
+  return {
+    ...recordOf(answer, id),
+    what_was_wrong: whatWasWrong,
+    what_is_right: whatIsRight,
+  };
+}
+
+/*
+ * A correction to the RV-2 pricing answer, as the pricing review's own
+ * passage has it: the $189 price holds for ninety days and then steps up.
+ */
+
+export const WHAT_WAS_WRONG =
+  "It left out that the $189 price only lasts ninety days.";
+
+export const WHAT_IS_RIGHT =
+  "The RV-2 launches at $189 for ninety days, then steps up to $209 on day " +
+  "ninety-one.";
+
+/**
+ * The turn that typed a correction into the conversation, as the service
+ * answers it: the agent recorded it against the earlier answer, said so,
+ * and did not search.
+ */
+export function correcting(
+  earlier: AnswerBody = answered(),
+  overrides: Partial<AnswerBody> = {},
+): AnswerBody {
+  return {
+    question:
+      "That's not quite right: the $189 price only lasts ninety days, then " +
+      "it steps up to $209.",
+    answer:
+      `I've recorded your correction to my answer to "${earlier.question}". ` +
+      `What was wrong: ${WHAT_WAS_WRONG} What is right: ${WHAT_IS_RIGHT} ` +
+      "It is kept for review, and does not change how later questions are " +
+      "answered.",
+    citations: [],
+    searches: 0,
+    abstained: false,
+    routing: null,
+    thread_id: earlier.thread_id,
+    answer_id: "answer-7",
+    correction: correctionOf(earlier, WHAT_WAS_WRONG, WHAT_IS_RIGHT, 3),
+    ...overrides,
+  };
+}
+
 /** Encode one server-sent event the way the service does. */
 export function sse(event: string, data: unknown): string {
   return `event: ${event}\r\ndata: ${JSON.stringify(data)}\r\n\r\n`;
@@ -315,22 +401,79 @@ function json(status: number, body: unknown): Response {
   });
 }
 
+/** A reply the stub gives in place of what it would otherwise write. */
+export type Reply = () => Response | Promise<Response>;
+
+/** A request that never reached the service, as `fetch` reports one. */
+export const unreachable: Reply = () =>
+  Promise.reject(new TypeError("Failed to fetch"));
+
 /**
  * Stand in for the API: `/answer` replies with the next of `answers`, and
  * `/chunks/{id}` with the record behind any citation in `chunks`.
+ *
+ * `POST /feedback` and `POST /corrections` write against any answer in
+ * `known` and return the row, the way the service does, and refuse an id
+ * they do not know with the service's 404. A reply queued in `writes` for
+ * either path is given first, in order, which is how a test makes a write
+ * fail.
  *
  * Returns the mock, so a test can see what was asked of it.
  */
 export function stubApi(options: {
   answers: (() => Response)[];
   chunks?: Chunk[];
+  known?: AnswerBody[];
+  writes?: { feedback?: Reply[]; corrections?: Reply[] };
 }) {
   const queue = [...options.answers];
   const chunks = new Map(
     (options.chunks ?? []).map((chunk) => [chunk.chunk_id, chunk]),
   );
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
+  const known = new Map(
+    (options.known ?? []).map((answer) => [answer.answer_id, answer]),
+  );
+  const writes = {
+    feedback: [...(options.writes?.feedback ?? [])],
+    corrections: [...(options.writes?.corrections ?? [])],
+  };
+  let written = 0;
+
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "http://api.test");
+    if (url.pathname === "/feedback" || url.pathname === "/corrections") {
+      const path = url.pathname === "/feedback" ? "feedback" : "corrections";
+      const queued = writes[path].shift();
+      if (queued) {
+        return Promise.resolve().then(queued);
+      }
+      const body = JSON.parse(String(init?.body)) as Record<string, string>;
+      const answer = known.get(body.answer_id);
+      if (!answer) {
+        return Promise.resolve(
+          json(404, {
+            detail:
+              `no answer with id '${body.answer_id}'. A record has to ` +
+              "point at an answer this service gave; the id comes back on " +
+              "the response to /answer.",
+          }),
+        );
+      }
+      written += 1;
+      return Promise.resolve(
+        json(
+          201,
+          path === "feedback"
+            ? feedbackOf(answer, body.verdict as Verdict, written)
+            : correctionOf(
+                answer,
+                body.what_was_wrong,
+                body.what_is_right,
+                written,
+              ),
+        ),
+      );
+    }
     if (url.pathname === "/answer") {
       const next = queue.shift();
       return Promise.resolve(

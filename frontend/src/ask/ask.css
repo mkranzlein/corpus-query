@@ -356,6 +356,73 @@ main.ask {
   padding-left: 0.75rem;
 }
 
+/* Whether an answer was helpful, and what it got wrong. */
+
+.ask .feedback {
+  border-top: 1px solid var(--rule);
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+  padding-top: 0.75rem;
+}
+
+.ask .feedback .vote {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+}
+
+.ask .feedback h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.ask .feedback button[aria-pressed="true"] {
+  border-color: var(--settled);
+  color: var(--settled);
+  font-weight: 600;
+  opacity: 1;
+}
+
+.ask .feedback .recorded {
+  color: var(--settled);
+  margin: 0;
+}
+
+.ask .feedback .correction {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.ask .feedback .invite {
+  margin: 0;
+}
+
+.ask .feedback label {
+  font-weight: 600;
+}
+
+.ask .feedback .corrected {
+  border-left: 4px solid var(--settled);
+  padding-left: 0.75rem;
+}
+
+.ask .feedback .corrected p {
+  margin: 0 0 0.35rem;
+}
+
+.ask .feedback .corrected strong {
+  color: var(--settled);
+}
+
+.ask .write-failed {
+  border-left: 4px solid var(--failed);
+  margin: 0;
+  padding-left: 0.75rem;
+}
+
 /* The question box, after the conversation, where the next one goes. */
 
 .ask .question {
