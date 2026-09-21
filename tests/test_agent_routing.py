@@ -151,6 +151,24 @@ def test_an_answered_question_drafts_nothing(reply: str) -> None:
     assert drafted_question(reply) is None
 
 
+def test_a_draft_is_handed_over_as_prose_rather_than_as_a_form() -> None:
+    """The labels the prompt asks for are the model's scaffolding, not the
+    user's: both lines come back joined, without them."""
+    assert drafted_question(
+        "CONTEXT: I was looking for the rev B connector tolerance, and what we "
+        "have on file gives a build date and no figure.\n"
+        "QUESTION: What did we settle on?"
+    ) == (
+        "I was looking for the rev B connector tolerance, and what we have on "
+        "file gives a build date and no figure. What did we settle on?"
+    )
+
+
+def test_a_draft_that_arrives_without_its_labels_is_still_forwarded() -> None:
+    """A question that lost its context is worth less, not nothing."""
+    assert drafted_question("What did we settle on?") == "What did we settle on?"
+
+
 def test_a_drafted_question_comes_back_as_written() -> None:
     """What the model wrote is what the user is handed to edit."""
     draft = (

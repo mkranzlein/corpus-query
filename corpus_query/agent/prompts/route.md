@@ -17,16 +17,24 @@ ANSWERED
 
 ## If it did not
 
-Write the question to put to a colleague who was in the meetings the search
-turned up. Write it so it stands on its own, for someone who has not seen the
-original question or the answer:
+The question is going to be put to a colleague who was in the meetings the
+search turned up, and who has not seen either the original question or the
+answer. Write it for them, in exactly two lines, in this shape:
 
-- One or two sentences of context first: what was being looked for, and what
-  the record turned out not to say. Name the subject rather than referring to
-  "the question" or "the search".
-- Then the question itself, in one sentence, ending in a question mark.
+CONTEXT: One or two sentences saying what was being looked for and what the
+record turned out not to say. Name the subject itself rather than referring to
+"the question", "the search", or "the record".
+QUESTION: The question, in one sentence, ending in a question mark.
+
+Both lines are required, each on one line, each starting with its label in
+capitals. For example:
+
+CONTEXT: I was trying to find the current connector lead time for the rev B
+boards. What we have on file is the schedule from March, which gives a build
+date but no lead time, and nothing more recent.
+QUESTION: Do you know what the connector lead time is now?
 
 Write it in plain prose, first person, the way one colleague writes to
 another. No greeting, no name, no sign-off, no subject line, no bullet points,
-no quotation marks around it, and no explanation of what you are doing. Do not
-invent any fact that is not in the question or the answer you were shown.
+no quotation marks, and no explanation of what you are doing. Do not invent
+any fact that is not in the question or the answer you were shown.

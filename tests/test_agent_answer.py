@@ -550,7 +550,14 @@ def test_an_abstention_suggests_who_to_ask() -> None:
         [
             searches("rev B connector tolerance"),
             says("The record does not give a tolerance for the rev B connector."),
-            says(draft),
+            # The routing model answers in the two labelled lines its prompt
+            # asks for; what the response carries is the prose inside them.
+            says(
+                "CONTEXT: I was looking for what the rev B connector tolerance "
+                "was set to, and the record covers the schedule for that board "
+                "without naming a figure.\n"
+                "QUESTION: What tolerance did we settle on?"
+            ),
         ]
     )
     search = StubSearch(result=found())

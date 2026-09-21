@@ -136,6 +136,13 @@ def candidates(
 def drafted_question(reply: str) -> str | None:
     """Read the routing model's reply.
 
+    The reply is either the sentinel or two labelled lines: the context that
+    made the question unanswerable, and the question itself. The labels are
+    there because a small model asked in prose for "context and then the
+    question" reliably writes the question alone, and asked for the same two
+    things under two labels reliably writes both. They are stripped here, so
+    what the user is handed is prose rather than a form.
+
     Args:
         reply: What the model said when it was shown the question and the
             answer that came back.
@@ -144,15 +151,47 @@ def drafted_question(reply: str) -> str | None:
         The question to forward, or ``None`` if the model judged that the
         answer settled the question — which is also what an empty reply is
         taken to mean, since a suggestion nobody can read is worse than no
-        suggestion.
+        suggestion. A reply that arrives without the labels is passed
+        through as written: it is a question that lost its context, which is
+        still worth forwarding.
     """
     text = reply.strip()
     if not text:
         return None
-    first_line = text.splitlines()[0].strip().strip("*_#`.:!").upper()
-    if first_line == ANSWERED:
+    if _sentinel(text.splitlines()[0]):
         return None
-    return text
+    parts = [_unlabelled(line) for line in text.splitlines() if line.strip()]
+    return " ".join(part for part in parts if part)
+
+
+def _sentinel(line: str) -> bool:
+    """Return whether a line is the model saying the question was answered.
+
+    Args:
+        line: The reply's first line.
+
+    Returns:
+        Whether it is the sentinel, read through the emphasis and
+        punctuation a small model puts around a word it was told to say on
+        its own.
+    """
+    return line.strip().strip("*_#`.:!").upper() == ANSWERED
+
+
+def _unlabelled(line: str) -> str:
+    """Strip the ``CONTEXT:``/``QUESTION:`` label off one line.
+
+    Args:
+        line: One line of the reply.
+
+    Returns:
+        The line's prose, without the label the prompt asked for.
+    """
+    stripped = line.strip()
+    label, separator, rest = stripped.partition(":")
+    if separator and label.strip().strip("*_ ").upper() in {"CONTEXT", "QUESTION"}:
+        return rest.strip()
+    return stripped
 
 
 def suggestion(
