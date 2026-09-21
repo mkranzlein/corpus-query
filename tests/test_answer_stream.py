@@ -113,6 +113,7 @@ def test_a_streamed_answer_reports_each_step_then_the_answer() -> None:
     assert answer.thread_id == data["started"]["thread_id"]
     assert answer.answer == "Marcus put the rev B boards two weeks out."
     assert answer.searches == 1
+    assert answer.abstained is False
     # Streaming is a way of delivering the answer, not a different kind of
     # answer: it is recorded like any other.
     [row] = recorded()["answers"]

@@ -340,8 +340,12 @@ def _explained(
 
 
 @dataclass(frozen=True)
-class _ChunkMetadata:
-    """A chunk's text and everything needed for a result and a citation."""
+class Chunk:
+    """A chunk's text and everything needed for a result and a citation.
+
+    What a search result carries apart from its ranking, which is what a
+    reader opening one cited passage wants to see.
+    """
 
     text: str
     document_slug: str
@@ -356,6 +360,24 @@ class _ChunkMetadata:
     topics: list[str]
     time_sensitivity: str | None
     business_impact: str | None
+
+
+def read_chunk(connection: sqlite3.Connection, chunk_id: int) -> Chunk | None:
+    """Read one chunk by id, with its document's provenance and metadata.
+
+    An answer's citations carry where a passage came from but not its text,
+    so a reader opening one needs to read the passage back by id. It is read
+    here, with the same query a search result is built from, so the two
+    cannot disagree about what a chunk says or where it sits.
+
+    Args:
+        connection: An open document store.
+        chunk_id: The chunk to read.
+
+    Returns:
+        The chunk, or ``None`` if the store holds no chunk with that id.
+    """
+    return _chunk_metadata(connection, [chunk_id]).get(chunk_id)
 
 
 def _chunk_texts(
@@ -380,7 +402,7 @@ def _chunk_texts(
 
 def _chunk_metadata(
     connection: sqlite3.Connection, chunk_ids: Sequence[int]
-) -> dict[int, _ChunkMetadata]:
+) -> dict[int, Chunk]:
     """Fetch everything a result needs about a set of chunks.
 
     Args:
@@ -420,7 +442,7 @@ def _chunk_metadata(
     topics_by_document = _topics_by_document(connection, document_ids)
     attendees_by_document = _attendees_by_document(connection, document_ids)
     return {
-        row["chunk_id"]: _ChunkMetadata(
+        row["chunk_id"]: Chunk(
             text=row["text"],
             document_slug=row["document_slug"],
             source_kind=row["source_kind"],

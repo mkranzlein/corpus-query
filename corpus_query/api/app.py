@@ -15,6 +15,10 @@ by one event per step the agent takes, since a local model can take tens of
 seconds and a page that shows nothing for that long reads as broken. Anything
 else gets one JSON body.
 
+``GET /chunks/{chunk_id}`` reads one passage back by the id a citation
+carries: its text, and the topics, time sensitivity, and business impact
+derived for its document, none of which a citation holds.
+
 ``POST /corrections`` and ``POST /feedback`` record what an answer got
 wrong, against the id ``/answer`` returned, and ``GET /gaps``,
 ``GET /corrections``, and ``GET /feedback`` read the three kinds back, most
@@ -83,6 +87,7 @@ from corpus_query.agent.runtime import OpenAgent, open_agent
 from corpus_query.api.models import (
     AnswerRequest,
     AnswerResponse,
+    ChunkModel,
     CitationModel,
     ConfidenceModel,
     CorrectionModel,
@@ -104,7 +109,7 @@ from corpus_query.api.models import (
     SearchResultModel,
 )
 from corpus_query.retrieval.index import DEFAULT_INDEX_DIR, open_index
-from corpus_query.retrieval.search import SearchResult
+from corpus_query.retrieval.search import SearchResult, read_chunk
 from corpus_query.retrieval.search import search as run_search
 from corpus_query.store import capture
 from corpus_query.store.capture import (
@@ -324,6 +329,39 @@ def create_app(
             results=[SearchResultModel.from_result(row) for row in result.results],
             confidence=ConfidenceModel.from_confidence(result.confidence),
         )
+
+    @app.get(
+        "/chunks/{chunk_id}",
+        response_model=ChunkModel,
+        responses={404: {"description": "No chunk has that id."}},
+    )
+    async def chunk_endpoint(chunk_id: int, request: Request):
+        """Read one passage by id, with its text and derived metadata.
+
+        An answer's citations say where each passage came from but not what
+        it says, so a reader opening one reads it here. This reads the
+        corpus and nothing else, and ranks nothing.
+
+        Args:
+            chunk_id: The passage, as a citation or a search result names it.
+            request: The live request, for the store opened at startup.
+
+        Returns:
+            The passage's text, where it sits, who wrote it or was in the
+            room, and the topics, time sensitivity, and business impact
+            derived for its document.
+
+        Raises:
+            HTTPException: 404, if the corpus holds no chunk with that id.
+        """
+        opened: Resources = request.app.state.resources
+        chunk = read_chunk(opened.connection, chunk_id)
+        if chunk is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"no chunk with id {chunk_id}",
+            )
+        return ChunkModel.from_chunk(chunk_id, chunk)
 
     @app.post(
         "/answer",
@@ -584,6 +622,7 @@ def _recorded(opened: Resources, question: str, result: Answer) -> AnswerRespons
         answer=result.answer,
         citations=[CitationModel(**row) for row in result.citations],
         searches=result.searches,
+        abstained=result.abstained,
         routing=(
             RoutingModel(**result.routing) if result.routing is not None else None
         ),

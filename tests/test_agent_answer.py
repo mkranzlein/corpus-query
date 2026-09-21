@@ -960,6 +960,7 @@ def test_an_answered_question_is_recorded_and_is_not_a_gap() -> None:
     assert answer["thread_id"] == body["thread_id"]
     assert answer["abstained"] == 0
     assert "rev-b-schedule" in answer["citations"]
+    assert body["abstained"] is False
     assert answer["created_at"]
     # The record settled the question, so there is nothing missing from it.
     assert written["gaps"] == []
@@ -990,6 +991,8 @@ def test_an_abstention_records_a_gap_carrying_the_suggestion() -> None:
     [gap] = written["gaps"]
     assert answer["abstained"] == 1
     assert gap["answer_id"] == body["answer_id"]
+    # The response says so itself, so a caller does not infer it.
+    assert body["abstained"] is True
     assert gap["question"] == "What tolerance did we set on the rev B connector?"
     # The suggestion is stored as it was made, rather than rebuilt later
     # against a roster and a corpus that have both moved on.
@@ -1051,6 +1054,9 @@ def test_an_abstention_naming_nobody_is_still_a_gap() -> None:
     assert body["routing"] is None
     assert gap["routing"] is None
     assert written["answers"][0]["abstained"] == 1
+    # Nobody to suggest is still an abstention, which routing alone would
+    # not have said.
+    assert body["abstained"] is True
 
 
 def test_an_out_of_scope_question_is_recorded_but_is_not_a_gap() -> None:
@@ -1058,16 +1064,17 @@ def test_an_out_of_scope_question_is_recorded_but_is_not_a_gap() -> None:
     model = ScriptedModel(
         [says("I answer from this organization's own record, and that is outside it.")]
     )
-    request(
+    body = request(
         answering_app(model, StubSearch(result=found())),
         "POST",
         "/answer",
         json={"question": "What is the capital of France?"},
-    )
+    ).json()
 
     written = recorded()
     [answer] = written["answers"]
     assert answer["abstained"] == 0
+    assert body["abstained"] is False
     assert answer["query"] == "What is the capital of France?"
     assert written["gaps"] == []
 

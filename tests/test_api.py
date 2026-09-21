@@ -360,6 +360,72 @@ def test_an_out_of_range_limit_is_a_422(app_factory, limit):
     assert response.status_code == 422
 
 
+def test_a_chunk_reads_back_with_its_text_and_derived_metadata(
+    app_factory, ingest, store
+):
+    """A citation opens to the passage's text and what was derived about it."""
+    document_id = ingest(store, "rev-b-schedule")
+    store.execute(
+        "UPDATE documents SET time_sensitivity = 'urgent', "
+        "business_impact = 'critical' WHERE id = ?",
+        (document_id,),
+    )
+    (topic_id,) = store.execute(
+        "INSERT INTO topics (name) VALUES ('Supply chain') RETURNING id"
+    ).fetchone()
+    store.execute(
+        "INSERT INTO document_topics (document_id, topic_id) VALUES (?, ?)",
+        (document_id, topic_id),
+    )
+    (chunk_id, text, location) = store.execute(
+        "SELECT id, text, location FROM chunks WHERE document_id = ? "
+        "ORDER BY ordinal LIMIT 1",
+        (document_id,),
+    ).fetchone()
+    app, stub = app_factory()
+
+    response = request(app, "GET", f"/chunks/{chunk_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["chunk_id"] == chunk_id
+    assert body["text"] == text
+    assert body["location"] == location
+    assert body["document_slug"] == "rev-b-schedule"
+    assert body["source_kind"] == TRANSCRIPT
+    assert body["title"]
+    assert body["document_date"]
+    assert body["author"] is None
+    assert body["attendees"]
+    assert body["topics"] == ["Supply chain"]
+    assert body["time_sensitivity"] == "urgent"
+    assert body["business_impact"] == "critical"
+    # A passage read on its own was not ranked against anything.
+    assert "rank" not in body
+    assert "rerank_score" not in body
+    # Reading a chunk ranks nothing.
+    assert stub.calls == []
+
+
+def test_an_unknown_chunk_is_a_404(app_factory):
+    """An id the corpus does not hold is the caller naming the wrong thing."""
+    app, _ = app_factory()
+
+    response = request(app, "GET", "/chunks/987654")
+
+    assert response.status_code == 404
+    assert "987654" in response.json()["detail"]
+
+
+def test_a_chunk_id_that_is_not_a_number_is_a_422(app_factory):
+    """The id is validated before the store is asked anything."""
+    app, _ = app_factory()
+
+    response = request(app, "GET", "/chunks/rev-b")
+
+    assert response.status_code == 422
+
+
 def test_health_reports_the_store_and_the_index(app_factory, ingest, store):
     """A healthy service says what it is serving from, with counts."""
     ingest(store, "rev-b-schedule")

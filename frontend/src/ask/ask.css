@@ -1,0 +1,314 @@
+/*
+ * The question page. Colors derive from the system palette, so the page
+ * follows the reader's light or dark setting.
+ *
+ * Secondary text is mixed from the text color rather than taken from
+ * GrayText, whose value varies by browser and in some falls under 4.5:1
+ * against the background. A mix of 72% text into the background stays
+ * above 7:1 in both schemes, whatever the browser's own Canvas is.
+ */
+
+main.ask {
+  --muted: color-mix(in srgb, CanvasText 72%, Canvas);
+  --rule: color-mix(in srgb, CanvasText 22%, Canvas);
+  --panel: color-mix(in srgb, CanvasText 5%, Canvas);
+  --settled: #1d4ed8;
+  --failed: #b91c1c;
+
+  max-width: 48rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  main.ask {
+    --settled: #93c5fd;
+    --failed: #fca5a5;
+  }
+}
+
+.ask .lede,
+.ask .quiet {
+  color: var(--muted);
+}
+
+.ask .visually-hidden {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.ask button {
+  background: Canvas;
+  border: 1px solid var(--muted);
+  border-radius: 0.3rem;
+  color: CanvasText;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.3rem 0.9rem;
+}
+
+.ask button.primary {
+  background: CanvasText;
+  color: Canvas;
+}
+
+.ask button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.ask button:focus-visible,
+.ask textarea:focus-visible,
+.ask summary:focus-visible {
+  outline: 2px solid var(--settled);
+  outline-offset: 2px;
+}
+
+/* The conversation. */
+
+.ask .turns {
+  list-style: none;
+  margin: 2rem 0 0;
+  padding: 0;
+}
+
+.ask .turn {
+  border-top: 1px solid var(--rule);
+  padding: 1.25rem 0;
+}
+
+.ask .asked {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+  white-space: pre-wrap;
+}
+
+/* Progress, while an answer is being produced, and after it as a record. */
+
+.ask .steps ol {
+  margin: 0.25rem 0 0;
+  padding-left: 1.4rem;
+}
+
+.ask .steps li {
+  font-size: 0.95rem;
+}
+
+.ask .steps.live li.done {
+  color: var(--muted);
+}
+
+.ask .steps.live li.current {
+  font-weight: 600;
+}
+
+.ask .steps.live li.current::after {
+  animation: ask-ellipsis 1.2s steps(4, end) infinite;
+  content: "…";
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+  width: 0;
+}
+
+@keyframes ask-ellipsis {
+  to {
+    width: 1.1em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ask .steps.live li.current::after {
+    animation: none;
+    width: auto;
+  }
+}
+
+.ask details.steps {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 1rem;
+}
+
+.ask details.steps summary {
+  cursor: pointer;
+}
+
+/* The answer. */
+
+.ask .prose {
+  margin: 0 0 1rem;
+  white-space: pre-wrap;
+}
+
+.ask .answer.abstained {
+  border-left: 4px solid var(--settled);
+  padding-left: 1rem;
+}
+
+.ask .outcome {
+  color: var(--settled);
+  margin: 0 0 0.5rem;
+}
+
+.ask .outcome strong {
+  display: block;
+}
+
+.ask .failure {
+  border-left: 4px solid var(--failed);
+  padding-left: 1rem;
+}
+
+.ask .failure strong {
+  color: var(--failed);
+}
+
+.ask .failure .detail {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+/* The passages an answer rests on. */
+
+.ask .passages h3 {
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  margin: 1.25rem 0 0.5rem;
+  text-transform: uppercase;
+}
+
+.ask .passages ol {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding-left: 1.4rem;
+}
+
+.ask .passage {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 0.4rem;
+  padding: 0.6rem 0.9rem 0.75rem;
+}
+
+.ask .source {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  margin: 0 0 0.35rem;
+}
+
+.ask .source .kind,
+.ask .source time {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.ask .facts {
+  display: grid;
+  font-size: 0.9rem;
+  gap: 0.15rem 1rem;
+  grid-template-columns: max-content 1fr;
+  margin: 0;
+}
+
+.ask .facts > div {
+  display: contents;
+}
+
+.ask .facts dt {
+  color: var(--muted);
+}
+
+.ask .facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ask .topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ask .topics li {
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  padding: 0 0.55rem;
+}
+
+.ask .passage .quiet {
+  font-size: 0.85rem;
+  margin: 0.4rem 0 0;
+}
+
+.ask .toggle {
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+  padding: 0.15rem 0.6rem;
+}
+
+.ask .text {
+  border-left: 3px solid var(--rule);
+  margin: 0.6rem 0 0;
+  padding-left: 0.9rem;
+}
+
+.ask .text p {
+  margin: 0.25rem 0;
+  white-space: pre-wrap;
+}
+
+/* The question box, after the conversation, where the next one goes. */
+
+.ask .question {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 1.5rem;
+}
+
+.ask .question label {
+  font-weight: 600;
+}
+
+.ask textarea {
+  background: Canvas;
+  border: 1px solid var(--muted);
+  border-radius: 0.3rem;
+  color: CanvasText;
+  font: inherit;
+  padding: 0.5rem 0.65rem;
+  resize: vertical;
+}
+
+.ask textarea::placeholder {
+  color: var(--muted);
+}
+
+.ask .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+@media (max-width: 36rem) {
+  .ask .facts {
+    grid-template-columns: 1fr;
+  }
+
+  .ask .facts dd {
+    margin-bottom: 0.25rem;
+  }
+}

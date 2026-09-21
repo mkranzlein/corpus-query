@@ -26,7 +26,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from corpus_query.retrieval.search import DEFAULT_RESULTS, Confidence, Result
+from corpus_query.retrieval.search import DEFAULT_RESULTS, Chunk, Confidence, Result
 
 #: The most results one request may ask for. The cross-encoder scores every
 #: fused candidate, so an unbounded limit is an unbounded request.
@@ -163,6 +163,80 @@ class SearchResultModel(BaseModel):
             time_sensitivity=result.time_sensitivity,
             business_impact=result.business_impact,
             rerank_score=result.rerank_score,
+        )
+
+
+class ChunkModel(BaseModel):
+    """One passage read by id: its text, where it came from, and what was
+    derived about its document.
+
+    The same fields a search result carries, without the ranking, since a
+    passage read on its own was not ranked against anything. This is what a
+    citation opens to: citations say where a passage is and leave its text
+    here.
+    """
+
+    chunk_id: int = Field(description="Row id of the chunk in the store.")
+    text: str = Field(description="The chunk's text.")
+    document_slug: str = Field(description="Slug of the document it came from.")
+    source_kind: str = Field(
+        description="What the document was read out of: transcript, docx, "
+        "pptx, or xlsx."
+    )
+    title: str = Field(description="The document's title, or a meeting's subject.")
+    document_date: str = Field(description="The document's date, ISO 8601.")
+    author: str | None = Field(
+        description="Who wrote it, or null for a transcript, which has "
+        "attendees rather than an author."
+    )
+    attendees: list[str] = Field(
+        description="Who was in the room, for a transcript. Empty for a "
+        "document that names an author."
+    )
+    location: str = Field(
+        description="Where in the document the chunk sits, as a citation shows it."
+    )
+    span_start: int | None = Field(
+        description="First unit the chunk covers, or null for a chunk written "
+        "about the document rather than cut out of it."
+    )
+    span_end: int | None = Field(
+        description="Last unit the chunk covers, inclusive. Null alongside span_start."
+    )
+    topics: list[str] = Field(description="Topics assigned to the document.")
+    time_sensitivity: str | None = Field(
+        description="How time sensitive the document is, as enrichment judged it."
+    )
+    business_impact: str | None = Field(
+        description="How much business impact the document carries."
+    )
+
+    @classmethod
+    def from_chunk(cls, chunk_id: int, chunk: Chunk) -> ChunkModel:
+        """Build the response shape from a chunk read out of the store.
+
+        Args:
+            chunk_id: The id it was read by.
+            chunk: What the store holds for it.
+
+        Returns:
+            The same chunk, as the API reports it.
+        """
+        return cls(
+            chunk_id=chunk_id,
+            text=chunk.text,
+            document_slug=chunk.document_slug,
+            source_kind=chunk.source_kind,
+            title=chunk.title,
+            document_date=chunk.document_date,
+            author=chunk.author,
+            attendees=list(chunk.attendees),
+            location=chunk.location,
+            span_start=chunk.span_start,
+            span_end=chunk.span_end,
+            topics=list(chunk.topics),
+            time_sensitivity=chunk.time_sensitivity,
+            business_impact=chunk.business_impact,
         )
 
 
@@ -357,6 +431,12 @@ class AnswerResponse(BaseModel):
         description="How many searches the agent ran for this question. "
         "Zero when it did not search, more than one when the question had "
         "more than one part."
+    )
+    abstained: bool = Field(
+        description="Whether the record failed to settle the question: the "
+        "agent searched and its answer says the record does not say. False "
+        "for an answered question, and false for one declined without a "
+        "search, which is out of scope rather than a gap in the record."
     )
     routing: RoutingModel | None = Field(
         default=None,
