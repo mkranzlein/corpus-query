@@ -976,13 +976,28 @@ def test_the_review_page_has_its_own_address(app_factory):
     assert review.text == root.text
 
 
+def test_a_trailing_slash_on_the_review_page_reaches_the_same_page(app_factory):
+    """``/review/`` lands on ``/review``, where the page's assets resolve."""
+    app, _ = app_factory()
+
+    slashed = request(app, "GET", "/review/")
+    followed = request(app, "GET", "/review/", follow_redirects=True)
+    review = request(app, "GET", "/review")
+
+    assert slashed.status_code == 308
+    assert slashed.headers["location"] == "/review"
+    assert followed.status_code == 200
+    assert str(followed.url).endswith("/review")
+    assert followed.text == review.text
+
+
 def test_the_review_page_is_not_in_the_api_schema(app_factory):
     """It is a page, not an endpoint, and the schema documents endpoints."""
     app, _ = app_factory()
 
     paths = request(app, "GET", "/openapi.json").json()["paths"]
 
-    assert "/review" not in paths
+    assert not {"/review", "/review/"} & paths.keys()
     assert {"get", "patch"} <= paths["/gaps/{record_id}"].keys()
 
 
@@ -998,7 +1013,8 @@ def test_the_review_page_without_a_bundle_says_why(tmp_path, store):
         static_dir=tmp_path / "never-built",
     )
 
-    response = request(app, "GET", "/review")
+    for url in ("/review", "/review/"):
+        response = request(app, "GET", url, follow_redirects=True)
 
-    assert response.status_code == 503
-    assert "npm --prefix frontend run build" in response.text
+        assert response.status_code == 503
+        assert "npm --prefix frontend run build" in response.text

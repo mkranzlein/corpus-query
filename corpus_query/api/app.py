@@ -63,7 +63,7 @@ from typing import Any
 
 from chromadb.api.models.Collection import Collection
 from fastapi import FastAPI, HTTPException, Query, Request, Response, status
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from corpus_query.agent.runtime import OpenAgent, open_agent
@@ -610,10 +610,26 @@ def _mount_frontend(app: FastAPI, directory: Path) -> None:
     file is called ``review``, and a catch-all that answered every unknown
     path with the page would turn a mistyped endpoint into a 200.
 
+    ``/review/`` redirects to ``/review`` rather than serving the page
+    itself. The bundle's asset URLs are relative, so from ``/review/`` the
+    page would ask for ``/review/assets/…`` and load without its script or
+    its styles. The redirect puts the browser on the address where they
+    resolve. It is registered first because the mount at ``/`` would
+    otherwise answer the path with a 404 before FastAPI's own trailing
+    slash redirect ever saw it.
+
     Args:
         app: The application to mount onto.
         directory: The built application, as Vite wrote it.
     """
+
+    @app.get("/review/", include_in_schema=False)
+    async def review_with_a_slash() -> RedirectResponse:
+        """Send a trailing slash to the address the page's assets resolve from."""
+        return RedirectResponse(
+            "/review", status_code=status.HTTP_308_PERMANENT_REDIRECT
+        )
+
     if directory.is_dir():
         page = directory / "index.html"
 
