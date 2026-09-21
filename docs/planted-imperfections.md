@@ -66,5 +66,60 @@ settles this" cannot be provoked from the transcripts alone. Worth knowing
 before treating an abstention test as passing on the strength of this corpus.
 
 The office documents in `data/office_files_guidance.md` plant their own three,
-one of which — a figure that disagrees between a workbook and a deck — is the
-numeric contradiction this batch did not produce.
+one of which — a figure that disagrees between a workbook and a deck — was
+meant to be the numeric contradiction this batch did not produce. It landed:
+see the office documents section below.
+
+## Office documents
+
+Nine office documents — three Word documents, three PowerPoint decks, three
+Excel workbooks — sit alongside the transcripts under `data/office/`.
+`data/office_files_guidance.md` asked the generator for three imperfections
+across the nine: a document contradicted by a later meeting, a number that
+appears in a workbook and a deck and disagrees, and uneven depth. It also
+asked that documents never cite meetings, so any contradiction across formats
+has to be found by comparing figures directly, the way retrieval would.
+
+This section reads the nine committed files and records what actually landed,
+the same way batch 1 of the transcripts is recorded above. All three asks
+landed, one of them only within one of the two formats it could have spanned.
+A fourth contradiction, not asked for, turned up between two of the documents
+and is recorded alongside them, since retrieval will run into it regardless
+of whether it was planted on purpose.
+
+### What was planted
+
+| Imperfection | Documents | What it is |
+| --- | --- | --- |
+| Document contradicted by a later meeting — **landed** | `xt-9-rev-b-thermal-qualification-report.docx` (Sofia, 2026-03-12) → `customer-escalation-brannock-refinery-account` (2026-04-08) | The qualification report's Recommendation section ("Field Release of the Compensation Firmware") recommends releasing firmware 3.5.0 with thermal compensation enabled by default to all Rev B units in the field, having tested it into the −40 °C to 55 °C range. In the later transcript, Elena asks Marcus directly whether the Rev B thermal drift is a firmware or hardware issue, and Marcus answers "the fix is a component change on the output stage, it's not something you can patch in firmware" — with no qualification that firmware helps for part of the population, the way the report found. `brannock-refinery-account-recovery-briefing.pptx` (Elena, 2026-04-14, slide 5, "Root Cause: Rev B Analog Output Drift") repeats the same hardware-only framing ("Cannot be corrected in firmware") for a specific account, again without reference to the report's tested mitigation. |
+| A number that appears in a workbook and a deck and disagrees — **landed** | `q1-sales-pipeline.xlsx` (Jamal, 2026-03-30) → `q1-board-review.pptx` (Priya, 2026-04-02) | Slide 6, "Q2 Pipeline by Stage," names three opportunities with figures that do not match the `Open Opportunities` sheet they are drawn from. Tallis Water Authority: the sheet gives $232,000 at the Proposal stage (row 3, `Open Opportunities!F3`); the slide gives $112,000 under a "Commit" bucket. Thornbury Power: the sheet gives $104,000 at Proposal (row 4, `F4`); the slide gives $196,000 under "Negotiation." Sable Creek Gas: the sheet gives $174,000 at Discovery (row 9, `F9`); the slide gives $140,000, also under "Negotiation." The totals disagree as well: the workbook's own `Q2 Forecast by Month` sheet states $2,100,000 total open pipeline and $881,000 weighted (`C5`, `D5`); summing the `Open Opportunities` amounts directly gives $2,555,110, weighted $926,511 by win probability. The slide states $2.12M total and $1.26M weighted. No two of the three totals agree, and the weighted figure the slide uses is 40% higher than either figure the workbook itself supports. |
+| Uneven depth — **landed, among the three Word documents** | `iec-62443-certification-readiness-assessment.docx` (Callum, 1,098 words) vs. `xt-9-rev-b-thermal-qualification-report.docx` (Sofia, 2,738 words) and `contract-manufacturer-transition-plan.docx` (Devon, 3,128 words) | The certification assessment covers the same kind of ground as its two siblings — a gap analysis, a remediation plan, a cost estimate — in under half the length of either, and thinly: its "Gap Analysis by Requirement Family" gives each gap one or two sentences, where the qualification report tabulates results at every soak point and the transition plan scores three candidate manufacturers against six weighted criteria. The three decks (14, 15, and 17 slides, each with a comparable level of speaker-note detail) and three workbooks show no equivalent spread — the unevenness is confined to the Word documents. |
+
+### An unasked-for contradiction between two documents
+
+`iec-62443-certification-readiness-assessment.docx` (Callum, 2026-03-02) tables
+three preliminary assessment-body quotes under "Assessment Body Selection":
+Kestrel Conformity Services at $86,000, Arden Certification GmbH at $104,000,
+and Lindqvist Assurance at $118,000. `q1-board-review.pptx` (Priya,
+2026-04-02, slide 16, "IEC 62443: Meridian's Q3 Requirement") states the range
+as "$92–118K." The high end matches Lindqvist's quote; the low end matches
+none of the three figures in the document it is drawn from. This was not
+among the three imperfections the guidance file asked for.
+
+### What this means for the corpus
+
+The workbook-versus-deck contradiction the transcript batch did not produce
+is present here, and more thoroughly than a single figure: three named
+opportunities and two different pipeline totals disagree between the sales
+pipeline workbook and the board deck built from it, giving retrieval several
+independent ways to return a wrong number with an authoritative-looking
+source. The document-versus-meeting failure mode is also confirmed outside
+the transcripts — a written recommendation, tested and dated, contradicted a
+month later by people who don't cite it, which is exactly the stale-document
+risk the corpus is meant to test.
+
+What did not fully land is the clean three-way split the guidance implied: no
+single document is uniformly thin, and no deck or workbook shows the same
+spread the Word documents do. A reader testing "does retrieval notice when
+one source is far less detailed than another" gets a real case, but only
+within one of the three formats.
