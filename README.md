@@ -370,6 +370,7 @@ means:
 | `verifying` | The draft's claims are being checked against the passages. Skipped when nothing was cited. | — |
 | `verified` | The check finished. | `verification`, null when every claim held up; `redraft`, whether the model is drafting again. |
 | `routing` | The answer is being judged against the question, to decide who to ask if it did not settle it. Skipped when nothing was cited. | — |
+| `correcting` | The message was taken as a correction of an earlier answer and is being recorded. Comes instead of everything from `searching` on. | — |
 | `answer` | Done. | Exactly the JSON body the request without the header gets. |
 | `error` | The run failed partway. | `detail`, what went wrong. |
 
@@ -532,6 +533,24 @@ curl -s localhost:8000/feedback \
 
 An id that does not name an answer this service gave is a `404`. Storing it
 anyway would make a row nothing could ever read back.
+
+A correction can also be typed into the conversation, as the next message on
+the same thread:
+
+```bash
+curl -s localhost:8000/answer \
+  -H 'content-type: application/json' \
+  -d '{"thread_id": "…",
+       "question": "No, that is wrong. The freeze moved to March 19th."}'
+```
+
+The agent recognizes a message that says an earlier answer was wrong and
+what is right instead, and records it against that answer's id in the same
+table, without searching. Its reply says what it recorded, and the response's
+`correction` field carries the row. A question about an answer, or
+disagreement that does not say what is right, is not recorded. When the
+conversation holds more than one answer and the message does not make clear
+which one it means, the agent asks rather than guessing.
 
 Read the three back most recent first, each row carrying the question that
 produced it and the answer that was given, so a reader working through them

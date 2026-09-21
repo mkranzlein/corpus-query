@@ -263,6 +263,7 @@ def record_answer(
     citations: list[dict[str, Any]],
     thread_id: str,
     abstained: bool,
+    answer_id: str | None = None,
 ) -> str:
     """Write the row for one answered question.
 
@@ -273,12 +274,17 @@ def record_answer(
         citations: The passages the answer rests on, best first.
         thread_id: The conversation the answer belongs to.
         abstained: Whether the record failed to settle the question.
+        answer_id: The id to write the row under, or None to mint one. The
+            agent mints its own before it answers, so that a correction
+            typed later in the same conversation can name this row from the
+            conversation alone.
 
     Returns:
         The new row's id, which is what a later gap, correction, or piece of
         feedback points at.
     """
-    answer_id = uuid.uuid4().hex
+    if answer_id is None:
+        answer_id = uuid.uuid4().hex
     with connection:
         connection.execute(
             "INSERT INTO answers "

@@ -374,6 +374,15 @@ class AnswerResponse(BaseModel):
         "back with a correction or a piece of feedback to say which answer "
         "is being written about."
     )
+    correction: CorrectionModel | None = Field(
+        default=None,
+        description="The correction this turn recorded, when the question "
+        "was not a question but the user correcting an earlier answer in "
+        "the same conversation. It is recorded against that earlier "
+        "answer's id, exactly as one sent to POST /corrections would be. "
+        "Null for every other turn, including a correction the agent could "
+        "not yet attach to an answer and asked about instead.",
+    )
 
 
 class CorrectionRequest(BaseModel):

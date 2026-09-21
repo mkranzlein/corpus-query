@@ -1,8 +1,8 @@
 """The graph: a rewrite, a model that may search, the loop around it, a
-verification pass, and what to do when the search did not settle the
-question.
+verification pass, what to do when the search did not settle the question,
+and what to do when the user was not asking one.
 
-Five nodes. ``rewrite`` turns the newest turn into a question that stands on
+Six nodes. ``rewrite`` turns the newest turn into a question that stands on
 its own, before anything searches, since a follow-up like "what about the
 refinery one?" is only that specific once the rest of the conversation is
 read alongside it. ``think`` calls the model. ``tools`` runs whatever the
@@ -26,6 +26,12 @@ suggestion of who to ask. Its model call is its own, like verification's:
 neither the prompt nor the reply joins the conversation, because a drafted
 question or a verification note appended to the history is something the
 next turn would try to answer or re-litigate.
+
+``correct`` runs instead of all of that when the model decides the newest
+turn corrects an earlier answer rather than asking something. It records the
+correction and says what it recorded, and the turn ends there: nothing is
+searched, so there is nothing to verify and nobody to route to. See
+:mod:`corpus_query.agent.corrections`.
 
 The model is passed in. Nothing here imports a provider, names one, or knows
 what is answering — tools are attached with ``bind_tools``, so the tool schema
@@ -59,6 +65,7 @@ from langchain_core.messages import (
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
+from corpus_query.agent import corrections
 from corpus_query.agent.prompts import load
 from corpus_query.agent.rewriting import resolved_query as read_rewrite
 from corpus_query.agent.routing import drafted_question, suggestion
@@ -70,6 +77,8 @@ if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
     from langchain_core.tools import BaseTool
     from langgraph.checkpoint.base import BaseCheckpointSaver
+
+    from corpus_query.agent.corrections import Recorder
 
 #: How many times one question may reach retrieval before the model is made
 #: to answer with what it has. Multi-part questions are meant to search more
@@ -146,6 +155,17 @@ class Answer:
     is always the last draft produced, whether or not verification ever
     cleared it."""
 
+    answer_id: str = ""
+    """The id minted for this answer before it was given. The API writes the
+    answer's row under it, which is what lets a correction typed later in
+    the same conversation name this answer from the conversation alone."""
+
+    correction: dict[str, Any] | None = None
+    """The correction this turn recorded against an earlier answer, as the
+    store wrote it, or ``None`` for a turn that recorded none — which is
+    every turn that asked a question, and a correction turn that could not
+    yet say which answer it was for."""
+
 
 @dataclass(frozen=True)
 class Agent:
@@ -221,8 +241,12 @@ class Agent:
         config = {"configurable": {"thread_id": thread}}
         yield Progress("started", {"thread_id": thread})
         cleared = await self._abandoned(config) if thread_id else []
+        # The answer's id is the question's message id, so the conversation
+        # itself records which answer row each earlier turn became. See
+        # corpus_query.agent.corrections.
+        answer_id = uuid.uuid4().hex
         turn_input = {
-            "messages": [*cleared, HumanMessage(question)],
+            "messages": [*cleared, HumanMessage(question, id=answer_id)],
             "system_prompt": self.system_prompt,
             "routing_prompt": self.routing_prompt,
             "rewrite_prompt": self.rewrite_prompt,
@@ -236,6 +260,7 @@ class Agent:
             "resolved_query": "",
             "verification": None,
             "verify_attempts": 0,
+            "correction": None,
         }
         watch = _Watch()
         state: dict[str, Any] = {}
@@ -251,12 +276,14 @@ class Agent:
         yield Answer(
             answer=_final_text(turn),
             citations=_citations(turn),
-            searches=sum(isinstance(message, ToolMessage) for message in turn),
+            searches=_search_count(turn),
             routing=state.get("routing"),
             abstained=bool(state.get("abstained")),
             thread_id=thread,
             resolved_query=state.get("resolved_query") or question,
             verification=state.get("verification"),
+            answer_id=answer_id,
+            correction=state.get("correction"),
         )
 
     async def _abandoned(self, config: dict[str, Any]) -> list[RemoveMessage]:
@@ -315,6 +342,11 @@ EVENTS: dict[str, str] = {
     "routing": "The answer is being judged against the question, to decide "
     "whether it settled it and who to ask if not. A turn that cited "
     "nothing skips this.",
+    "correcting": "The model took the message as a correction of an earlier "
+    "answer rather than a question, and it is being recorded. Reported "
+    "instead of everything from ``searching`` on: a correcting turn "
+    "searches nothing, verifies nothing, and routes nothing, and the "
+    "answer that follows says what was recorded.",
 }
 
 
@@ -365,6 +397,8 @@ class _Watch:
                 return [Progress("verifying", {})]
             if name == "route" and self.cited:
                 return [Progress("routing", {})]
+            if name == "correct":
+                return [Progress("correcting", {})]
             return []
         # A task that failed has nothing to report. The failure itself
         # comes out of the stream as an exception.
@@ -389,8 +423,15 @@ class _Watch:
         return []
 
     def _searching(self, messages: list[Any]) -> list[Progress]:
-        """Report each search the model just asked for."""
+        """Report each search the model just asked for.
+
+        A reply that calls the correction tool reports no search at all:
+        the graph drops any search asked for alongside a correction, so
+        none of them will run.
+        """
         progress = []
+        if any(corrections.correction_call(message) for message in messages):
+            return progress
         for message in messages:
             for call in getattr(message, "tool_calls", None) or []:
                 query = str(call.get("args", {}).get("query", ""))
@@ -451,6 +492,7 @@ class State(MessagesState):
     resolved_query: str
     verification: dict[str, Any] | None
     verify_attempts: int
+    correction: dict[str, Any] | None
 
 
 def build_graph(
@@ -459,6 +501,7 @@ def build_graph(
     checkpointer: BaseCheckpointSaver | None = None,
     max_searches: int = MAX_SEARCHES,
     max_regenerations: int = MAX_REGENERATIONS,
+    record_correction: Recorder | None = None,
 ) -> Any:
     """Compile the agent's graph.
 
@@ -478,11 +521,23 @@ def build_graph(
         max_regenerations: How many redrafts one turn may go through when
             verification keeps rejecting a claim. See
             :data:`MAX_REGENERATIONS`.
+        record_correction: What writes a correction the user typed, against
+            the id of the answer it corrects. None leaves the model without
+            the correction tool, so it is never offered a way to record
+            something this graph has nowhere to put.
 
     Returns:
         The compiled graph.
     """
     with_tools = model.bind_tools(tools)
+    # Offered only once the conversation holds an answer to correct: a first
+    # turn that states a fact is not correcting anything, and a small model
+    # offered the tool there is a small model that will sometimes call it.
+    with_correction = (
+        model.bind_tools([*tools, corrections.correction_tool()])
+        if record_correction is not None
+        else None
+    )
 
     async def rewrite(state: State) -> dict[str, str]:
         """Expand the newest turn into a question that stands on its own.
@@ -502,7 +557,7 @@ def build_graph(
         """
         turn = _this_turn(state["messages"])
         question = _question(turn)
-        history = state["messages"][: len(state["messages"]) - len(turn)]
+        history = _history(state["messages"])
         if not history:
             return {"resolved_query": question}
         reply = await model.ainvoke(
@@ -524,23 +579,63 @@ def build_graph(
             The model's reply, to append to the conversation.
         """
         system = state["system_prompt"]
+        turn = _this_turn(state["messages"])
         resolved = state.get("resolved_query") or ""
-        if resolved and resolved != _question(_this_turn(state["messages"])):
+        if resolved and resolved != _question(turn):
             system = (
                 f"{system}\n\nThis turn's question, resolved to stand on its "
                 f"own: {resolved}"
             )
-        messages = [SystemMessage(system), *state["messages"]]
-        searches = sum(
-            isinstance(message, ToolMessage)
-            for message in _this_turn(state["messages"])
-        )
+        searches = _search_count(turn)
         # Past the ceiling the model is called without its tools, so the
         # only move left is to answer. Refusing the tool call outright would
         # leave a dangling call in the history, which the next replay would
         # have to explain away.
         speaker = model if searches >= max_searches else with_tools
+        # A turn that has already searched is answering a question, so the
+        # correction tool is offered only before the first search.
+        earlier = corrections.earlier_answers(_history(state["messages"]))
+        if with_correction is not None and earlier and searches == 0:
+            speaker = with_correction
+            system = f"{system}\n\n{corrections.numbered(earlier)}"
+        messages = [SystemMessage(system), *state["messages"]]
         return {"messages": [await speaker.ainvoke(messages)]}
+
+    async def correct(state: State) -> dict[str, Any]:
+        """Record the correction the model recognized, and say what was recorded.
+
+        Only the call to the correction tool is acted on. A reply that also
+        asked for a search has that call dropped, so a correction never
+        reaches retrieval: the model's message is replaced by one carrying
+        the correction call alone, which keeps every call in the history
+        answered by exactly one tool message.
+
+        Args:
+            state: The conversation, with the model's call at the end.
+
+        Returns:
+            The model's call, the tool's result, and the reply to the user,
+            to append to the conversation, and the correction as it was
+            written when one was.
+        """
+        messages = state["messages"]
+        called = messages[-1]
+        call = corrections.correction_call(called)
+        outcome = await corrections.handle(
+            call,
+            corrections.earlier_answers(_history(messages)),
+            record_correction,
+        )
+        return {
+            "messages": [
+                called.model_copy(update={"tool_calls": [call]}),
+                ToolMessage(
+                    outcome.status, tool_call_id=call["id"], name=corrections.TOOL_NAME
+                ),
+                AIMessage(outcome.reply),
+            ],
+            "correction": outcome.correction,
+        }
 
     async def verify(state: State) -> dict[str, Any]:
         """Re-check the drafted answer's claims against what was searched.
@@ -627,7 +722,7 @@ def build_graph(
         turn = _this_turn(state["messages"])
         citations = _citations(turn)
         if not citations:
-            return {"routing": None, "abstained": _searched(turn)}
+            return {"routing": None, "abstained": _search_count(turn) > 0}
         judgement = await model.ainvoke(
             [
                 SystemMessage(state["routing_prompt"]),
@@ -646,6 +741,21 @@ def build_graph(
             "routing": suggestion(citations, reply),
             "abstained": drafted_question(reply) is not None,
         }
+
+    def after_think(state: State) -> str:
+        """Decide what the model's reply calls for next.
+
+        Args:
+            state: The conversation, with the model's reply at the end.
+
+        Returns:
+            ``"correct"`` when the reply calls the correction tool, whatever
+            else it calls; ``"tools"`` when it calls anything else; and
+            ``"verify"`` when it calls nothing and is a drafted answer.
+        """
+        if corrections.correction_call(state["messages"][-1]) is not None:
+            return "correct"
+        return "tools" if tools_condition(state) == "tools" else "verify"
 
     def after_verify(state: State) -> str:
         """Decide whether a verified turn is done or needs another draft.
@@ -667,16 +777,20 @@ def build_graph(
     builder.add_node("tools", ToolNode(tools))
     builder.add_node("verify", verify)
     builder.add_node("route", route)
+    builder.add_node("correct", correct)
     builder.add_edge(START, "rewrite")
     builder.add_edge("rewrite", "think")
     builder.add_conditional_edges(
-        "think", tools_condition, {"tools": "tools", END: "verify"}
+        "think",
+        after_think,
+        {"tools": "tools", "verify": "verify", "correct": "correct"},
     )
     builder.add_edge("tools", "think")
     builder.add_conditional_edges(
         "verify", after_verify, {"think": "think", "route": "route"}
     )
     builder.add_edge("route", END)
+    builder.add_edge("correct", END)
     return builder.compile(checkpointer=checkpointer)
 
 
@@ -699,16 +813,34 @@ def _this_turn(messages: list[Any]) -> list[Any]:
     return messages
 
 
-def _searched(messages: list[Any]) -> bool:
-    """Return whether this turn reached retrieval at all.
+def _history(messages: list[Any]) -> list[Any]:
+    """Return the conversation before the current question.
+
+    Args:
+        messages: The whole conversation.
+
+    Returns:
+        Everything before the last question the user asked.
+    """
+    return messages[: len(messages) - len(_this_turn(messages))]
+
+
+def _search_count(messages: list[Any]) -> int:
+    """Return how many searches this turn ran.
+
+    Every tool message is a search except the one recording a correction,
+    which reaches no retrieval.
 
     Args:
         messages: This turn's messages.
 
     Returns:
-        Whether any search ran.
+        How many searches ran.
     """
-    return any(isinstance(message, ToolMessage) for message in messages)
+    return sum(
+        isinstance(message, ToolMessage) and message.name != corrections.TOOL_NAME
+        for message in messages
+    )
 
 
 def _question(messages: list[Any]) -> str:

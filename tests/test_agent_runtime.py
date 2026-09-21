@@ -20,9 +20,11 @@ import sqlite3
 
 import pytest
 from fastapi import FastAPI
+from langchain_core.messages import AIMessage
 
 from corpus_query.agent.prompts import PROMPT_DIR, PromptError, load
 from corpus_query.agent.runtime import open_agent
+from corpus_query.store import capture
 from test_agent_answer import ScriptedModel, says
 
 
@@ -92,6 +94,68 @@ def test_a_conversation_survives_the_process_that_held_it(tmp_path) -> None:
     assert rows
 
 
+def test_a_correction_is_recorded_in_the_usage_database(tmp_path) -> None:
+    """The agent writes a typed correction to the file it was opened on.
+
+    The answer row is written here the way ``/answer`` writes it, under the
+    id the agent minted, which is what the correction then points at.
+    """
+    database = tmp_path / "usage.db"
+    model = ScriptedModel(
+        [
+            says("The freeze is March 12th."),
+            says("No, it moved to March 19th."),
+            AIMessage(
+                "",
+                tool_calls=[
+                    {
+                        "name": "record_correction",
+                        "args": {
+                            "what_was_wrong": "It said March 12th.",
+                            "what_is_right": "It moved to March 19th.",
+                        },
+                        "id": "fix",
+                    }
+                ],
+            ),
+        ]
+    )
+
+    async def run() -> tuple[str, dict | None]:
+        async with open_agent(
+            a_host_app(), model=model, checkpoint_database=database
+        ) as agent:
+            first = await agent.answer("When is the firmware freeze?")
+            records = capture.connect(database)
+            try:
+                capture.record_answer(
+                    records,
+                    query="When is the firmware freeze?",
+                    answer=first.answer,
+                    citations=[],
+                    thread_id=first.thread_id,
+                    abstained=False,
+                    answer_id=first.answer_id,
+                )
+            finally:
+                records.close()
+            second = await agent.answer(
+                "No, it moved to March 19th.", thread_id=first.thread_id
+            )
+        return first.answer_id, second.correction
+
+    answer_id, correction = asyncio.run(run())
+
+    assert correction is not None
+    records = capture.connect(database)
+    try:
+        [written] = capture.corrections(records)
+    finally:
+        records.close()
+    assert written["answer_id"] == answer_id
+    assert written["what_is_right"] == "It moved to March 19th."
+
+
 def test_closing_the_agent_closes_what_it_opened(tmp_path) -> None:
     """Nothing is left open after the application stops serving.
 
@@ -117,7 +181,11 @@ def test_closing_the_agent_closes_what_it_opened(tmp_path) -> None:
 
 
 def test_the_graph_is_compiled_with_the_retrieval_tool(tmp_path) -> None:
-    """The model that comes up has the search tool bound to it."""
+    """The model that comes up has the search tool bound to it.
+
+    The correction tool is bound too, separately, since it is offered only
+    once a conversation holds an answer to correct.
+    """
     model = ScriptedModel([])
 
     async def run() -> None:
@@ -129,6 +197,10 @@ def test_the_graph_is_compiled_with_the_retrieval_tool(tmp_path) -> None:
     asyncio.run(run())
 
     assert [tool.name for tool in model.bound] == ["search_corpus"]
+    assert [[tool.name for tool in tools] for tools in model.bindings] == [
+        ["search_corpus"],
+        ["search_corpus", "record_correction"],
+    ]
 
 
 def test_the_default_usage_database_is_used_when_none_is_given(tmp_path) -> None:

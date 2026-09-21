@@ -368,16 +368,16 @@ class HangingModel(ScriptedModel):
 
     def bind_tools(self, tools: list[Any]) -> HangingBound:
         """Attach the tools, keeping the ability to hang."""
-        self.bound = list(tools)
-        return HangingBound(self)
+        bound = super().bind_tools(tools)
+        return HangingBound(self, bound.tools)
 
     async def ainvoke(self, messages: list[Any], **kwargs: Any) -> AIMessage:
         """Return the next reply, or hang if that is what is next."""
-        return await self.reply(messages, with_tools=False)
+        return await self.reply(messages, tools=[])
 
-    async def reply(self, messages: list[Any], with_tools: bool) -> AIMessage:
+    async def reply(self, messages: list[Any], tools: list[str]) -> AIMessage:
         """Pop the next reply, hanging on :data:`HANG`."""
-        message = self.next_reply(messages, with_tools=with_tools)
+        message = self.next_reply(messages, tools=tools)
         if message is HANG:
             return await self.hang.wait()
         return message
@@ -388,10 +388,11 @@ class HangingBound:
     """The hanging model with its tools attached."""
 
     model: HangingModel
+    tools: list[str]
 
     async def ainvoke(self, messages: list[Any], **kwargs: Any) -> AIMessage:
         """Return the next reply, or hang, for a call made with tools."""
-        return await self.model.reply(messages, with_tools=True)
+        return await self.model.reply(messages, tools=self.tools)
 
 
 #: Put in a script where the model should never reply.

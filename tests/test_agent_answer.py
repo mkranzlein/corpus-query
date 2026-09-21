@@ -34,6 +34,7 @@ from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from corpus_query.agent.graph import Agent, build_graph
+from corpus_query.agent.runtime import correction_recorder
 from corpus_query.agent.retrieval import (
     TOOL_NAME,
     citation,
@@ -69,8 +70,14 @@ class ScriptedModel:
     replies: list[AIMessage]
     prompts: list[list[Any]] = field(default_factory=list)
     bound: list[Any] = field(default_factory=list)
+    """The tools the first ``bind_tools`` call attached: the ones every
+    question is offered."""
+    bindings: list[list[Any]] = field(default_factory=list)
+    """Every set of tools the graph attached, in the order it attached them."""
     with_tools: list[bool] = field(default_factory=list)
     """One entry per call: whether the tools were attached for it."""
+    offered: list[list[str]] = field(default_factory=list)
+    """One entry per call: the names of the tools attached for it."""
 
     def bind_tools(self, tools: list[Any]) -> BoundModel:
         """Record the tools and hand back the model they are attached to.
@@ -82,19 +89,21 @@ class ScriptedModel:
             The same script, reached through a distinct object, so a test
             can tell a call made with tools from one made without.
         """
-        self.bound = list(tools)
-        return BoundModel(self)
+        if not self.bindings:
+            self.bound = list(tools)
+        self.bindings.append(list(tools))
+        return BoundModel(self, [tool.name for tool in tools])
 
     async def ainvoke(self, messages: list[Any], **kwargs: Any) -> AIMessage:
         """Return the next scripted reply, for a call made without tools."""
-        return self.next_reply(messages, with_tools=False)
+        return self.next_reply(messages, tools=[])
 
-    def next_reply(self, messages: list[Any], with_tools: bool) -> AIMessage:
+    def next_reply(self, messages: list[Any], tools: list[str]) -> AIMessage:
         """Record one call and pop the reply that answers it.
 
         Args:
             messages: The conversation so far, system prompt included.
-            with_tools: Whether the caller had tools attached.
+            tools: The names of the tools the caller had attached.
 
         Returns:
             The next message in the script.
@@ -104,7 +113,8 @@ class ScriptedModel:
                 the script accounts for, which is a loop rather than a run.
         """
         self.prompts.append(list(messages))
-        self.with_tools.append(with_tools)
+        self.with_tools.append(bool(tools))
+        self.offered.append(tools)
         if not self.replies:
             raise AssertionError("the graph called the model past its script")
         return self.replies.pop(0)
@@ -115,10 +125,11 @@ class BoundModel:
     """The scripted model with its tools attached."""
 
     model: ScriptedModel
+    tools: list[str]
 
     async def ainvoke(self, messages: list[Any], **kwargs: Any) -> AIMessage:
         """Return the next scripted reply, for a call made with tools."""
-        return self.model.next_reply(messages, with_tools=True)
+        return self.model.next_reply(messages, tools=self.tools)
 
 
 def says(text: str) -> AIMessage:
@@ -170,12 +181,21 @@ def answering_app(model: ScriptedModel, search: StubSearch):
 
     @asynccontextmanager
     async def open_scripted(app):
-        """Open the agent against the scripted model and an in-memory thread store."""
+        """Open the agent against the scripted model and an in-memory thread store.
+
+        Corrections are written the way the service writes them, to the
+        usage database the application's own records are in, so what the
+        agent records and what ``/corrections`` reads back are the same
+        rows.
+        """
         client = in_process_client(app)
         try:
             yield Agent(
                 graph=build_graph(
-                    model, [search_tool(client)], checkpointer=InMemorySaver()
+                    model,
+                    [search_tool(client)],
+                    checkpointer=InMemorySaver(),
+                    record_correction=correction_recorder(),
                 )
             )
         finally:
@@ -900,7 +920,7 @@ def recorded():
     opens the same file the request just wrote to.
 
     Returns:
-        The answers, gaps, corrections, and feedback in it.
+        The answers, gaps, and corrections in it.
     """
     connection = capture.connect()
     try:
@@ -909,6 +929,7 @@ def recorded():
                 "SELECT * FROM answers ORDER BY rowid"
             ).fetchall(),
             "gaps": capture.gaps(connection),
+            "corrections": capture.corrections(connection),
         }
     finally:
         connection.close()

@@ -19,7 +19,11 @@ else gets one JSON body.
 wrong, against the id ``/answer`` returned, and ``GET /gaps``,
 ``GET /corrections``, and ``GET /feedback`` read the three kinds back, most
 recent first. A gap needs no endpoint to be written: the service records one
-itself whenever the record did not settle a question. ``GET`` on
+itself whenever the record did not settle a question. Nor does a correction
+typed into the conversation: sent to ``/answer`` as the next message, it is
+recorded by the agent against the earlier answer it corrects, in the same
+table ``POST /corrections`` writes to, and comes back on that response's
+``correction`` field. ``GET`` on
 ``/gaps/{id}``, ``/corrections/{id}``, or ``/feedback/{id}`` reads one record,
 and ``PATCH`` on the same path marks it reviewed or clears the mark — the one
 change a record takes after it is written. All of it goes in the usage
@@ -546,6 +550,7 @@ def _recorded(opened: Resources, question: str, result: Answer) -> AnswerRespons
         citations=result.citations,
         thread_id=result.thread_id,
         abstained=result.abstained,
+        answer_id=result.answer_id or None,
     )
     # A gap is written by the system rather than reported by anybody, so
     # this is the only place it can come from. The suggestion is stored as
@@ -562,6 +567,11 @@ def _recorded(opened: Resources, question: str, result: Answer) -> AnswerRespons
         ),
         thread_id=result.thread_id,
         answer_id=answer_id,
+        correction=(
+            CorrectionModel(**result.correction)
+            if result.correction is not None
+            else None
+        ),
     )
 
 
