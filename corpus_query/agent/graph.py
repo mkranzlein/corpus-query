@@ -241,6 +241,13 @@ class Agent:
         half a turn. The next question asked on that thread clears it first;
         see :meth:`_abandoned`.
 
+        The run is one trace: a span for the run itself, with every model
+        call and tool call the graph makes under it. The span ends before
+        the answer is handed over, and a run that stops partway ends it on
+        the way out, as failed or cancelled, so a trace is never left with a
+        span that did not end. The answer carries the trace's id; see
+        :mod:`corpus_query.tracing`.
+
         Args:
             question: The question, in natural language.
             thread_id: The conversation to continue. A new one is started
