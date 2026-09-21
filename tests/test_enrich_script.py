@@ -21,7 +21,7 @@ from corpus_query.enrich.schema import (
 )
 from corpus_query.store.db import connect
 from corpus_query.transcripts.summaries import read_summaries
-from scripts.enrich import build_client, build_embedder, main, parse_args
+from scripts.enrich import build_embedder, main, parse_args
 from tests.conftest import canned
 
 pytestmark = pytest.mark.usefixtures("no_env_file")
@@ -294,25 +294,6 @@ def test_the_defaults_are_the_committed_paths():
     assert args.db.name == "corpus.db"
     assert args.topics.name == "topics.md"
     assert args.model
-
-
-def test_the_client_is_built_from_the_environment(monkeypatch):
-    built = {}
-
-    class FakeAnthropicBedrock:
-        def __init__(self, **kwargs):
-            built.update(kwargs)
-
-    monkeypatch.setattr("scripts.enrich.AnthropicBedrock", FakeAnthropicBedrock)
-
-    build_client(
-        {
-            "AWS_BEARER_TOKEN_BEDROCK": "key",
-            "AWS_REGION": "us-east-1",
-        }
-    )
-
-    assert built == {"api_key": "key", "aws_region": "us-east-1"}
 
 
 def test_a_missing_model_extra_is_named_with_the_command_that_fixes_it(monkeypatch):
