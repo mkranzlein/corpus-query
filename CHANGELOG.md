@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v2.24.2 (2026-09-21)
+
+### Bug Fixes
+
+- **frontend**: Proxy feedback, correction, and gap endpoints in dev server
+  ([#129](https://github.com/mkranzlein/corpus-query/pull/129),
+  [`308d875`](https://github.com/mkranzlein/corpus-query/commit/308d87516317a1e9f2eb2986886d7e108ee07100))
+
+### Documentation
+
+- List every proxied path in the dev server note
+  ([#129](https://github.com/mkranzlein/corpus-query/pull/129),
+  [`308d875`](https://github.com/mkranzlein/corpus-query/commit/308d87516317a1e9f2eb2986886d7e108ee07100))
+
+
 ## v2.24.1 (2026-09-21)
 
 ### Bug Fixes
