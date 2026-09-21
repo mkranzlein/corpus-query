@@ -13,8 +13,15 @@ Run it with::
     uv run scripts/serve.py             # http://127.0.0.1:8000
     uv run scripts/serve.py --port 9000
 
-Nothing here calls a hosted model and nothing costs anything: search runs
-locally against the store and the local models.
+Two SQLite files are involved and they are not the same one. ``--db`` is the
+corpus, which is read to answer questions and never written to here.
+``--usage-db`` is where conversations are checkpointed; it is created on first
+use, it is not committed, and it is the only file serving modifies.
+
+Nothing here calls a hosted model and nothing costs anything. Search runs
+locally against the store and the local models, and ``/answer`` runs against
+a model served locally by Ollama, which needs to be running and to have that
+model pulled.
 """
 
 from __future__ import annotations
@@ -25,9 +32,11 @@ from pathlib import Path
 
 import uvicorn
 
+from corpus_query.agent.runtime import open_agent
 from corpus_query.api.app import StartupError, create_app, open_resources
 from corpus_query.retrieval.index import DEFAULT_INDEX_DIR
 from corpus_query.store.db import DEFAULT_DATABASE_FILE, SchemaVersionError
+from corpus_query.store.usage import DEFAULT_USAGE_DATABASE_FILE
 
 #: Loopback by default. This is a local service over a local corpus, and
 #: there is no authentication in front of it.
@@ -50,6 +59,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=DEFAULT_DATABASE_FILE,
         help=f"document store to serve (default: {DEFAULT_DATABASE_FILE})",
+    )
+    parser.add_argument(
+        "--usage-db",
+        type=Path,
+        default=DEFAULT_USAGE_DATABASE_FILE,
+        help=f"where conversations are checkpointed, created if it is not "
+        f"there (default: {DEFAULT_USAGE_DATABASE_FILE})",
     )
     parser.add_argument(
         "--index",
@@ -92,7 +108,12 @@ def main(argv: list[str] | None = None, run=uvicorn.run) -> int:
     # The resources are opened here rather than inside the application's
     # lifespan so that a bad corpus is reported as one clear line before
     # uvicorn starts, instead of a traceback out of a startup hook.
-    app = create_app(resources=lambda: resources)
+    app = create_app(
+        resources=lambda: resources,
+        agent=lambda application: open_agent(
+            application, checkpoint_database=args.usage_db
+        ),
+    )
     print(f"Serving {args.db} on http://{args.host}:{args.port}")
     run(app, host=args.host, port=args.port)
     return 0

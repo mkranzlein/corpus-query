@@ -8,13 +8,17 @@ a function's return value inspected directly.
 Retrieval is stubbed throughout. What ranks above what is settled in the
 retrieval tests; what is under test here is the HTTP layer — shapes, status
 codes, and what happens when the input or the corpus is not what was hoped
-for. Nothing here loads a model, so none of it needs the models extra.
+for. The agent is stubbed out entirely, for the same reason and because
+opening the real one would load a chat model and a thread store neither
+``/search`` nor ``/health`` touches; it has tests of its own. Nothing here
+loads a model, so none of it needs the models extra.
 """
 
 from __future__ import annotations
 
 import asyncio
 import sys
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -54,6 +58,19 @@ def request(app, method: str, url: str, **kwargs: Any) -> httpx.Response:
                 return await client.request(method, url, **kwargs)
 
     return asyncio.run(run())
+
+
+@asynccontextmanager
+async def no_agent(app):
+    """Stand in for the agent, opening nothing.
+
+    Args:
+        app: The application, ignored.
+
+    Yields:
+        None. Nothing here asks ``/answer`` anything.
+    """
+    yield None
 
 
 class FakeCollection:
@@ -140,7 +157,7 @@ def app_factory(store):
         resources = Resources(
             connection=store, collection=collection or FakeCollection()
         )
-        app = create_app(resources=lambda: resources, search=stub)
+        app = create_app(resources=lambda: resources, search=stub, agent=no_agent)
         return app, stub
 
     return factory
@@ -333,7 +350,8 @@ def test_startup_fails_loudly_when_the_store_is_missing(tmp_path):
     app = create_app(
         resources=lambda: open_resources(
             tmp_path / "nowhere.db", tmp_path / "chroma", warm_models=False
-        )
+        ),
+        agent=no_agent,
     )
 
     with pytest.raises(StartupError, match="no document store"):

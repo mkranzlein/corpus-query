@@ -2,35 +2,37 @@
 
 [![CI](https://github.com/mkranzlein/corpus-query/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mkranzlein/corpus-query/actions/workflows/ci.yml) [![codecov](https://codecov.io/gh/mkranzlein/corpus-query/graph/badge.svg?token=ZGULR6SXPA)](https://codecov.io/gh/mkranzlein/corpus-query)
 
-Ask a corpus of meeting transcripts a question in plain English and get back
-the passages that bear on it. Each result carries where it came from — the
-meeting, its date, the turns the passage spans — and the metadata derived from
-it during ingestion: the topics the meeting was filed under, how time
-sensitive it is, how much business impact it carries. Alongside the results
-come confidence signals about them.
+Ask a corpus of meeting transcripts and documents a question in plain English.
+`/search` gives you back the passages that bear on it; `/answer` gives you an
+answer written out of those passages, with the passages it rests on.
 
-It returns passages, not prose. There is no summary at the end, and nothing
-here writes a sentence that was not spoken in a meeting.
+Each result carries where it came from — the document, its date, the turns or
+the heading or the slide the passage spans — and the metadata derived from it
+during ingestion: the topics it was filed under, how time sensitive it is, how
+much business impact it carries. Alongside the results come confidence signals
+about them.
 
 ## Where this sits
 
-The query API is what exists today: one HTTP endpoint over hybrid retrieval —
-BM25 and vector search, fused, then reranked by a cross-encoder — plus the
-ingestion and enrichment that fill the corpus it searches.
+Two HTTP endpoints over one corpus. `/search` is hybrid retrieval — BM25 and
+vector search, fused, then reranked by a cross-encoder. `/answer` is an agent
+over that: it decides whether to search, how many times, and what the passages
+add up to, and it says so when they add up to nothing.
 
-Two things are deliberately not here yet. An agent that reads these passages
-and synthesizes an answer out of them, with citations back to the chunks it
-used, is later work; it will be a caller of this endpoint rather than a
-replacement for it, which is why the response carries the confidence signals
-even though nothing weighs them yet. An interface a person would sit in front
-of is later work too. Until then, `curl` is the interface.
+The agent is a caller of `/search` rather than a replacement for it. It posts
+to that endpoint like any other client, so the two can be asked the same
+question and compared, and `curl` still reaches the ranking on its own.
 
-Search runs entirely on your machine: a SQLite document store on disk, a local
-embedding model, and a local reranking model. **No AWS account, no Bedrock
-endpoint, and no API key are involved in answering a query.** A hosted model
-wrote the transcripts and enriched them, but that work is done and its output
-ships in the database. Building a corpus of your own is the one thing here
-that needs credentials; see [Building a corpus](#building-a-corpus).
+An interface a person would sit in front of is deliberately not here yet.
+Until then, `curl` is the interface.
+
+Everything runs on your machine: a SQLite document store on disk, a local
+embedding model, a local reranking model, and a local chat model served by
+Ollama. **No AWS account, no Bedrock endpoint, and no API key are involved in
+answering a query.** A hosted model wrote the transcripts and enriched them,
+but that work is done and its output ships in the database. Building a corpus
+of your own is the one thing here that needs credentials; see [Building a
+corpus](#building-a-corpus).
 
 ## Quickstart
 
@@ -50,11 +52,19 @@ uv sync --extra models
 # 3. Fetch the embedding and reranking weights (~215 MB, once).
 uv run scripts/fetch_models.py
 
-# 4. Start the service. The committed corpus at data/corpus.db is ready to query.
+# 4. Install Ollama and pull the chat model /answer runs on (~5.3 GB, once).
+brew install ollama && ollama serve &
+ollama pull granite4.1:8b
+
+# 5. Start the service. The committed corpus at data/corpus.db is ready to query.
 uv run scripts/serve.py
 ```
 
-That fourth step needs a document store to search, and the one committed at
+Step 4 is only needed for `/answer`. `/search` ranks without a chat model, and
+the service starts either way — a question asked of `/answer` with no Ollama
+running is the one thing that fails.
+
+That fifth step needs a document store to search, and the one committed at
 `data/corpus.db` is ready as-is — nothing to build, no credentials needed. If
 you want to query a corpus of your own instead, see [Building a
 corpus](#building-a-corpus). Either way, if the database is ever missing or
@@ -144,6 +154,71 @@ A question the corpus has nothing to say about is a `200` with an empty
 Interactive API documentation, generated from the same models that validate
 the request, is at <http://localhost:8000/docs>.
 
+### Ask for an answer instead
+
+```bash
+curl -s localhost:8000/answer \
+  -H 'content-type: application/json' \
+  -d '{"question": "What did we decide about the XT-9 rev B thermal drift?"}'
+```
+
+```jsonc
+{
+  "question": "What did we decide about the XT-9 rev B thermal drift?",
+  "answer": "The team settled on a two-track response ...",
+  "citations": [
+    {
+      "chunk_id": 98,
+      "document_slug": "xt-9-rev-b-thermal-drift-firmware-workaround-feasibility",
+      "source_kind": "transcript",
+      "title": "XT-9 Rev B Thermal Drift - Firmware Workaround Feasibility",
+      "document_date": "2026-03-05",
+      "author": null,
+      "location": "turns 4-13"
+    }
+    // ...the rest of what it read
+  ],
+  "searches": 1,
+  "thread_id": "bafccadb164e4447b21f7a8899f11390"
+}
+```
+
+Behind that is a LangGraph agent holding one tool: `/search`, which it reaches
+over HTTP the same way you just did. Whether it searches at all, and how many
+times, is its decision. A question with two subjects is two searches. A
+question the conversation already answered is none. A question the corpus
+could not hold — the capital of France — is declined without a search, which
+is why `searches` is part of the response rather than an implementation
+detail.
+
+**Not knowing is an answer.** Retrieval always returns its best few passages,
+so the agent's job includes deciding that they do not actually address what
+was asked and saying so, rather than summarizing whatever came back. That
+comes back as a `200` with no citations, like any other answer.
+
+`thread_id` is the conversation. Send it back with the next question and the
+agent answers against everything already said — which is how a follow-up gets
+answered without searching again:
+
+```bash
+curl -s localhost:8000/answer \
+  -H 'content-type: application/json' \
+  -d '{"question": "Who owns that?", "thread_id": "bafccadb164e4447b21f7a8899f11390"}'
+```
+
+Conversations are checkpointed to disk, so a thread survives a restart. That
+goes in a second SQLite file, `data/usage.db`, and not into the corpus. The
+corpus is a committed artifact and stays read-only in normal use; the usage
+database is local, is not committed, and is created the first time you ask a
+question. Deleting it costs you the threads it held and nothing else. Point
+`--usage-db` somewhere else to keep it elsewhere.
+
+The chat model is `granite4.1:8b`, served locally by Ollama, and it is the
+only moving part here that has to be installed separately. It is a small model
+chosen to fit a 16GB machine: expect it to pick its tools less surely than a
+large one, and expect an occasional answer that reads like it was written by a
+small model. Nothing about `/answer` calls a hosted model or costs anything.
+
 ### Check that it is up
 
 ```bash
@@ -184,6 +259,11 @@ plausible-looking empty responses.
 The database ships with this repository, so a fresh clone already has one at
 `data/corpus.db`. Point `--db` elsewhere to use a different store, or build
 your own — see [Building a corpus](#building-a-corpus).
+
+`data/usage.db` needs nothing in place. It is created empty the first time
+`/answer` is asked something, it is not committed and is gitignored, and it is
+the only file the service writes to — running queries never modifies the
+corpus.
 
 ---
 

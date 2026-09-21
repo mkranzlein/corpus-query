@@ -1,11 +1,15 @@
-"""The query API: one endpoint over hybrid retrieval, and a health check.
+"""The query API: retrieval, an agent over it, and a health check.
 
-``POST /search`` takes a natural-language question and returns the transcript
+``POST /search`` takes a natural-language question and returns the corpus
 chunks that bear on it, each carrying its provenance and the metadata
 enrichment derived from it, alongside the confidence signals the retrieval
-pipeline reports. It returns passages, not prose — synthesizing an answer out
-of them is a later exercise's job, and that agent is a caller of this endpoint
-rather than a replacement for it.
+pipeline reports. It returns passages, not prose.
+
+``POST /answer`` takes the same kind of question and returns an answer written
+out of those passages, with the passages it rests on. It is a caller of
+``/search`` rather than a replacement for it: the agent posts to that endpoint
+like any other client, so the two can be asked the same question and compared,
+and the endpoint that ranks is still curlable on its own.
 
 Everything expensive happens once, at startup: the document store is opened,
 the vector index is opened — rebuilt from the embeddings already in the store
@@ -34,14 +38,18 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
 from chromadb.api.models.Collection import Collection
 from fastapi import FastAPI, Request, Response, status
 
+from corpus_query.agent.runtime import OpenAgent, open_agent
 from corpus_query.api.models import (
+    AnswerRequest,
+    AnswerResponse,
+    CitationModel,
     ConfidenceModel,
     DatabaseHealth,
     HealthResponse,
@@ -132,7 +140,9 @@ def open_resources(
 
 
 def create_app(
-    resources: OpenResources | None = None, search: SearchFn | None = None
+    resources: OpenResources | None = None,
+    search: SearchFn | None = None,
+    agent: OpenAgent | None = None,
 ) -> FastAPI:
     """Build the application.
 
@@ -144,20 +154,34 @@ def create_app(
         search: What to run a query with. Defaults to the project's
             retrieval pipeline. Overridable so the HTTP layer can be tested
             without ranking anything.
+        agent: What to answer with, as a context manager over the
+            application's lifetime. Defaults to
+            :func:`corpus_query.agent.runtime.open_agent`, which compiles
+            the graph against the project's local model. Overridable so a
+            test can drive the graph without a model behind it.
 
     Returns:
         The application, ready to be served.
     """
     open_them = resources if resources is not None else open_resources
     run = search if search is not None else run_search
+    open_it = agent if agent is not None else open_agent
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        """Open everything before the first request, and close it after."""
+        """Open everything before the first request, and close it after.
+
+        The agent is opened last and given the application itself, because
+        it reaches retrieval by posting to ``/search`` on it. That is a
+        cycle only in the object graph: the routes are registered by the
+        time the lifespan runs, and no request is served until it yields.
+        """
         opened = open_them()
         app.state.resources = opened
         try:
-            yield
+            async with AsyncExitStack() as stack:
+                app.state.agent = await stack.enter_async_context(open_it(app))
+                yield
         finally:
             opened.close()
 
@@ -192,6 +216,35 @@ def create_app(
             query=payload.query,
             results=[SearchResultModel.from_result(row) for row in result.results],
             confidence=ConfidenceModel.from_confidence(result.confidence),
+        )
+
+    @app.post("/answer", response_model=AnswerResponse)
+    async def answer_endpoint(payload: AnswerRequest, request: Request):
+        """Answer one question out of the corpus.
+
+        The graph was compiled at startup; this awaits it. Whether
+        retrieval runs, and how many times, is the agent's decision rather
+        than this handler's.
+
+        Args:
+            payload: The question, and the conversation to continue if
+                there is one.
+            request: The live request, for the agent opened at startup.
+
+        Returns:
+            The answer, the passages it rests on, and the conversation it
+            belongs to. A question the corpus cannot settle comes back as
+            an answer saying so, not as an error, and so does one the
+            corpus was never going to be asked.
+        """
+        agent = request.app.state.agent
+        result = await agent.answer(payload.question, thread_id=payload.thread_id)
+        return AnswerResponse(
+            question=payload.question,
+            answer=result.answer,
+            citations=[CitationModel(**row) for row in result.citations],
+            searches=result.searches,
+            thread_id=result.thread_id,
         )
 
     @app.get("/health", response_model=HealthResponse)
