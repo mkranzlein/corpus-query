@@ -12,11 +12,16 @@ for. The agent is stubbed out entirely, for the same reason and because
 opening the real one would load a chat model and a thread store neither
 ``/search`` nor ``/health`` touches; it has tests of its own. Nothing here
 loads a model, so none of it needs the models extra.
+
+The browser application is not stubbed. It is committed, so the tests serve
+the same bytes a clone does, which is what makes "the page is served" worth
+asserting at all. Nothing here runs Node.
 """
 
 from __future__ import annotations
 
 import asyncio
+import re
 import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -56,6 +61,32 @@ def request(app, method: str, url: str, **kwargs: Any) -> httpx.Response:
                 transport=transport, base_url="http://api.test"
             ) as client:
                 return await client.request(method, url, **kwargs)
+
+    return asyncio.run(run())
+
+
+def session_requests(app, calls: list[tuple[str, str]]) -> list[httpx.Response]:
+    """Make several requests against one application, within one lifespan.
+
+    :func:`request` opens and closes the application per call, which closes
+    the store connection with it, so a test that wants to see two endpoints
+    answer the same running service asks here instead.
+
+    Args:
+        app: The application to drive.
+        calls: The method and path of each request, in order.
+
+    Returns:
+        One response per call, in the same order.
+    """
+
+    async def run() -> list[httpx.Response]:
+        async with app.router.lifespan_context(app):
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://api.test"
+            ) as client:
+                return [await client.request(method, url) for method, url in calls]
 
     return asyncio.run(run())
 
@@ -401,3 +432,63 @@ def test_open_resources_opens_the_store_and_the_index(tmp_path, ingest):
         assert resources.collection.count() == 0
     finally:
         resources.close()
+
+
+def test_the_frontend_is_served_at_the_root(app_factory):
+    """A browser asking for the site gets the built application."""
+    app, _ = app_factory()
+
+    response = request(app, "GET", "/")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert 'id="root"' in response.text
+
+
+def test_the_bundled_assets_are_served(app_factory):
+    """The script the page asks for is there, at the path the page names."""
+    app, _ = app_factory()
+    [script] = re.findall(r'src="\./(assets/[^"]+\.js)"', request(app, "GET", "/").text)
+
+    response = request(app, "GET", f"/{script}")
+
+    assert response.status_code == 200
+    assert "javascript" in response.headers["content-type"]
+
+
+def test_serving_the_page_does_not_shadow_the_endpoints(app_factory):
+    """The mount is at ``/`` and still comes second to everything above it."""
+    app, _ = app_factory()
+
+    health, schema, page = session_requests(
+        app, [("GET", "/health"), ("GET", "/openapi.json"), ("GET", "/")]
+    )
+
+    assert (health.status_code, schema.status_code) == (200, 200)
+    assert health.json()["status"] == "ok"
+    assert "/search" in schema.json()["paths"]
+    assert page.headers["content-type"].startswith("text/html")
+
+
+def test_an_unknown_path_is_still_a_404(app_factory):
+    """Serving a page at the root does not turn every path into that page."""
+    app, _ = app_factory()
+
+    assert request(app, "GET", "/nowhere").status_code == 404
+
+
+def test_a_missing_bundle_does_not_stop_the_api(tmp_path, store):
+    """Without a built page the endpoints work and the root says why."""
+    resources = Resources(connection=store, collection=FakeCollection())
+    app = create_app(
+        resources=lambda: resources,
+        search=StubSearch(SearchResult(results=[], confidence=a_confidence())),
+        agent=no_agent,
+        static_dir=tmp_path / "never-built",
+    )
+
+    root, health = session_requests(app, [("GET", "/"), ("GET", "/health")])
+
+    assert root.status_code == 503
+    assert "npm --prefix frontend run build" in root.text
+    assert health.status_code == 200

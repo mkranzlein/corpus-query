@@ -1,3 +1,10 @@
+# The built frontend under corpus_query/api/static/ is committed on purpose —
+# see the README — but it is generated, minified, and not anyone's to edit.
+# Whitespace fixers and linters have nothing useful to say about it, and one
+# of them rewriting a byte of a bundle would make the commit disagree with
+# what Vite produced.
+exclude: ^corpus_query/api/static/
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.6
@@ -26,6 +33,27 @@ repos:
       - id: check-added-large-files
       - id: no-commit-to-branch
         args: [--branch, main]
+
+  # The frontend's own checks. Both need `npm --prefix frontend ci` to have
+  # been run, so both are scoped to changes under frontend/ — someone who
+  # only ever touches Python is never asked to install Node. Neither one is
+  # skipped in CI: the lint job installs the frontend's dependencies so that
+  # a lint failure or a type error fails the build there too.
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: npm --prefix frontend run lint
+        language: system
+        files: ^frontend/
+        pass_filenames: false
+
+      - id: tsc
+        name: tsc
+        entry: npm --prefix frontend run typecheck
+        language: system
+        files: ^frontend/
+        pass_filenames: false
 
   # Kept last so the fast checks report first. Skipped in CI's lint job, which
   # has no uv; the test job there runs pytest directly.
