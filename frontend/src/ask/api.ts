@@ -19,6 +19,26 @@ export interface Citation {
   location: string;
 }
 
+/** Someone worth asking, and the passages that named them. */
+export interface RoutingCandidate {
+  /** The person, as the roster spells them. */
+  name: string;
+  role: string;
+  department: string;
+  /** How many of the retrieved passages this person wrote or attended. */
+  passages: number;
+  /** Those passages, best first, cited the way an answer's are. */
+  evidence: Citation[];
+}
+
+/** Who to ask when the record did not settle the question. */
+export interface Routing {
+  /** People worth asking, best first. Never empty when sent. */
+  candidates: RoutingCandidate[];
+  /** The question restated to stand on its own, for the user to edit. */
+  question: string;
+}
+
 /** What `POST /answer` returns, and what its `answer` event carries. */
 export interface AnswerBody {
   question: string;
@@ -26,8 +46,8 @@ export interface AnswerBody {
   citations: Citation[];
   searches: number;
   abstained: boolean;
-  /** Who to ask, on an abstention. Shown by the routing view, not here. */
-  routing: unknown;
+  /** Who to ask, on an abstention that found someone to ask; else null. */
+  routing: Routing | null;
   thread_id: string;
   answer_id: string;
   /** A correction the turn recorded. Shown by the feedback view, not here. */

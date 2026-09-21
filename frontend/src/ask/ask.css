@@ -271,6 +271,91 @@ main.ask {
   white-space: pre-wrap;
 }
 
+/* Who might know, on an abstention, and the question to put to them. */
+
+.ask .suggestion {
+  margin: 1.25rem 0 0;
+}
+
+.ask .suggestion h3 {
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.35rem;
+  text-transform: uppercase;
+}
+
+.ask .suggestion > .quiet {
+  font-size: 0.9rem;
+  margin: 0 0 0.75rem;
+}
+
+.ask .candidates {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding-left: 1.4rem;
+}
+
+.ask .candidate .who {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  margin: 0;
+}
+
+.ask .candidate .role {
+  color: var(--muted);
+}
+
+.ask .candidate .why {
+  margin: 0.2rem 0 0.5rem;
+}
+
+.ask .evidence {
+  display: grid;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ask .source .relation {
+  color: var(--settled);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.ask .draft {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 1.25rem;
+}
+
+.ask .draft label {
+  font-weight: 600;
+}
+
+.ask .draft > .quiet {
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.ask .draft .actions {
+  align-items: center;
+}
+
+.ask .draft .copied {
+  color: var(--settled);
+  margin: 0;
+}
+
+.ask .copy-failed {
+  border-left: 4px solid var(--failed);
+  margin: 0;
+  padding-left: 0.75rem;
+}
+
 /* The question box, after the conversation, where the next one goes. */
 
 .ask .question {
