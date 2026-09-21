@@ -45,13 +45,15 @@ needs credentials; see [Building a corpus](#building-a-corpus).
 
 ## Quickstart
 
-Starting from nothing, on macOS:
+Starting from nothing, on macOS or Ubuntu. [docs/setup.md](docs/setup.md)
+has every step for each of them: installing uv and Ollama, answering from
+Bedrock instead, and a [teardown](docs/setup.md#teardown) that stops
+everything and removes what was downloaded and written, saying which of it is
+worth keeping.
 
 ```bash
-# 1. Install uv, which manages the Python version and the dependencies.
-brew install uv
-# On Linux or Windows, use the installer instead:
-# https://docs.astral.sh/uv/getting-started/installation/
+# 1. Install uv, and Ollama for the local model: see docs/setup.md for the
+#    commands on macOS and on Ubuntu.
 
 # 2. Install the project, with the model stack.
 git clone https://github.com/mkranzlein/corpus-query.git
@@ -61,13 +63,13 @@ uv sync --extra models
 # 3. Fetch the embedding and reranking weights (~215 MB, once).
 uv run scripts/fetch_models.py
 
-# 4. Install Ollama and pull the chat model /answer runs on (~5.3 GB, once).
-brew install ollama && ollama serve &
+# 4. Pull the chat model /answer runs on (~5.3 GB, once). Ollama must be running.
 ollama pull granite4.1:8b
 
 # 5. Start the service. The committed corpus at data/corpus.db is ready to query.
 uv run scripts/serve.py
 # The page is at http://127.0.0.1:8000, the endpoints are below it.
+# Ctrl+C stops it.
 ```
 
 Note what is not in that list: Node. The browser application is built ahead of
@@ -75,19 +77,17 @@ time and the build is committed, so running the whole system takes Python and
 nothing else. See [The committed
 frontend](#the-committed-frontend).
 
-Step 4 is only needed for `/answer`. `/search` ranks without a chat model, and
-the service starts either way — a question asked of `/answer` with no Ollama
-running is the one thing that fails.
+Ollama and step 4 are only needed for `/answer`. `/search` ranks without a
+chat model, and the service starts either way — a question asked of `/answer`
+with no Ollama running is the one thing that fails.
 
-It is also only needed for the local model, which is the default. To answer
-from the hosted model instead, skip step 4, put a Bedrock key and a region in
-`.env`, and name the backend when you start the service:
+They are also only needed for the local model, which is the default. To
+answer from the hosted model instead, skip them, put a Bedrock key and a
+region in `.env` — [`.env.example`](.env.example) is a template with every
+setting that file takes — and name the backend when you start the service:
 
 ```bash
-cat >> .env <<'EOF'
-AWS_BEARER_TOKEN_BEDROCK=your-bedrock-api-key
-AWS_REGION=us-east-1
-EOF
+cp .env.example .env   # then fill in AWS_BEARER_TOKEN_BEDROCK and AWS_REGION
 CORPUS_QUERY_MODEL_BACKEND=bedrock uv run scripts/serve.py
 ```
 
@@ -428,10 +428,10 @@ the response body's reader rather than with `EventSource`, which only makes
 | costs      | nothing, beyond the laptop's battery  | a billed call per model turn, and a turn that searches makes several |
 
 The local model is the only moving part here that has to be installed
-separately:
+separately. [docs/setup.md](docs/setup.md#1-install-the-tools) installs
+Ollama on macOS and on Ubuntu; with it running, pull the model:
 
 ```bash
-brew install ollama && ollama serve &
 ollama pull granite4.1:8b      # ~5.3 GB, once
 ```
 
