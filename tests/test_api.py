@@ -37,6 +37,7 @@ from corpus_query.api.app import (
     open_resources,
 )
 from corpus_query.retrieval.search import Confidence, Result, SearchResult
+from corpus_query.store import capture
 from corpus_query.store.db import connect
 from corpus_query.store.kinds import TRANSCRIPT
 
@@ -89,6 +90,19 @@ def session_requests(app, calls: list[tuple[str, str]]) -> list[httpx.Response]:
                 return [await client.request(method, url) for method, url in calls]
 
     return asyncio.run(run())
+
+
+def captured_records():
+    """Open the capture store the application records into.
+
+    The default usage database is redirected to ``tmp_path`` for every test,
+    so this opens a throwaway file rather than the project's own. The
+    application closes it when its lifespan ends.
+
+    Returns:
+        An open connection to the captured records.
+    """
+    return capture.connect()
 
 
 @asynccontextmanager
@@ -207,7 +221,9 @@ def app_factory(store):
             )
         )
         resources = Resources(
-            connection=store, collection=collection or FakeCollection()
+            connection=store,
+            collection=collection or FakeCollection(),
+            captured=captured_records(),
         )
         app = create_app(resources=lambda: resources, search=stub, agent=no_agent)
         return app, stub
@@ -501,7 +517,9 @@ def test_an_unknown_path_is_still_a_404(app_factory):
 
 def test_a_missing_bundle_does_not_stop_the_api(tmp_path, store):
     """Without a built page the endpoints work and the root says why."""
-    resources = Resources(connection=store, collection=FakeCollection())
+    resources = Resources(
+        connection=store, collection=FakeCollection(), captured=captured_records()
+    )
     app = create_app(
         resources=lambda: resources,
         search=StubSearch(SearchResult(results=[], confidence=a_confidence())),

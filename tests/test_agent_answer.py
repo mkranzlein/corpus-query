@@ -39,7 +39,14 @@ from corpus_query.agent.retrieval import (
 from corpus_query.api.app import Resources, create_app
 from corpus_query.retrieval.search import Confidence, SearchResult
 from corpus_query.store.db import connect
-from test_api import FakeCollection, StubSearch, a_confidence, a_result, request
+from test_api import (
+    FakeCollection,
+    StubSearch,
+    a_confidence,
+    a_result,
+    captured_records,
+    request,
+)
 
 
 @dataclass
@@ -160,7 +167,9 @@ def answering_app(model: ScriptedModel, search: StubSearch):
 
     return create_app(
         resources=lambda: Resources(
-            connection=connect(":memory:"), collection=FakeCollection()
+            connection=connect(":memory:"),
+            collection=FakeCollection(),
+            captured=captured_records(),
         ),
         search=search,
         agent=open_scripted,
@@ -409,7 +418,9 @@ def test_the_search_ceiling_makes_the_model_answer() -> None:
 
     app = create_app(
         resources=lambda: Resources(
-            connection=connect(":memory:"), collection=FakeCollection()
+            connection=connect(":memory:"),
+            collection=FakeCollection(),
+            captured=captured_records(),
         ),
         search=search,
         agent=open_scripted,

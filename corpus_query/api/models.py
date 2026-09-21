@@ -22,6 +22,8 @@ two.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 
 from corpus_query.retrieval.search import DEFAULT_RESULTS, Confidence, Result
@@ -29,6 +31,25 @@ from corpus_query.retrieval.search import DEFAULT_RESULTS, Confidence, Result
 #: The most results one request may ask for. The cross-encoder scores every
 #: fused candidate, so an unbounded limit is an unbounded request.
 MAX_RESULTS = 50
+
+
+def _required(value: str, field: str) -> str:
+    """Trim a submitted string and reject one that says nothing.
+
+    Args:
+        value: What was submitted.
+        field: The field's name, for the message.
+
+    Returns:
+        The value, with surrounding whitespace removed.
+
+    Raises:
+        ValueError: If nothing but whitespace was submitted.
+    """
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError(f"{field} must not be empty")
+    return stripped
 
 
 class SearchRequest(BaseModel):
@@ -347,4 +368,164 @@ class AnswerResponse(BaseModel):
     thread_id: str = Field(
         description="The conversation this answer belongs to. Send it back "
         "to ask a follow-up against the same history."
+    )
+    answer_id: str = Field(
+        description="The id of the row recorded for this question. Send it "
+        "back with a correction or a piece of feedback to say which answer "
+        "is being written about."
+    )
+
+
+class CorrectionRequest(BaseModel):
+    """What a user says one answer got wrong, and what is true instead."""
+
+    answer_id: str = Field(
+        description="The answer being corrected, as ``POST /answer`` returned it."
+    )
+    what_was_wrong: str = Field(
+        description="What the answer claimed that it should not have.",
+        examples=["It said the firmware freeze is March 12th."],
+    )
+    what_is_right: str = Field(
+        description="What is true instead. Both halves are required: a "
+        "correction that only says an answer was wrong is feedback.",
+        examples=["The freeze moved to March 19th."],
+    )
+
+    @field_validator("answer_id", "what_was_wrong", "what_is_right")
+    @classmethod
+    def _reject_empty(cls, value: str, info) -> str:
+        """Reject a field that is empty or only whitespace.
+
+        Args:
+            value: The submitted text.
+            info: The field being validated, for the message.
+
+        Returns:
+            The text, with surrounding whitespace removed.
+
+        Raises:
+            ValueError: If nothing but whitespace was submitted.
+        """
+        return _required(value, info.field_name)
+
+
+class FeedbackRequest(BaseModel):
+    """A verdict on one answer, with an optional note."""
+
+    answer_id: str = Field(
+        description="The answer being judged, as ``POST /answer`` returned it."
+    )
+    verdict: Literal["up", "down"] = Field(
+        description='"up" or "down". A bare "down" is a verdict rather than '
+        "a correction: it says an answer was bad and carries nothing a "
+        "reader can act on."
+    )
+    note: str | None = Field(
+        default=None,
+        description="Anything the user wanted to add. Optional, and null "
+        "when there was nothing.",
+    )
+
+    @field_validator("answer_id")
+    @classmethod
+    def _reject_empty(cls, value: str) -> str:
+        """Reject an answer id that is empty or only whitespace.
+
+        Args:
+            value: The submitted id.
+
+        Returns:
+            The id, with surrounding whitespace removed.
+
+        Raises:
+            ValueError: If nothing but whitespace was submitted.
+        """
+        return _required(value, "answer_id")
+
+    @field_validator("note")
+    @classmethod
+    def _blank_is_no_note(cls, value: str | None) -> str | None:
+        """Treat a whitespace-only note as no note at all.
+
+        Args:
+            value: The submitted note, or None.
+
+        Returns:
+            The trimmed note, or None when there was nothing in it.
+        """
+        if value is None:
+            return None
+        return value.strip() or None
+
+
+class RecordModel(BaseModel):
+    """What every captured record carries.
+
+    The question and the answer come along on each row rather than being
+    left behind an id, so a reader working through gaps or corrections can
+    read one without a second call.
+    """
+
+    id: int = Field(description="Row id of this record.")
+    answer_id: str = Field(description="The answer it was recorded against.")
+    created_at: str = Field(description="When it was recorded, ISO 8601, UTC.")
+    thread_id: str = Field(
+        description="The conversation the answer belongs to, for reading the "
+        "exchange around it."
+    )
+    question: str = Field(description="The question as it was asked.")
+    answer: str = Field(description="The answer that was given.")
+    abstained: bool = Field(
+        description="Whether the record failed to settle that question."
+    )
+
+
+class GapModel(RecordModel):
+    """A question the record did not settle, detected rather than reported."""
+
+    routing: RoutingModel | None = Field(
+        default=None,
+        description="Who to ask, as it was suggested at the time, or null "
+        "when the passages named nobody on the roster.",
+    )
+
+
+class CorrectionModel(RecordModel):
+    """A user-supplied correction to one answer."""
+
+    what_was_wrong: str = Field(
+        description="What the answer claimed that it should not have."
+    )
+    what_is_right: str = Field(description="What is true instead.")
+
+
+class FeedbackModel(RecordModel):
+    """A verdict on one answer."""
+
+    verdict: str = Field(description='"up" or "down".')
+    note: str | None = Field(description="What the user added, or null.")
+
+
+class GapsResponse(BaseModel):
+    """What ``GET /gaps`` returns."""
+
+    gaps: list[GapModel] = Field(
+        description="Gaps, most recent first. Empty when none were recorded."
+    )
+
+
+class CorrectionsResponse(BaseModel):
+    """What ``GET /corrections`` returns."""
+
+    corrections: list[CorrectionModel] = Field(
+        description="Corrections, most recent first. Empty when none were recorded."
+    )
+
+
+class FeedbackResponse(BaseModel):
+    """What ``GET /feedback`` returns."""
+
+    feedback: list[FeedbackModel] = Field(
+        description="Verdicts, most recent first. Empty when none were recorded."
     )

@@ -40,17 +40,33 @@ def corpus(tmp_path, ingest):
 
 
 @pytest.fixture
-def no_model_loading(monkeypatch):
-    """Open resources for real, but without loading the models."""
-    opened: list[Resources] = []
+def no_model_loading(monkeypatch, tmp_path):
+    """Open resources for real, but without loading the models.
 
-    def open_without_models(database, index_dir, warm_models=True):
-        resources = open_resources(database, index_dir, warm_models=False)
+    The usage database the script resolved is recorded rather than used.
+    Run bare, that is the project's own ``data/usage.db``, and a test run
+    has no business creating it — so what is recorded is asserted on and
+    what is opened is a file under ``tmp_path``.
+
+    Yields:
+        The usage database path the script asked for, one entry per call.
+    """
+    opened: list[Resources] = []
+    asked: list[Any] = []
+
+    def open_without_models(database, index_dir, warm_models=True, usage_database=None):
+        asked.append(usage_database)
+        resources = open_resources(
+            database,
+            index_dir,
+            warm_models=False,
+            usage_database=tmp_path / "usage.db",
+        )
         opened.append(resources)
         return resources
 
     monkeypatch.setattr("scripts.serve.open_resources", open_without_models)
-    yield
+    yield asked
     for resources in opened:
         resources.close()
 
@@ -117,6 +133,32 @@ def test_an_empty_store_is_reported(tmp_path, capsys):
     assert code == 1
     assert server.calls == []
     assert "no chunks" in capsys.readouterr().err
+
+
+def test_the_usage_database_flag_reaches_the_records(
+    corpus, no_model_loading, tmp_path
+):
+    """Records go where ``--usage-db`` says, not beside the corpus.
+
+    The flag already moved the conversations. It moves the gaps,
+    corrections, and feedback with them, because they are the same file and
+    the point of that file is that it is the one thing serving writes to.
+    """
+    elsewhere = tmp_path / "somewhere" / "usage.db"
+
+    main(
+        [
+            "--db",
+            str(corpus),
+            "--index",
+            str(tmp_path / "chroma"),
+            "--usage-db",
+            str(elsewhere),
+        ],
+        run=FakeServer(),
+    )
+
+    assert no_model_loading == [elsewhere]
 
 
 def test_parse_args_defaults_to_the_projects_paths():
