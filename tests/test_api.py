@@ -13,6 +13,11 @@ opening the real one would load a chat model and a thread store neither
 ``/search`` nor ``/health`` touches; it has tests of its own. Nothing here
 loads a model, so none of it needs the models extra.
 
+The capture endpoints are not stubbed either: they write to a real SQLite
+file under ``tmp_path`` and read back out of it, because what is worth
+asserting about them is mostly what the file does — that an orphan is refused
+and that a row comes back readable without a second call.
+
 The browser application is not stubbed. It is committed, so the tests serve
 the same bytes a clone does, which is what makes "the page is served" worth
 asserting at all. Nothing here runs Node.
@@ -532,3 +537,278 @@ def test_a_missing_bundle_does_not_stop_the_api(tmp_path, store):
     assert root.status_code == 503
     assert "npm --prefix frontend run build" in root.text
     assert health.status_code == 200
+
+
+@pytest.fixture
+def records_app(tmp_path):
+    """Return an app recording into a usage database, and where that is.
+
+    The application is given a fresh document store per startup, because
+    :func:`request` runs one request inside its own lifespan and closes
+    everything after. The captured records are a file rather than memory,
+    so a write made by one request is there for the next one to read — and
+    for the test to read directly.
+
+    Returns:
+        The application, and the path its records go to.
+    """
+    path = tmp_path / "records.db"
+
+    def open_them() -> Resources:
+        return Resources(
+            connection=connect(":memory:"),
+            collection=FakeCollection(),
+            captured=capture.connect(path),
+        )
+
+    app = create_app(
+        resources=open_them,
+        search=StubSearch(SearchResult(results=[], confidence=a_confidence())),
+        agent=no_agent,
+    )
+    return app, path
+
+
+def an_answer(path, **overrides: Any) -> str:
+    """Record one answer in the file the application writes to.
+
+    Args:
+        path: The usage database the application was pointed at.
+        **overrides: Fields of the answer row to set.
+
+    Returns:
+        The new answer's id.
+    """
+    connection = capture.connect(path)
+    try:
+        return capture.record_answer(
+            connection,
+            **{
+                "query": "Where are the rev B boards?",
+                "answer": "Marcus put them two weeks out.",
+                "citations": [],
+                "thread_id": "thread-1",
+                "abstained": False,
+            }
+            | overrides,
+        )
+    finally:
+        connection.close()
+
+
+def test_a_correction_is_recorded_against_an_answer(records_app):
+    """Both halves come back on the created record, with what they are about."""
+    app, path = records_app
+    answer_id = an_answer(path)
+
+    response = request(
+        app,
+        "POST",
+        "/corrections",
+        json={
+            "answer_id": answer_id,
+            "what_was_wrong": "It said the freeze is March 12th.",
+            "what_is_right": "The freeze moved to March 19th.",
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["answer_id"] == answer_id
+    assert body["what_was_wrong"] == "It said the freeze is March 12th."
+    assert body["what_is_right"] == "The freeze moved to March 19th."
+    assert body["question"] == "Where are the rev B boards?"
+    assert body["answer"] == "Marcus put them two weeks out."
+    assert body["created_at"]
+
+
+@pytest.mark.parametrize("verdict", ["up", "down"])
+def test_feedback_records_a_verdict(records_app, verdict):
+    """A thumbs up or down is recorded, with the note when there is one."""
+    app, path = records_app
+    answer_id = an_answer(path)
+
+    response = request(
+        app,
+        "POST",
+        "/feedback",
+        json={
+            "answer_id": answer_id,
+            "verdict": verdict,
+            "note": "cited the wrong meeting",
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["verdict"] == verdict
+    assert body["note"] == "cited the wrong meeting"
+
+
+def test_feedback_does_not_need_a_note(records_app):
+    """A bare verdict is a complete record, and it is not a correction."""
+    app, path = records_app
+    answer_id = an_answer(path)
+
+    body = request(
+        app, "POST", "/feedback", json={"answer_id": answer_id, "verdict": "down"}
+    ).json()
+
+    assert body["note"] is None
+
+
+@pytest.mark.parametrize(
+    "url_and_payload",
+    [
+        pytest.param(
+            ("/corrections", {"what_was_wrong": "the date", "what_is_right": "March"}),
+            id="correction",
+        ),
+        pytest.param(("/feedback", {"verdict": "up"}), id="feedback"),
+    ],
+)
+def test_a_write_against_an_unknown_answer_is_a_404(records_app, url_and_payload):
+    """An orphan is refused, and the refusal says what the id should be."""
+    app, _ = records_app
+    url, payload = url_and_payload
+
+    response = request(app, "POST", url, json={"answer_id": "nope"} | payload)
+
+    assert response.status_code == 404
+    assert "nope" in response.json()["detail"]
+
+
+def test_a_verdict_that_is_neither_up_nor_down_is_a_422(records_app):
+    """The two verdicts are the contract, and the schema says so."""
+    app, path = records_app
+    answer_id = an_answer(path)
+
+    response = request(
+        app, "POST", "/feedback", json={"answer_id": answer_id, "verdict": "sideways"}
+    )
+
+    assert response.status_code == 422
+    assert "verdict" in str(response.json()["detail"])
+
+
+@pytest.mark.parametrize("field", ["what_was_wrong", "what_is_right"])
+def test_a_correction_needs_both_halves(records_app, field):
+    """Half a correction carries nothing to act on, so it is refused."""
+    app, path = records_app
+    answer_id = an_answer(path)
+    payload = {
+        "answer_id": answer_id,
+        "what_was_wrong": "the date",
+        "what_is_right": "March 19th",
+    } | {field: "   "}
+
+    response = request(app, "POST", "/corrections", json=payload)
+
+    assert response.status_code == 422
+    assert field in str(response.json()["detail"])
+
+
+def test_the_reads_come_back_most_recent_first(records_app):
+    """A reader catching up gets the newest first, not the oldest."""
+    app, path = records_app
+    answer_id = an_answer(path)
+    for note in ("first", "second"):
+        request(
+            app,
+            "POST",
+            "/feedback",
+            json={"answer_id": answer_id, "verdict": "down", "note": note},
+        )
+
+    body = request(app, "GET", "/feedback").json()
+
+    assert [row["note"] for row in body["feedback"]] == ["second", "first"]
+
+
+def test_a_read_carries_enough_to_be_read_without_a_second_call(records_app):
+    """Each row names the question and the answer it was recorded against."""
+    app, path = records_app
+    answer_id = an_answer(path, query="What is the tolerance?", abstained=True)
+    connection = capture.connect(path)
+    try:
+        capture.record_gap(connection, answer_id)
+    finally:
+        connection.close()
+    request(
+        app,
+        "POST",
+        "/corrections",
+        json={
+            "answer_id": answer_id,
+            "what_was_wrong": "the tolerance",
+            "what_is_right": "it is 0.2mm",
+        },
+    )
+
+    gaps = request(app, "GET", "/gaps").json()["gaps"]
+    corrections = request(app, "GET", "/corrections").json()["corrections"]
+
+    for [row] in (gaps, corrections):
+        assert row["question"] == "What is the tolerance?"
+        assert row["answer"] == "Marcus put them two weeks out."
+        assert row["thread_id"] == "thread-1"
+        assert row["abstained"] is True
+
+
+def test_reading_before_anything_was_recorded_is_an_empty_list(records_app):
+    """Nothing recorded is an answer, not a missing resource."""
+    app, _ = records_app
+
+    for url, key in (
+        ("/gaps", "gaps"),
+        ("/corrections", "corrections"),
+        ("/feedback", "feedback"),
+    ):
+        response = request(app, "GET", url)
+        assert response.status_code == 200
+        assert response.json()[key] == []
+
+
+def test_a_read_stops_at_the_limit_it_was_given(records_app):
+    """These reads are for catching up, not for exporting the table."""
+    app, path = records_app
+    answer_id = an_answer(path)
+    for note in ("first", "second", "third"):
+        request(
+            app,
+            "POST",
+            "/feedback",
+            json={"answer_id": answer_id, "verdict": "up", "note": note},
+        )
+
+    body = request(app, "GET", "/feedback?limit=2").json()
+
+    assert [row["note"] for row in body["feedback"]] == ["third", "second"]
+
+
+def test_an_unbounded_read_is_refused(records_app):
+    """An unbounded limit is a table export behind a page of prose."""
+    app, _ = records_app
+
+    assert request(app, "GET", "/gaps?limit=100000").status_code == 422
+
+
+def test_what_is_recorded_goes_nowhere_near_the_corpus(records_app):
+    """The records live in their own file, which holds no corpus tables."""
+    app, path = records_app
+    answer_id = an_answer(path)
+
+    request(app, "POST", "/feedback", json={"answer_id": answer_id, "verdict": "up"})
+
+    connection = capture.connect(path)
+    try:
+        tables = {
+            row["name"]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+    finally:
+        connection.close()
+    assert {"answers", "gaps", "corrections", "feedback"} <= tables
+    assert "chunks" not in tables
