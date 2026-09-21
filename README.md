@@ -34,13 +34,14 @@ it is a shell: it loads, and it reports what the service is running on. The
 question box and the answer view are being built on top of it. Until they
 land, `curl` is still the way to ask the corpus anything.
 
-Everything runs on your machine: a SQLite document store on disk, a local
-embedding model, a local reranking model, and a local chat model served by
-Ollama. **No AWS account, no Bedrock endpoint, and no API key are involved in
-answering a query.** A hosted model wrote the transcripts and enriched them,
-but that work is done and its output ships in the database. Building a corpus
-of your own is the one thing here that needs credentials; see [Building a
-corpus](#building-a-corpus).
+Everything runs on your machine by default: a SQLite document store on disk, a
+local embedding model, a local reranking model, and a local chat model served
+by Ollama. **Searching needs no AWS account, no Bedrock endpoint, and no API
+key**, and neither does answering unless you ask for the hosted model by
+name — see [Which model answers](#which-model-answers). A hosted model wrote
+the transcripts and enriched them, but that work is done and its output ships
+in the database. Building a corpus of your own is the one thing here that
+needs credentials; see [Building a corpus](#building-a-corpus).
 
 ## Quickstart
 
@@ -77,6 +78,22 @@ frontend](#the-committed-frontend).
 Step 4 is only needed for `/answer`. `/search` ranks without a chat model, and
 the service starts either way — a question asked of `/answer` with no Ollama
 running is the one thing that fails.
+
+It is also only needed for the local model, which is the default. To answer
+from the hosted model instead, skip step 4, put a Bedrock key and a region in
+`.env`, and name the backend when you start the service:
+
+```bash
+cat >> .env <<'EOF'
+AWS_BEARER_TOKEN_BEDROCK=your-bedrock-api-key
+AWS_REGION=us-east-1
+EOF
+CORPUS_QUERY_MODEL_BACKEND=bedrock uv run scripts/serve.py
+```
+
+That path makes a real, billed call for every question. [Which model
+answers](#which-model-answers) has what each mode costs and what happens when
+the one you chose is not reachable.
 
 That fifth step needs a document store to search, and the one committed at
 `data/corpus.db` is ready as-is — nothing to build, no credentials needed. If
@@ -297,11 +314,112 @@ question. The gaps, corrections, and feedback below go in that same file.
 Deleting it costs you the threads and the records it held and nothing else.
 Point `--usage-db` somewhere else to keep it elsewhere.
 
-The chat model is `granite4.1:8b`, served locally by Ollama, and it is the
-only moving part here that has to be installed separately. It is a small model
-chosen to fit a 16GB machine: expect it to pick its tools less surely than a
-large one, and expect an occasional answer that reads like it was written by a
-small model. Nothing about `/answer` calls a hosted model or costs anything.
+### Which model answers
+
+`/answer` runs on one of two models, and which one is yours to choose:
+
+|            | local (the default)                   | hosted                                                    |
+| ---------- | ------------------------------------- | --------------------------------------------------------- |
+| model      | `granite4.1:8b`                       | Claude Sonnet 4.6, as `us.anthropic.claude-sonnet-4-6`     |
+| served by  | Ollama, on this machine               | Bedrock                                                    |
+| needs      | Ollama running, that model pulled     | `AWS_BEARER_TOKEN_BEDROCK` and `AWS_REGION`                |
+| costs      | nothing, beyond the laptop's battery  | a billed call per model turn, and a turn that searches makes several |
+
+The local model is the only moving part here that has to be installed
+separately:
+
+```bash
+brew install ollama && ollama serve &
+ollama pull granite4.1:8b      # ~5.3 GB, once
+```
+
+It is a small model chosen to fit a 16GB machine, and that shows in the way it
+works rather than only in the prose: expect it to pick its tools less surely
+than a large hosted one — a question it should have searched for, answered
+from memory, or a second search it did not need — and expect an occasional
+answer that reads like it was written by a small model. Nothing tunes that
+away.
+
+The hosted model needs a Bedrock API key and a region, read from the process
+environment or from `.env` — the same file
+[`scripts/bedrock_smoke_test.py`](scripts/bedrock_smoke_test.py) and the
+corpus scripts read theirs from, and not `.env.admin`, which holds
+provisioning settings instead:
+
+```bash
+cat >> .env <<'EOF'
+AWS_BEARER_TOKEN_BEDROCK=your-bedrock-api-key
+AWS_REGION=us-east-1
+EOF
+```
+
+[docs/provisioning.md](docs/provisioning.md) is where a key comes from and how
+the spend is bounded.
+
+#### Choosing one
+
+```bash
+uv run scripts/serve.py                                       # local
+CORPUS_QUERY_MODEL_BACKEND=bedrock uv run scripts/serve.py    # hosted
+```
+
+`CORPUS_QUERY_MODEL_BACKEND` takes `ollama` or `bedrock`, is read from the
+environment or from `.env`, and is the only thing that decides. **Having a
+Bedrock key does not select Bedrock.** A key sits in `.env` because the corpus
+scripts need one, so if both are configured — a key in the file and Ollama
+running — the local model answers, and if neither is, the local model is still
+what the service reaches for. Whichever is chosen is built before the socket
+opens, and the service says which on the way up:
+
+```
+/answer is answering from granite4.1:8b on ollama.
+```
+
+A value that is neither backend is refused by name rather than guessed at,
+because the two differ in what they cost:
+
+```
+error: 'bedrok' is not a backend this project has. Set CORPUS_QUERY_MODEL_BACKEND to 'ollama' or 'bedrock', or leave it unset to answer from the local model.
+```
+
+So is asking for the hosted model without the settings it needs. Both are a
+message and a non-zero exit before anything is served:
+
+```
+error: AWS_BEARER_TOKEN_BEDROCK is not set, and answering from bedrock needs it. Add it to .env or export it, or unset CORPUS_QUERY_MODEL_BACKEND to answer from the local model instead.
+```
+
+What is *not* checked at startup is whether the model can be reached. Building
+either client opens no connection, so a service whose Ollama is not running,
+or whose key is no longer good, starts normally and fails on the first
+question: `/answer` comes back `500 Internal Server Error`, and the
+traceback in the service's log names the cause — `httpx.ConnectError` for an
+Ollama that is not listening, the AWS error for a key Bedrock rejects. The
+service keeps running, `/search` keeps working, and `/health` still reports
+`ok`, since what it checks is the store and the index rather than the model.
+
+#### How the two fit together
+
+The swap is not a base URL or a model name. The two models do not agree on the
+wire about how a tool call is asked for or returned, so each arrives through
+its own LangChain chat model class — `ChatOllama` and `ChatBedrockConverse` —
+and [`corpus_query/agent/model.py`](corpus_query/agent/model.py) is the one
+factory that decides which. The graph's nodes name neither: they are handed a
+chat model and bind the search tool to it with `bind_tools`, so the tool
+schema is written once and translated by whichever class received it. Adding a
+third backend is a change to that module and to nothing else.
+
+One difference is deliberate rather than incidental: the hosted model is asked
+for non-streamed replies. LangChain's Bedrock Converse model has had trouble
+streaming tool calls against cross-region inference profiles, which is exactly
+what `us.anthropic.claude-sonnet-4-6` is, and the agent awaits every reply
+whole before the graph moves on — so there is nothing to give up by turning
+streaming off, and a documented failure mode to avoid.
+
+The corpus scripts are not part of this. Generating and enriching a corpus
+calls Bedrock directly through the `anthropic` SDK, they are preprocessing you
+run by hand rather than anything a question reaches, and they have no local
+path — see [Building a corpus](#building-a-corpus).
 
 ### Telling it when it is wrong
 
