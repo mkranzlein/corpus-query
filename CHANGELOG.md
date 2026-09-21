@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v2.16.0 (2026-09-21)
+
+### Bug Fixes
+
+- Count only labelled lines as unsupported claims
+  ([#115](https://github.com/mkranzlein/corpus-query/pull/115),
+  [`ed699f0`](https://github.com/mkranzlein/corpus-query/commit/ed699f01903e0d86a2bbeb090d9b801ccb355e02))
+
+### Features
+
+- Rewrite follow-up questions and verify citations before answering
+  ([#115](https://github.com/mkranzlein/corpus-query/pull/115),
+  [`ed699f0`](https://github.com/mkranzlein/corpus-query/commit/ed699f01903e0d86a2bbeb090d9b801ccb355e02))
+
+
 ## v2.15.0 (2026-09-21)
 
 ### Bug Fixes
