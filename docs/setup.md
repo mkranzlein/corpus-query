@@ -162,26 +162,26 @@ that terminal's output is its log.
 
 ## Teardown
 
-What running this project leaves on a machine, where each item came from, and
+Everything the project writes inside the clone goes when you delete the
+clone's directory: the environment, the downloaded weights, the vector index,
+recorded usage, and `.env`. There is nothing to remove from it by hand first.
+Recorded usage, in `data/usage.db`, holds the conversation history, the gaps,
+corrections, and feedback recorded against answers, and each question's
+trace, so copy that file somewhere else first if you want to keep any of it.
+
+What follows is what outlives the clone, where each item came from, and
 whether it is worth keeping:
 
 | Item | Where | Safe to keep? |
 | --- | --- | --- |
 | The pulled chat model | Ollama's model store: `~/.ollama/models` on macOS, `/usr/share/ollama/.ollama/models` on Ubuntu | Yes. ~5.3 GB, and any other project on this machine that uses `granite4.1:8b` shares the same copy. |
 | Ollama itself | See below | Yes, if anything else uses it. |
-| Embedding and reranking weights, and the vector index | `.cache/` in the clone (`huggingface/` and `chroma/`) | Yes. Both are rebuilt when missing: the weights by downloading ~215 MB again, the index at the next start. |
-| Recorded usage | `data/usage.db` in the clone, with `-wal` and `-shm` files beside it while the service runs | Only if you want what it holds: the conversation history, the gaps, corrections, and feedback recorded against answers, and each question's trace. Removing it loses those; the service makes a new, empty one when next asked something. |
-| The project environment | `.venv/` in the clone | Yes. `uv sync --extra models` makes it again. |
-| Bedrock credentials | `.env` in the clone | Not once you are done with Bedrock. It holds a working API key. |
 | uv, its cache, and the Python it downloaded | See below | Yes. They are shared with every other project that uses uv. |
 
-`data/corpus.db` is not on this list. It is part of the repository rather than
-something running the project produced, and the service will not start
-without it.
-
-If `HF_HOME` was already set in your environment when you ran the project, the
-weights went to that directory instead of `.cache/huggingface`, alongside
-whatever else uses it, and are best left there.
+The embedding and reranking weights normally go in `.cache/huggingface` in the
+clone. If `HF_HOME` was already set in your environment when you ran the
+project, they went to that directory instead, alongside whatever else uses it,
+and are best left there.
 
 ### 1. Stop the service
 
@@ -211,26 +211,7 @@ sudo systemctl disable ollama
 
 `sudo systemctl enable --now ollama` undoes both.
 
-### 4. Remove what the project wrote in the clone
-
-The same on both, from the root of the clone, after the service has stopped:
-
-```bash
-rm -rf .cache                                          # weights and vector index
-rm -f data/usage.db data/usage.db-wal data/usage.db-shm  # recorded usage
-rm -rf .venv                                           # the project environment
-rm -f .env                                             # Bedrock credentials
-```
-
-Deleting `.env` removes the key from this machine but does not revoke it,
-and anyone else who has a copy can still use it. Revoking it is done in AWS:
-see [Handle compromised long-term and short-term Amazon Bedrock API
-keys](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys-revoke.html).
-
-If you are finished with the clone as a whole, deleting its directory removes
-all of the above at once.
-
-### 5. Optionally, uninstall Ollama
+### 4. Optionally, uninstall Ollama
 
 Only if nothing else on this machine uses it. This also removes every model
 Ollama holds, not just this project's.
@@ -268,7 +249,7 @@ sudo rm -r /usr/share/ollama                  # includes every pulled model
 The libraries line has to run before the binary is removed, because it finds
 them from where the binary is.
 
-### 6. Optionally, uninstall uv
+### 5. Optionally, uninstall uv
 
 Only if nothing else on this machine uses it. The first three lines remove
 uv's data for every project, not just this one: its cache, every Python
@@ -290,5 +271,5 @@ harmless with uv gone; remove them by hand if you want them gone too.
 If you installed uv with Homebrew instead, `brew uninstall uv` replaces the
 last line.
 
-The packages `apt` installed on Ubuntu in step 1 — curl, git, and zstd — are
-general-purpose tools that other software relies on. Leave them.
+The packages `apt` installed on Ubuntu in setup step 1 — curl, git, and zstd —
+are general-purpose tools that other software relies on. Leave them.
