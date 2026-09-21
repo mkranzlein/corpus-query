@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from corpus_query.ingest.chunk import TARGET_WORDS, Chunk
+from corpus_query.ingest.decks import DECK_SUFFIX, read_deck
 from corpus_query.ingest.reader import IngestError, ReadDocument, Reader
 from corpus_query.ingest.transcripts import TRANSCRIPT_SUFFIX, read_transcript
 from corpus_query.ingest.word import DOCX_SUFFIX, read_word_document
@@ -46,6 +47,7 @@ DEFAULT_DOCUMENT_DIRS = (Path("data/transcripts"), Path("data/office"))
 READERS: dict[str, Reader] = {
     TRANSCRIPT_SUFFIX: read_transcript,
     DOCX_SUFFIX: read_word_document,
+    DECK_SUFFIX: read_deck,
 }
 
 
