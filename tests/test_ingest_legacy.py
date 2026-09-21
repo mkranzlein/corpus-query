@@ -12,6 +12,7 @@ pull request instead.
 from __future__ import annotations
 
 import datetime
+import zipfile
 
 import docx
 import pytest
@@ -234,3 +235,129 @@ def test_find_soffice_is_none_when_neither_exists(monkeypatch, tmp_path):
     monkeypatch.setattr(legacy.shutil, "which", lambda name: None)
     monkeypatch.setattr(legacy, "MACOS_SOFFICE_PATH", tmp_path / "absent")
     assert legacy.find_soffice() is None
+
+
+def _ooxml_package(path, relationship_type, *, extra="<w:body/>"):
+    """Write a minimal OOXML package whose core properties use a given type.
+
+    Enough of a package for the repair to work on: the relationships part it
+    rewrites, a core properties part for the relationship to point at, and
+    one other part to prove it is copied across untouched.
+
+    Args:
+        path: Where to write the package.
+        relationship_type: The type to give the core properties relationship.
+        extra: The body of the other part, so a test can tell copies apart.
+    """
+    with zipfile.ZipFile(path, "w") as package:
+        package.writestr(
+            legacy.PACKAGE_RELATIONSHIPS,
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/'
+            'package/2006/relationships">'
+            f'<Relationship Id="rId1" Type="{relationship_type}" '
+            'Target="docProps/core.xml"/>'
+            "</Relationships>",
+        )
+        package.writestr("docProps/core.xml", "<cp:coreProperties/>")
+        package.writestr("word/document.xml", extra)
+
+
+def test_repair_points_the_core_properties_relationship_at_the_standard(tmp_path):
+    """LibreOffice's spelling of the relationship is rewritten to OOXML's."""
+    converted = tmp_path / "converted.docx"
+    _ooxml_package(converted, legacy.LIBREOFFICE_CORE_PROPERTIES_RELATIONSHIP)
+
+    legacy.repair_core_properties(converted)
+
+    with zipfile.ZipFile(converted) as package:
+        relationships = package.read(legacy.PACKAGE_RELATIONSHIPS).decode("utf-8")
+    assert legacy.CORE_PROPERTIES_RELATIONSHIP in relationships
+    assert legacy.LIBREOFFICE_CORE_PROPERTIES_RELATIONSHIP not in relationships
+
+
+def test_repair_leaves_every_other_part_alone(tmp_path):
+    """Only the relationships part is rewritten; the content is copied."""
+    converted = tmp_path / "converted.docx"
+    _ooxml_package(
+        converted,
+        legacy.LIBREOFFICE_CORE_PROPERTIES_RELATIONSHIP,
+        extra="<w:body>kept</w:body>",
+    )
+
+    legacy.repair_core_properties(converted)
+
+    with zipfile.ZipFile(converted) as package:
+        assert (
+            package.read("word/document.xml").decode("utf-8") == "<w:body>kept</w:body>"
+        )
+        assert (
+            package.read("docProps/core.xml").decode("utf-8") == "<cp:coreProperties/>"
+        )
+        assert sorted(package.namelist()) == sorted(
+            [legacy.PACKAGE_RELATIONSHIPS, "docProps/core.xml", "word/document.xml"]
+        )
+
+
+def test_repair_leaves_a_standard_package_untouched(tmp_path):
+    """A file that already spells the relationship correctly is not rewritten."""
+    converted = tmp_path / "converted.docx"
+    _ooxml_package(converted, legacy.CORE_PROPERTIES_RELATIONSHIP)
+    before = converted.read_bytes()
+
+    legacy.repair_core_properties(converted)
+
+    assert converted.read_bytes() == before
+
+
+def test_repair_ignores_a_package_with_no_relationships(tmp_path):
+    """A package missing the part this repairs is left alone, not an error."""
+    converted = tmp_path / "converted.docx"
+    with zipfile.ZipFile(converted, "w") as package:
+        package.writestr("word/document.xml", "<w:body/>")
+    before = converted.read_bytes()
+
+    legacy.repair_core_properties(converted)
+
+    assert converted.read_bytes() == before
+
+
+def test_a_converted_document_keeps_its_author(monkeypatch, tmp_path, roster_path):
+    """The repair runs inside the conversion, so the reader sees the author.
+
+    This is the failure the repair exists for: without it, ``python-docx``
+    does not find the core properties part, substitutes an empty one, and
+    the document is reported as naming no author.
+    """
+    document = docx.Document()
+    document.add_paragraph("Background", style="Heading 1")
+    document.add_paragraph("The plan is on schedule.")
+    document.core_properties.author = "Devon"
+    document.core_properties.created = WHEN
+    written = tmp_path / "converted.docx"
+    document.save(written)
+
+    # Respell the relationship the way LibreOffice does, so the file under
+    # test is wrong in exactly the way a real conversion is.
+    with zipfile.ZipFile(written) as package:
+        entries = [(item, package.read(item.filename)) for item in package.infolist()]
+    with zipfile.ZipFile(written, "w") as package:
+        for item, data in entries:
+            if item.filename == legacy.PACKAGE_RELATIONSHIPS:
+                data = (
+                    data.decode("utf-8")
+                    .replace(
+                        legacy.CORE_PROPERTIES_RELATIONSHIP,
+                        legacy.LIBREOFFICE_CORE_PROPERTIES_RELATIONSHIP,
+                    )
+                    .encode("utf-8")
+                )
+            package.writestr(item, data)
+
+    assert docx.Document(written).core_properties.author == ""
+
+    legacy.repair_core_properties(written)
+
+    assert docx.Document(written).core_properties.author == "Devon"
+    read = read_word_document(written, 200, roster_path=roster_path)
+    assert read.author == "Devon"

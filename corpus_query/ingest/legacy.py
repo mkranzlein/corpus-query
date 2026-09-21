@@ -6,6 +6,10 @@ with LibreOffice headless, and the result is handed to the reader that format
 already has. No model sees raw bytes at either step, and the conversion is
 deterministic, so the chunks that come out match the file they came from.
 
+What LibreOffice produces is not quite standard, so the conversion repairs
+it before the reader sees it: see :func:`repair_core_properties`, which puts
+the converted file's core properties back where OOXML says they live.
+
 The conversion happens in a temporary directory that is cleaned up once the
 modern reader has run. Nothing is written next to the source file, and the
 converted file is never committed or reused across calls — this is not a
@@ -22,6 +26,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import tempfile
+import zipfile
 from pathlib import Path
 
 from corpus_query.ingest.reader import IngestError, ReadDocument, Reader
@@ -38,6 +43,26 @@ INSTALL_HINT = (
     "Install it from https://www.libreoffice.org/download/ or, on macOS, "
     "with `brew install --cask libreoffice`."
 )
+
+#: The relationship type OOXML gives the core properties part, which is
+#: where a document's author, title, and dates live. Readers find that part
+#: by looking this exact string up in the package relationships.
+CORE_PROPERTIES_RELATIONSHIP = (
+    "http://schemas.openxmlformats.org/package/2006/relationships/"
+    "metadata/core-properties"
+)
+
+#: What LibreOffice writes in its place: the same path under
+#: ``officedocument`` rather than ``package``. Everything else about the
+#: file is well formed, and the properties themselves are present and
+#: correct — only the relationship pointing at them is misspelled.
+LIBREOFFICE_CORE_PROPERTIES_RELATIONSHIP = (
+    "http://schemas.openxmlformats.org/officedocument/2006/relationships/"
+    "metadata/core-properties"
+)
+
+#: The package relationships, which is the one part this repairs.
+PACKAGE_RELATIONSHIPS = "_rels/.rels"
 
 
 def find_soffice() -> Path | None:
@@ -69,7 +94,8 @@ def convert(path: Path, target_suffix: str, outdir: Path) -> Path:
             into. The caller owns its lifetime.
 
     Returns:
-        The path of the converted file. LibreOffice writes it as
+        The path of the converted file, repaired by
+        :func:`repair_core_properties`. LibreOffice writes it as
         ``<name>.<target_suffix>`` in ``outdir``, so it is not discovered —
         it follows from the source file's own name.
 
@@ -109,7 +135,59 @@ def convert(path: Path, target_suffix: str, outdir: Path) -> Path:
         raise IngestError(
             f"Could not convert {path} to {target_suffix} with LibreOffice: {detail}"
         )
+    repair_core_properties(converted)
     return converted
+
+
+def repair_core_properties(path: Path) -> None:
+    """Point a converted file's core properties relationship at the standard.
+
+    LibreOffice writes the core properties relationship under
+    ``officedocument`` where OOXML puts it under ``package``. The properties
+    part itself is present and correct — author, title, and dates are all in
+    ``docProps/core.xml`` — but a reader that looks the part up by its
+    standard relationship type does not find it.
+
+    The readers disagree about how much that matters, which is why this is
+    not left to them. ``openpyxl`` finds the part anyway, so a converted
+    workbook reads correctly; ``python-docx`` does not, and silently
+    substitutes an empty properties part, so a converted document loses its
+    author and is reported unreadable. LibreOffice happens to spell the
+    relationship correctly when it writes ``.pptx``.
+
+    Relying on that split would mean the Word path is broken and the Excel
+    path works by a tolerance nobody promised. So the conversion repairs
+    what it wrote, for every format, and hands the modern reader a file that
+    says what OOXML says it should.
+
+    Only the relationship type is rewritten, and only when the
+    non-standard one is there. Every other part is copied across byte for
+    byte, with its original compression, so the text a chunk is cut from is
+    the text LibreOffice produced.
+
+    Args:
+        path: The converted file, rewritten in place if it needs it.
+    """
+    with zipfile.ZipFile(path) as archive:
+        try:
+            relationships = archive.read(PACKAGE_RELATIONSHIPS).decode("utf-8")
+        except KeyError:
+            return
+        if LIBREOFFICE_CORE_PROPERTIES_RELATIONSHIP not in relationships:
+            return
+        entries = [(item, archive.read(item.filename)) for item in archive.infolist()]
+
+    repaired = relationships.replace(
+        LIBREOFFICE_CORE_PROPERTIES_RELATIONSHIP, CORE_PROPERTIES_RELATIONSHIP
+    ).encode("utf-8")
+
+    rewritten = path.with_name(f"{path.name}.repaired")
+    with zipfile.ZipFile(rewritten, "w") as rebuilt:
+        for item, data in entries:
+            rebuilt.writestr(
+                item, repaired if item.filename == PACKAGE_RELATIONSHIPS else data
+            )
+    rewritten.replace(path)
 
 
 def converting_reader(target_suffix: str, modern_reader: Reader) -> Reader:
