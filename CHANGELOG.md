@@ -2,6 +2,38 @@
 
 <!-- version list -->
 
+## v2.19.0 (2026-09-21)
+
+### Documentation
+
+- Describe tracing each query in the README
+  ([#119](https://github.com/mkranzlein/corpus-query/pull/119),
+  [`de6908f`](https://github.com/mkranzlein/corpus-query/commit/de6908fafe88f92ddb951594867205738f9f52ae))
+
+- Say how an agent run is traced ([#119](https://github.com/mkranzlein/corpus-query/pull/119),
+  [`de6908f`](https://github.com/mkranzlein/corpus-query/commit/de6908fafe88f92ddb951594867205738f9f52ae))
+
+### Features
+
+- Add span tables to the usage database
+  ([#119](https://github.com/mkranzlein/corpus-query/pull/119),
+  [`de6908f`](https://github.com/mkranzlein/corpus-query/commit/de6908fafe88f92ddb951594867205738f9f52ae))
+
+- Trace the query path with OpenTelemetry spans
+  ([#119](https://github.com/mkranzlein/corpus-query/pull/119),
+  [`de6908f`](https://github.com/mkranzlein/corpus-query/commit/de6908fafe88f92ddb951594867205738f9f52ae))
+
+- Trace the query path with OpenTelemetry spans in the usage database
+  ([#119](https://github.com/mkranzlein/corpus-query/pull/119),
+  [`de6908f`](https://github.com/mkranzlein/corpus-query/commit/de6908fafe88f92ddb951594867205738f9f52ae))
+
+### Testing
+
+- Assert the spans a search and an answer emit
+  ([#119](https://github.com/mkranzlein/corpus-query/pull/119),
+  [`de6908f`](https://github.com/mkranzlein/corpus-query/commit/de6908fafe88f92ddb951594867205738f9f52ae))
+
+
 ## v2.18.0 (2026-09-21)
 
 ### Documentation
