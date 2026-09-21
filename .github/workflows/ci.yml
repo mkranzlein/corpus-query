@@ -29,6 +29,11 @@ jobs:
 
       - run: npm --prefix frontend ci
 
+      # The frontend's tests run here rather than in the test job, which has
+      # no Node. They report no coverage: the Codecov upload below covers
+      # pytest alone, and the badge is meant to say that and nothing more.
+      - run: npm --prefix frontend test
+
       # The build output under corpus_query/api/static/ is committed (see the
       # README's "The committed frontend" section) so that running the system
       # needs only Python. Nothing else checks that it still matches the
