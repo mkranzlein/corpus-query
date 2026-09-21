@@ -38,9 +38,23 @@ DEFAULT_TEMPERATURE = 0.0
 #: that looks like from outside is an agent that follows its prompt on short
 #: questions and summarizes whatever retrieval returned on long ones.
 #:
-#: 32k is well inside what this model supports and leaves room for several
-#: rounds of passages on top of the conversation.
-DEFAULT_CONTEXT_WINDOW = 32768
+#: The size is measured rather than guessed. Ollama reports what it actually
+#: evaluated, and the longest realistic turns come in at about 4k tokens for a
+#: two-part question that searched twice, and about 5.5k for one search over
+#: dense spreadsheet rows — so the default window was missing by a few hundred
+#: tokens, which is why the failure looked so arbitrary. 16k is three times
+#: the worst turn measured and still leaves room for a conversation to grow on
+#: one thread, while costing meaningfully less KV cache than 32k on a machine
+#: that has to hold the weights too: 8.2GB resident rather than 10GB.
+#:
+#: What it does not cover is a turn that runs all the way to
+#: :data:`corpus_query.agent.graph.MAX_SEARCHES`. Six searches over passages
+#: as dense as the spreadsheet rows would come to roughly 27k tokens, and
+#: Ollama would start dropping the front of them again. Real questions take
+#: one or two searches and the ceiling exists to stop a loop rather than to be
+#: reached, so this is a bound worth knowing rather than one worth sizing the
+#: window for.
+DEFAULT_CONTEXT_WINDOW = 16384
 
 
 def load_chat_model(
