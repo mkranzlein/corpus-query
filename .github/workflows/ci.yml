@@ -33,16 +33,24 @@ jobs:
       # README's "The committed frontend" section) so that running the system
       # needs only Python. Nothing else checks that it still matches the
       # source it was built from, so rebuild it here and fail if the rebuild
-      # differs from what is committed — that is the only thing that catches
-      # a frontend change pushed without its bundle. This depends on Vite's
+      # differs from what is committed, whether that is a changed file, a
+      # deleted one, or a new one — that is the only thing that catches a
+      # frontend change pushed without its bundle. This depends on Vite's
       # output being reproducible, which has been confirmed in this same
       # Linux container the workflow runs in.
       - run: npm --prefix frontend run build
 
       - name: Check that the committed frontend bundle is up to date
         run: |
-          if ! git diff --quiet -- corpus_query/api/static; then
+          # git status, not git diff: Vite copies anything added under
+          # frontend/public/ into the output unchanged, and a file the
+          # rebuild adds that was never committed is untracked, not changed.
+          # git diff ignores untracked files entirely, so it would miss that
+          # case and pass a stale bundle.
+          status=$(git status --porcelain -- corpus_query/api/static)
+          if [ -n "$status" ]; then
             echo "::error::corpus_query/api/static is out of date with frontend/. Run 'npm --prefix frontend run build' and commit the result."
+            echo "$status"
             git diff --stat -- corpus_query/api/static
             exit 1
           fi
