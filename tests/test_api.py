@@ -812,3 +812,193 @@ def test_what_is_recorded_goes_nowhere_near_the_corpus(records_app):
         connection.close()
     assert {"answers", "gaps", "corrections", "feedback"} <= tables
     assert "chunks" not in tables
+
+
+A_STORED_CITATION = {
+    "chunk_id": 7,
+    "document_slug": "rev-b-schedule",
+    "source_kind": TRANSCRIPT,
+    "title": "Rev B schedule",
+    "document_date": "2026-03-04",
+    "author": None,
+    "attendees": ["Priya", "Marcus"],
+    "location": "turns 0-1",
+}
+
+
+def one_of_each(path) -> dict[str, int]:
+    """Record a gap, a correction, and a piece of feedback on one answer.
+
+    Args:
+        path: The usage database the application was pointed at.
+
+    Returns:
+        Each record's id, by its kind.
+    """
+    answer_id = an_answer(path, citations=[A_STORED_CITATION], abstained=True)
+    connection = capture.connect(path)
+    try:
+        return {
+            "gaps": capture.record_gap(connection, answer_id)["id"],
+            "corrections": capture.record_correction(
+                connection, answer_id, what_was_wrong="x", what_is_right="y"
+            )["id"],
+            "feedback": capture.record_feedback(connection, answer_id, verdict="down")[
+                "id"
+            ],
+        }
+    finally:
+        connection.close()
+
+
+@pytest.mark.parametrize("kind", capture.KINDS)
+def test_each_list_carries_the_review_state_and_citations(records_app, kind):
+    """A row says whether it is new, and what its answer rested on."""
+    app, path = records_app
+    one_of_each(path)
+
+    [row] = request(app, "GET", f"/{kind}").json()[kind]
+
+    assert row["reviewed_at"] is None
+    assert row["citations"] == [A_STORED_CITATION]
+
+
+@pytest.mark.parametrize("kind", capture.KINDS)
+def test_each_list_holds_only_its_own_kind(records_app, kind):
+    """Narrowing the queue to one kind is asking for that kind's list."""
+    app, path = records_app
+    one_of_each(path)
+    one_of_each(path)
+
+    rows = request(app, "GET", f"/{kind}").json()[kind]
+
+    own = {"gaps": "routing", "corrections": "what_is_right", "feedback": "verdict"}
+    assert len(rows) == 2
+    for row in rows:
+        assert own[kind] in row
+        assert not (set(own.values()) - {own[kind]}) & row.keys()
+
+
+@pytest.mark.parametrize("kind", capture.KINDS)
+def test_one_record_opens_to_the_full_record(records_app, kind):
+    """Opening a row gives what the list had for it, fetched by its id."""
+    app, path = records_app
+    ids = one_of_each(path)
+
+    listed, opened = session_requests(
+        app, [("GET", f"/{kind}"), ("GET", f"/{kind}/{ids[kind]}")]
+    )
+
+    assert opened.status_code == 200
+    assert opened.json() == listed.json()[kind][0]
+    assert opened.json()["question"] == "Where are the rev B boards?"
+    assert opened.json()["citations"] == [A_STORED_CITATION]
+
+
+@pytest.mark.parametrize("kind", capture.KINDS)
+def test_opening_an_id_that_is_not_there_is_a_404(records_app, kind):
+    """An unknown id is a caller naming the wrong thing."""
+    app, _ = records_app
+
+    response = request(app, "GET", f"/{kind}/404")
+
+    assert response.status_code == 404
+    assert "404" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("kind", capture.KINDS)
+def test_marking_a_record_reviewed_persists(records_app, kind):
+    """The mark is on the record the next time anyone reads the list."""
+    app, path = records_app
+    ids = one_of_each(path)
+
+    marked = request(
+        app, "PATCH", f"/{kind}/{ids[kind]}", json={"reviewed": True}
+    ).json()
+    [row] = request(app, "GET", f"/{kind}").json()[kind]
+
+    assert marked["reviewed_at"]
+    assert row["reviewed_at"] == marked["reviewed_at"]
+
+
+def test_marking_one_kind_leaves_the_others_new(records_app):
+    """Gap 1 and correction 1 are different records despite sharing an id."""
+    app, path = records_app
+    ids = one_of_each(path)
+
+    request(app, "PATCH", f"/gaps/{ids['gaps']}", json={"reviewed": True})
+
+    for kind in ("corrections", "feedback"):
+        [row] = request(app, "GET", f"/{kind}").json()[kind]
+        assert row["reviewed_at"] is None
+
+
+def test_a_review_mark_can_be_cleared(records_app):
+    """Setting reviewed to false puts the item back among the new ones."""
+    app, path = records_app
+    ids = one_of_each(path)
+    url = f"/corrections/{ids['corrections']}"
+    request(app, "PATCH", url, json={"reviewed": True})
+
+    cleared = request(app, "PATCH", url, json={"reviewed": False})
+
+    assert cleared.status_code == 200
+    assert cleared.json()["reviewed_at"] is None
+
+
+def test_marking_an_id_that_is_not_there_is_a_404(records_app):
+    """Nothing is written, and the caller hears why."""
+    app, _ = records_app
+
+    response = request(app, "PATCH", "/feedback/404", json={"reviewed": True})
+
+    assert response.status_code == 404
+
+
+def test_marking_needs_to_say_which_way(records_app):
+    """A mark with no value is refused rather than guessed at."""
+    app, path = records_app
+    ids = one_of_each(path)
+
+    response = request(app, "PATCH", f"/gaps/{ids['gaps']}", json={})
+
+    assert response.status_code == 422
+
+
+def test_the_review_page_has_its_own_address(app_factory):
+    """``/review`` loads the application, which shows the queue there."""
+    app, _ = app_factory()
+
+    root, review = session_requests(app, [("GET", "/"), ("GET", "/review")])
+
+    assert review.status_code == 200
+    assert review.headers["content-type"].startswith("text/html")
+    assert review.text == root.text
+
+
+def test_the_review_page_is_not_in_the_api_schema(app_factory):
+    """It is a page, not an endpoint, and the schema documents endpoints."""
+    app, _ = app_factory()
+
+    paths = request(app, "GET", "/openapi.json").json()["paths"]
+
+    assert "/review" not in paths
+    assert {"get", "patch"} <= paths["/gaps/{record_id}"].keys()
+
+
+def test_the_review_page_without_a_bundle_says_why(tmp_path, store):
+    """Without a built page the review address explains itself too."""
+    resources = Resources(
+        connection=store, collection=FakeCollection(), captured=captured_records()
+    )
+    app = create_app(
+        resources=lambda: resources,
+        search=StubSearch(SearchResult(results=[], confidence=a_confidence())),
+        agent=no_agent,
+        static_dir=tmp_path / "never-built",
+    )
+
+    response = request(app, "GET", "/review")
+
+    assert response.status_code == 503
+    assert "npm --prefix frontend run build" in response.text
