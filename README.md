@@ -23,8 +23,10 @@ The agent is a caller of `/search` rather than a replacement for it. It posts
 to that endpoint like any other client, so the two can be asked the same
 question and compared, and `curl` still reaches the ranking on its own.
 
-An interface a person would sit in front of is deliberately not here yet.
-Until then, `curl` is the interface.
+There is a browser application too, served at `/` by the same process. Today
+it is a shell: it loads, and it reports what the service is running on. The
+question box and the answer view are being built on top of it. Until they
+land, `curl` is still the way to ask the corpus anything.
 
 Everything runs on your machine: a SQLite document store on disk, a local
 embedding model, a local reranking model, and a local chat model served by
@@ -58,7 +60,13 @@ ollama pull granite4.1:8b
 
 # 5. Start the service. The committed corpus at data/corpus.db is ready to query.
 uv run scripts/serve.py
+# The page is at http://127.0.0.1:8000, the endpoints are below it.
 ```
+
+Note what is not in that list: Node. The browser application is built ahead of
+time and the build is committed, so running the whole system takes Python and
+nothing else. See [The committed
+frontend](#the-committed-frontend).
 
 Step 4 is only needed for `/answer`. `/search` ranks without a chat model, and
 the service starts either way — a question asked of `/answer` with no Ollama
@@ -94,6 +102,13 @@ thing to do; the next start makes it again.
 Everything expensive happens before the port is open — the database, the
 index, and both models — so the first query is as fast as the hundredth, and a
 service that has started is a service that works.
+
+### Open the page
+
+<http://127.0.0.1:8000> serves the browser application. It is a shell for now
+— it tells you the service is up and what it is serving from — and the
+endpoints below it are where the answers come from. Nothing had to be built
+for it to be there.
 
 ### Ask it something
 
@@ -328,8 +343,49 @@ intended signal rather than a failure to diagnose. The API's own tests drive
 the application in process over ASGI with retrieval stubbed, so they run
 without the extra.
 
-Hooks run ruff, gitleaks, and a Conventional Commits check. Install them once
-with `pre-commit install` and `pre-commit install --hook-type commit-msg`.
+Hooks run ruff, gitleaks, a Conventional Commits check, and — for changes
+under `frontend/` — eslint and the TypeScript compiler. Install them once with
+`pre-commit install` and `pre-commit install --hook-type commit-msg`. CI runs
+the same set.
+
+## The committed frontend
+
+The browser application lives in `frontend/`: React and TypeScript, compiled
+by Vite. Its build output is committed, at
+`corpus_query/api/static/`, and FastAPI serves that directory at `/`.
+
+Committing a build is unusual enough to say why. Node is a build-time
+dependency and nothing more — no part of running this system calls it — so
+shipping the build means a clone needs Python and nothing else to get a
+working page. The alternative is telling everyone who wants to run the project
+to install a second toolchain to produce a file that was identical for
+everyone who produced it. The bundle is a couple of hundred kilobytes, which
+is a small thing to keep in a repository in exchange for deleting the largest
+setup obstacle it had.
+
+The consequence is that **a frontend change is not finished until the build is
+rebuilt and committed with it**. The source and the bundle are one change.
+
+```bash
+npm --prefix frontend ci       # once
+npm --prefix frontend run dev  # http://localhost:5173, against a live API
+```
+
+`npm run dev` serves the application itself with hot module replacement and
+proxies `/search`, `/answer`, and `/health` through to `scripts/serve.py` on
+port 8000, so run that in another terminal. Requests stay same-origin that
+way, which is why the API carries no CORS configuration for the sake of
+development.
+
+```bash
+npm --prefix frontend run lint       # eslint
+npm --prefix frontend run typecheck  # tsc
+npm --prefix frontend run build      # writes corpus_query/api/static/
+```
+
+If `corpus_query/api/static/` is ever missing, the API still starts and the
+endpoints still answer; `/` says what to run instead. The page is the one
+thing that needs it.
 
 ## Provisioning (for the record)
 

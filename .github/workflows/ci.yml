@@ -17,6 +17,18 @@ jobs:
         with:
           python-version: "3.14"
 
+      # The frontend's eslint and tsc hooks run from the repository's own
+      # node_modules, so they are installed here rather than skipped. Node is
+      # a build-time dependency only — nothing in the test job or at run time
+      # needs it.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm --prefix frontend ci
+
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit

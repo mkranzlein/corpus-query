@@ -1,4 +1,4 @@
-"""The query API: retrieval, an agent over it, and a health check.
+"""The query API: retrieval, an agent over it, a health check, and the page.
 
 ``POST /search`` takes a natural-language question and returns the corpus
 chunks that bear on it, each carrying its provenance and the metadata
@@ -10,6 +10,11 @@ out of those passages, with the passages it rests on. It is a caller of
 ``/search`` rather than a replacement for it: the agent posts to that endpoint
 like any other client, so the two can be asked the same question and compared,
 and the endpoint that ranks is still curlable on its own.
+
+``GET /`` serves the browser application, built from ``frontend/`` and
+committed under ``static/`` beside this module. It is mounted last, so the
+JSON endpoints and the generated OpenAPI documents keep their paths and
+nothing about them changes by virtue of a page existing.
 
 Everything expensive happens once, at startup: the document store is opened,
 the vector index is opened — rebuilt from the embeddings already in the store
@@ -44,6 +49,8 @@ from pathlib import Path
 
 from chromadb.api.models.Collection import Collection
 from fastapi import FastAPI, Request, Response, status
+from fastapi.responses import PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 
 from corpus_query.agent.runtime import OpenAgent, open_agent
 from corpus_query.api.models import (
@@ -70,6 +77,12 @@ type SearchFn = Callable[..., SearchResult]
 
 #: Opens everything the service needs, once, at startup.
 type OpenResources = Callable[[], "Resources"]
+
+#: The built browser application. Vite writes here and the result is
+#: committed, which is what lets a clone run the whole system with Python
+#: alone — see the README. Nothing at run time builds it, and nothing at run
+#: time needs Node.
+DEFAULT_STATIC_DIR = Path(__file__).parent / "static"
 
 
 class StartupError(RuntimeError):
@@ -143,6 +156,7 @@ def create_app(
     resources: OpenResources | None = None,
     search: SearchFn | None = None,
     agent: OpenAgent | None = None,
+    static_dir: Path | str | None = None,
 ) -> FastAPI:
     """Build the application.
 
@@ -159,6 +173,9 @@ def create_app(
             :func:`corpus_query.agent.runtime.open_agent`, which compiles
             the graph against the project's local model. Overridable so a
             test can drive the graph without a model behind it.
+        static_dir: The built browser application to serve at ``/``.
+            Defaults to :data:`DEFAULT_STATIC_DIR`, the bundle committed
+            beside this module.
 
     Returns:
         The application, ready to be served.
@@ -284,7 +301,45 @@ def create_app(
             status="ok" if healthy else "degraded", database=database, index=index
         )
 
+    _mount_frontend(app, DEFAULT_STATIC_DIR if static_dir is None else Path(static_dir))
     return app
+
+
+def _mount_frontend(app: FastAPI, directory: Path) -> None:
+    """Serve the built browser application at ``/``.
+
+    The mount goes on after every endpoint above it. Starlette matches
+    routes in the order they were added and a mount at ``/`` matches
+    everything, so anything registered afterwards would never be reached —
+    which is exactly why this is the last thing ``create_app`` does.
+
+    A missing directory is not a failure to start. The bundle is committed,
+    so it is there in any clone; the one way to be without it is to have
+    deleted it or to be running from somewhere it was never checked out,
+    and the JSON endpoints work perfectly well either way. That case gets a
+    page saying how to build it rather than a service that refuses to come
+    up over a file nothing else needs.
+
+    Args:
+        app: The application to mount onto.
+        directory: The built application, as Vite wrote it.
+    """
+    if directory.is_dir():
+        # html=True is what makes ``/`` serve index.html rather than a
+        # directory listing.
+        app.mount("/", StaticFiles(directory=directory, html=True), name="frontend")
+        return
+
+    @app.get("/", response_class=PlainTextResponse)
+    async def missing_frontend(response: Response) -> str:
+        """Say where the page went, and how to put it back."""
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return (
+            f"the built frontend is not at {directory}. Build it with "
+            f"`npm --prefix frontend ci && npm --prefix frontend run build`, "
+            f"or restore it from version control. The /search, /answer, and "
+            f"/health endpoints do not need it."
+        )
 
 
 def _warm_models() -> None:

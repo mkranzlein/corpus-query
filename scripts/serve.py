@@ -115,6 +115,7 @@ def main(argv: list[str] | None = None, run=uvicorn.run) -> int:
         ),
     )
     print(f"Serving {args.db} on http://{args.host}:{args.port}")
+    print("The page is at that address; /search, /answer, and /health are below it.")
     run(app, host=args.host, port=args.port)
     return 0
 
