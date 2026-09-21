@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v2.17.0 (2026-09-21)
+
+### Documentation
+
+- Show the answer stream in the README, and when it is sent
+  ([#117](https://github.com/mkranzlein/corpus-query/pull/117),
+  [`d592817`](https://github.com/mkranzlein/corpus-query/commit/d592817bf45201903abc908c5dfae1ab06f86cfc))
+
+### Features
+
+- Report each step of an answer as the graph takes it
+  ([#117](https://github.com/mkranzlein/corpus-query/pull/117),
+  [`d592817`](https://github.com/mkranzlein/corpus-query/commit/d592817bf45201903abc908c5dfae1ab06f86cfc))
+
+- Stream /answer as server-sent events on request
+  ([#117](https://github.com/mkranzlein/corpus-query/pull/117),
+  [`d592817`](https://github.com/mkranzlein/corpus-query/commit/d592817bf45201903abc908c5dfae1ab06f86cfc))
+
+
 ## v2.16.0 (2026-09-21)
 
 ### Bug Fixes
