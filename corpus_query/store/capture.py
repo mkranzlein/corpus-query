@@ -13,7 +13,10 @@ All three hang off an **answer row**, written once per question asked. That
 row is what gives a correction typed a week later something stable to point
 at, and it is the one record per query in the system: anything later that
 wants per-query numbers adds columns here rather than a second table
-recording the same event.
+recording the same event. The ones it carries — retrieval confidence,
+citation coverage, latency, what answered, and the trace behind it — are
+what a trend across thousands of answers is read from; see
+``docs/answer-metrics.md``.
 
 Everything goes in the usage database, which is the local, uncommitted file
 that already holds the agent's graph checkpoints. See
@@ -64,7 +67,7 @@ from corpus_query.store.usage import usage_database
 #: The version of these tables that this code reads and writes. Recorded in
 #: ``capture_meta`` rather than in the file's ``user_version`` pragma, for
 #: the reasons in the module docstring.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 #: The key the version is stored under in ``capture_meta``.
 SCHEMA_VERSION_KEY = "schema_version"
@@ -88,11 +91,34 @@ _SCHEMA_PATH = Path(__file__).parent / "capture.sql"
 #: kind is checked against this list before it gets that far.
 KINDS = ("gaps", "corrections", "feedback")
 
+#: The per-query numbers on an answer row, and their types, in the order the
+#: table holds them. Version 3 added them; see ``capture.sql`` for what each
+#: one means.
+MEASUREMENTS = (
+    ("searches", "INTEGER"),
+    ("top_score", "REAL"),
+    ("margin", "REAL"),
+    ("citation_coverage", "REAL"),
+    ("latency_ms", "INTEGER"),
+    ("backend", "TEXT"),
+    ("model", "TEXT"),
+    ("trace_id", "TEXT"),
+)
+
 #: What takes a file from each older version to the next one, keyed by the
 #: version it starts from. A version-1 file predates reviewing, so its rows
-#: gain a null ``reviewed_at``, which reads, correctly, as not yet seen.
+#: gain a null ``reviewed_at``, which reads, correctly, as not yet seen. A
+#: version-2 file predates the per-query numbers, so its answers gain them
+#: as nulls, which read as not measured rather than as zero.
 _MIGRATIONS: dict[int, tuple[str, ...]] = {
     1: tuple(f"ALTER TABLE {table} ADD COLUMN reviewed_at TEXT" for table in KINDS),
+    2: (
+        *(
+            f"ALTER TABLE answers ADD COLUMN {column} {kind}"
+            for column, kind in MEASUREMENTS
+        ),
+        "CREATE INDEX idx_answers_trace_id ON answers (trace_id)",
+    ),
 }
 
 
@@ -264,8 +290,23 @@ def record_answer(
     thread_id: str,
     abstained: bool,
     answer_id: str | None = None,
+    *,
+    searches: int | None = None,
+    top_score: float | None = None,
+    margin: float | None = None,
+    citation_coverage: float | None = None,
+    latency_ms: int | None = None,
+    backend: str | None = None,
+    model: str | None = None,
+    trace_id: str | None = None,
 ) -> str:
     """Write the row for one answered question.
+
+    The row is written for every question, an abstention included, and it
+    carries the numbers that make answers comparable across thousands of
+    them: how well retrieval matched, how much of the answer the passages
+    bear out, how long it took, and what answered. Each is optional, so a
+    caller that did not measure one records a null rather than a zero.
 
     Args:
         connection: An open capture connection.
@@ -278,6 +319,19 @@ def record_answer(
             agent mints its own before it answers, so that a correction
             typed later in the same conversation can name this row from the
             conversation alone.
+        searches: How many searches the turn ran.
+        top_score: The best rerank score any of those searches returned.
+        margin: The gap between the first and second result of the search
+            ``top_score`` came from.
+        citation_coverage: The share of the answer's sentences the retrieved
+            passages bear out, from 0 to 1. See
+            :func:`corpus_query.agent.measures.citation_coverage`.
+        latency_ms: How long the answer took, in milliseconds.
+        backend: The provider that answered, as OpenTelemetry names it.
+        model: The model that answered, as its provider names it.
+        trace_id: The trace the answer's spans were recorded under. An
+            empty string is stored as null, since it means tracing was off
+            and there is no trace to follow.
 
     Returns:
         The new row's id, which is what a later gap, correction, or piece of
@@ -288,8 +342,10 @@ def record_answer(
     with connection:
         connection.execute(
             "INSERT INTO answers "
-            "(id, thread_id, query, answer, citations, abstained) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "(id, thread_id, query, answer, citations, abstained, searches, "
+            "top_score, margin, citation_coverage, latency_ms, backend, model, "
+            "trace_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 answer_id,
                 thread_id,
@@ -297,6 +353,14 @@ def record_answer(
                 answer,
                 json.dumps(citations),
                 int(abstained),
+                searches,
+                top_score,
+                margin,
+                citation_coverage,
+                latency_ms,
+                backend,
+                model,
+                trace_id or None,
             ),
         )
     return answer_id

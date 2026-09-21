@@ -44,11 +44,42 @@ CREATE TABLE answers (
     -- measurement, not a missing row, so it is a column here and the row is
     -- written either way.
     abstained INTEGER NOT NULL CHECK (abstained IN (0, 1)),
-    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    -- The per-query numbers, below, came with version 3. They are after
+    -- created_at because that is where ALTER TABLE puts a column, and a file
+    -- upgraded from version 2 and a file created at version 3 should have
+    -- the same table. A row written before version 3 has them all null,
+    -- which reads as not measured rather than as zero. What each one means,
+    -- and the SQL that reads them, is in docs/answer-metrics.md.
+    --
+    -- How many searches the turn ran. Zero for a question declined as out
+    -- of scope and for a correction typed into the conversation, which is
+    -- what lets a rate be taken over the turns that consulted the record.
+    searches INTEGER,
+    -- The best rerank score any of the turn's searches returned, and the gap
+    -- between that search's first and second result. Null when nothing was
+    -- searched or nothing came back.
+    top_score REAL,
+    margin REAL,
+    -- The share of the answer's sentences whose content words are mostly
+    -- found in one retrieved passage, from 0 to 1. Null when the turn
+    -- retrieved no passage to check against.
+    citation_coverage REAL,
+    -- Wall-clock milliseconds from the question reaching the agent to the
+    -- finished answer.
+    latency_ms INTEGER,
+    -- What answered: the provider as OpenTelemetry names it (ollama,
+    -- aws.bedrock) and the model as that provider names it.
+    backend TEXT,
+    model TEXT,
+    -- The trace the answer's spans were recorded under, as 32 hex digits,
+    -- or null when tracing was off. spans.trace_id is the other end.
+    trace_id TEXT
 );
 
 CREATE INDEX idx_answers_created_at ON answers (created_at);
 CREATE INDEX idx_answers_thread_id ON answers (thread_id);
+CREATE INDEX idx_answers_trace_id ON answers (trace_id);
 
 -- A question the record did not settle. System-detected: written when the
 -- agent abstains or routes, and nobody has to remember to file it.
