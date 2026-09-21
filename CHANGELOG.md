@@ -2,6 +2,47 @@
 
 <!-- version list -->
 
+## v2.6.0 (2026-09-21)
+
+### Build System
+
+- Add python-docx for reading Word documents
+  ([#77](https://github.com/mkranzlein/corpus-query/pull/77),
+  [`4d19bb8`](https://github.com/mkranzlein/corpus-query/commit/4d19bb8a3d1d41139cf68d5df04d1c67681d229a))
+
+### Chores
+
+- Track the document-skills plugin as enabled
+  ([#72](https://github.com/mkranzlein/corpus-query/pull/72),
+  [`e1e5826`](https://github.com/mkranzlein/corpus-query/commit/e1e582647be875899433629b8184fc4ec7400103))
+
+### Documentation
+
+- Commit the generated office documents and note how they were made
+  ([#75](https://github.com/mkranzlein/corpus-query/pull/75),
+  [`be79e2c`](https://github.com/mkranzlein/corpus-query/commit/be79e2c7fbe8056cc4d9f5098f289e9808673325))
+
+- Record what the transcript corpus actually planted
+  ([#70](https://github.com/mkranzlein/corpus-query/pull/70),
+  [`bdc3722`](https://github.com/mkranzlein/corpus-query/commit/bdc37224a825a7c44223f4e21ebe4990a8f927d7))
+
+### Features
+
+- Read Word documents into heading-section chunks
+  ([#77](https://github.com/mkranzlein/corpus-query/pull/77),
+  [`4d19bb8`](https://github.com/mkranzlein/corpus-query/commit/4d19bb8a3d1d41139cf68d5df04d1c67681d229a))
+
+### Testing
+
+- Cover enriching and searching a Word document
+  ([#77](https://github.com/mkranzlein/corpus-query/pull/77),
+  [`4d19bb8`](https://github.com/mkranzlein/corpus-query/commit/4d19bb8a3d1d41139cf68d5df04d1c67681d229a))
+
+- Cover reading Word documents and their heading sections
+  ([#77](https://github.com/mkranzlein/corpus-query/pull/77),
+  [`4d19bb8`](https://github.com/mkranzlein/corpus-query/commit/4d19bb8a3d1d41139cf68d5df04d1c67681d229a))
+
+
 ## v2.5.0 (2026-09-20)
 
 ### Documentation
