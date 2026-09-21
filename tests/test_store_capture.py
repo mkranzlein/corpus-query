@@ -14,14 +14,18 @@ import sqlite3
 import pytest
 
 from corpus_query.store.capture import (
+    KINDS,
     SCHEMA_VERSION,
     SCHEMA_VERSION_KEY,
     CaptureSchemaVersionError,
     UnknownAnswerError,
+    UnknownRecordError,
     connect,
     corrections,
     feedback,
     gaps,
+    mark_reviewed,
+    record,
     record_answer,
     record_correction,
     record_feedback,
@@ -313,3 +317,165 @@ def test_every_answer_gets_its_own_id(records) -> None:
     second = an_answer(records)
 
     assert first != second
+
+
+def test_a_record_carries_the_citations_of_its_answer(records) -> None:
+    """Opening a record shows what the answer rested on, without a second read."""
+    answer_id = an_answer(records, citations=[A_CITATION])
+
+    record_gap(records, answer_id)
+    record_correction(records, answer_id, what_was_wrong="x", what_is_right="y")
+    record_feedback(records, answer_id, verdict="down")
+
+    for row in (gaps(records)[0], corrections(records)[0], feedback(records)[0]):
+        assert row["citations"] == [A_CITATION]
+
+
+def test_a_new_record_has_not_been_reviewed(records) -> None:
+    """Everything starts in the queue as new."""
+    answer_id = an_answer(records)
+
+    written = record_feedback(records, answer_id, verdict="down")
+
+    assert written["reviewed_at"] is None
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_one_record_can_be_read_by_its_id(records, kind) -> None:
+    """A single record comes back exactly as the list of its kind has it."""
+    answer_id = an_answer(records)
+    record_gap(records, answer_id)
+    record_correction(records, answer_id, what_was_wrong="x", what_is_right="y")
+    record_feedback(records, answer_id, verdict="up")
+    readers = {"gaps": gaps, "corrections": corrections, "feedback": feedback}
+    [listed] = readers[kind](records)
+
+    assert record(records, kind, listed["id"]) == listed
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_reading_an_id_that_is_not_there_is_refused(records, kind) -> None:
+    """An unknown id is reported rather than answered with nothing."""
+    with pytest.raises(UnknownRecordError):
+        record(records, kind, 404)
+
+
+def test_a_kind_that_is_not_one_of_the_three_is_refused(records) -> None:
+    """The kind names a table, so anything else stops before any SQL runs."""
+    with pytest.raises(ValueError):
+        record(records, "answers", 1)
+    with pytest.raises(ValueError):
+        mark_reviewed(records, "answers; DROP TABLE gaps", 1)
+
+
+def test_marking_a_record_reviewed_persists(tmp_path) -> None:
+    """The mark survives the connection, so a reader sees it next time too."""
+    path = tmp_path / "usage.db"
+    first = connect(path)
+    try:
+        answer_id = an_answer(first)
+        written = record_correction(
+            first, answer_id, what_was_wrong="x", what_is_right="y"
+        )
+        marked = mark_reviewed(first, "corrections", written["id"])
+    finally:
+        first.close()
+
+    second = connect(path)
+    try:
+        [row] = corrections(second)
+    finally:
+        second.close()
+
+    assert marked["reviewed_at"]
+    assert row["reviewed_at"] == marked["reviewed_at"]
+    assert row | {"reviewed_at": None} == written
+
+
+def test_marking_twice_keeps_the_first_time(records) -> None:
+    """Repeating the request does not move when the item was first seen."""
+    answer_id = an_answer(records)
+    written = record_gap(records, answer_id)
+    first = mark_reviewed(records, "gaps", written["id"])
+    records.execute(
+        "UPDATE gaps SET reviewed_at = '2026-01-01T00:00:00.000Z' WHERE id = ?",
+        (written["id"],),
+    )
+    records.commit()
+
+    again = mark_reviewed(records, "gaps", written["id"])
+
+    assert first["reviewed_at"]
+    assert again["reviewed_at"] == "2026-01-01T00:00:00.000Z"
+
+
+def test_a_review_mark_can_be_cleared(records) -> None:
+    """A mistaken click puts the item back among the new ones."""
+    answer_id = an_answer(records)
+    written = record_feedback(records, answer_id, verdict="down")
+    mark_reviewed(records, "feedback", written["id"])
+
+    cleared = mark_reviewed(records, "feedback", written["id"], reviewed=False)
+
+    assert cleared["reviewed_at"] is None
+    assert feedback(records)[0]["reviewed_at"] is None
+
+
+def test_marking_only_touches_the_record_named(records) -> None:
+    """Gap 1 and correction 1 are different records despite sharing an id."""
+    answer_id = an_answer(records)
+    gap = record_gap(records, answer_id)
+    correction = record_correction(
+        records, answer_id, what_was_wrong="x", what_is_right="y"
+    )
+    assert gap["id"] == correction["id"]
+
+    mark_reviewed(records, "gaps", gap["id"])
+
+    assert gaps(records)[0]["reviewed_at"]
+    assert corrections(records)[0]["reviewed_at"] is None
+
+
+def test_marking_an_id_that_is_not_there_is_refused(records) -> None:
+    """Nothing is written, and the caller hears that nothing matched."""
+    with pytest.raises(UnknownRecordError):
+        mark_reviewed(records, "corrections", 404)
+
+
+def test_a_file_from_before_reviewing_is_brought_up_to_date(tmp_path) -> None:
+    """Rows written before the review mark existed are kept, and read as new.
+
+    The version-1 file is made by taking the column back off a current one,
+    which leaves exactly the tables that version wrote.
+    """
+    path = tmp_path / "usage.db"
+    old = connect(path)
+    try:
+        answer_id = an_answer(old)
+        record_gap(old, answer_id, routing=A_ROUTING)
+        record_correction(old, answer_id, what_was_wrong="x", what_is_right="y")
+        record_feedback(old, answer_id, verdict="down", note="stale")
+        for table in KINDS:
+            old.execute(f"ALTER TABLE {table} DROP COLUMN reviewed_at")
+        old.execute(
+            "UPDATE capture_meta SET value = '1' WHERE key = ?", (SCHEMA_VERSION_KEY,)
+        )
+        old.commit()
+    finally:
+        old.close()
+
+    upgraded = connect(path)
+    try:
+        (version,) = upgraded.execute(
+            "SELECT value FROM capture_meta WHERE key = ?", (SCHEMA_VERSION_KEY,)
+        ).fetchone()
+        rows = [gaps(upgraded)[0], corrections(upgraded)[0], feedback(upgraded)[0]]
+        marked = mark_reviewed(upgraded, "feedback", rows[2]["id"])
+    finally:
+        upgraded.close()
+
+    assert int(version) == SCHEMA_VERSION
+    assert rows[0]["routing"] == A_ROUTING
+    assert rows[2]["note"] == "stale"
+    assert all(row["reviewed_at"] is None for row in rows)
+    assert marked["reviewed_at"]
