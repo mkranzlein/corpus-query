@@ -638,9 +638,9 @@ class State(MessagesState):
     correction: dict[str, Any] | None
     served_by: dict[str, Any] | None
     """Which model drafted this turn's answer: ``backend`` and ``model``.
-    Written by ``think``, the one node every turn passes through, so the
-    answer's row records what actually answered rather than what was
-    configured."""
+    Written by ``think``, the one node every turn passes through, from the
+    model it called, so the answer's row names the model the turn ran on
+    rather than whatever the environment says the backend should be."""
 
 
 def build_graph(
