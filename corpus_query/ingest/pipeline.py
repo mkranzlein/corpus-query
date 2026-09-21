@@ -31,10 +31,18 @@ from pathlib import Path
 
 from corpus_query.ingest.chunk import TARGET_WORDS, Chunk
 from corpus_query.ingest.decks import DECK_SUFFIX, read_deck
+from corpus_query.ingest.legacy import converting_reader
 from corpus_query.ingest.reader import IngestError, ReadDocument, Reader
 from corpus_query.ingest.transcripts import TRANSCRIPT_SUFFIX, read_transcript
 from corpus_query.ingest.word import DOCX_SUFFIX, read_word_document
 from corpus_query.ingest.workbooks import XLSX_SUFFIX, read_workbook
+
+#: Legacy binary formats. Each is converted to its modern equivalent with
+#: LibreOffice at ingest time and then read by the reader that format
+#: already has; see :mod:`corpus_query.ingest.legacy`.
+DOC_SUFFIX = ".doc"
+PPT_SUFFIX = ".ppt"
+XLS_SUFFIX = ".xls"
 
 #: Where the corpus lives, relative to the repository root: the transcripts
 #: the generator writes, and the office documents committed beside them. A
@@ -50,6 +58,9 @@ READERS: dict[str, Reader] = {
     DOCX_SUFFIX: read_word_document,
     DECK_SUFFIX: read_deck,
     XLSX_SUFFIX: read_workbook,
+    DOC_SUFFIX: converting_reader(DOCX_SUFFIX, read_word_document),
+    PPT_SUFFIX: converting_reader(DECK_SUFFIX, read_deck),
+    XLS_SUFFIX: converting_reader(XLSX_SUFFIX, read_workbook),
 }
 
 
