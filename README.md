@@ -664,6 +664,17 @@ Three environment variables change where they go:
 The last two are OpenTelemetry's own names, so they mean here what they mean
 anywhere else.
 
+### Answer quality over time
+
+A trace explains one answer. For the trend across all of them, every answer's
+row in the `answers` table also carries a handful of numbers — whether it
+abstained, the top retrieval score and its margin, how much of the answer the
+retrieved passages bear out, latency, which backend and model answered, and
+the trace id that leads back to its spans. Abstention rate, citation coverage,
+and correction rate by day are each one plain query:
+[docs/answer-metrics.md](docs/answer-metrics.md) has them, how citation
+coverage is defined, and what these numbers can and cannot tell you.
+
 ### Check that it is up
 
 ```bash
