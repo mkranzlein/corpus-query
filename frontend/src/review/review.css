@@ -1,0 +1,199 @@
+/*
+ * The review queue. Colors come from the system palette so the page follows
+ * the reader's light or dark setting along with the rest of the application.
+ */
+
+main.review {
+  max-width: 56rem;
+}
+
+.review button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.review .filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1.5rem 0 1rem;
+}
+
+.review .filters button {
+  background: Canvas;
+  border: 1px solid GrayText;
+  border-radius: 999px;
+  color: CanvasText;
+  padding: 0.25rem 0.9rem;
+}
+
+.review .filters button[aria-pressed="true"] {
+  background: CanvasText;
+  color: Canvas;
+}
+
+.review .count {
+  opacity: 0.7;
+}
+
+.review .unseen {
+  font-size: 0.8em;
+  margin-left: 0.4rem;
+}
+
+.review .note,
+.review .quiet {
+  color: GrayText;
+}
+
+.review .empty {
+  border: 1px dashed GrayText;
+  border-radius: 0.5rem;
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+.review .queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.review .item {
+  border-top: 1px solid color-mix(in srgb, GrayText 40%, transparent);
+  padding: 0.75rem 0;
+}
+
+.review .summary {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+}
+
+.review .open {
+  background: none;
+  border: 0;
+  color: inherit;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0;
+  text-align: left;
+}
+
+.review .item.new .question {
+  font-weight: 600;
+}
+
+.review .item.reviewed .open {
+  opacity: 0.65;
+}
+
+.review .meta {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  gap: 0.6rem;
+}
+
+.review .kind {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.review .kind-gaps {
+  color: #b45309;
+}
+
+.review .kind-corrections {
+  color: #b91c1c;
+}
+
+.review .kind-feedback {
+  color: #1d4ed8;
+}
+
+@media (prefers-color-scheme: dark) {
+  .review .kind-gaps {
+    color: #fbbf24;
+  }
+
+  .review .kind-corrections {
+    color: #f87171;
+  }
+
+  .review .kind-feedback {
+    color: #93c5fd;
+  }
+}
+
+.review .badge {
+  background: CanvasText;
+  border-radius: 0.25rem;
+  color: Canvas;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0 0.35rem;
+}
+
+.review .did,
+.review .said {
+  font-size: 0.9rem;
+}
+
+.review .said {
+  font-style: italic;
+}
+
+.review .mark {
+  background: Canvas;
+  border: 1px solid GrayText;
+  border-radius: 0.3rem;
+  color: CanvasText;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  padding: 0.2rem 0.6rem;
+}
+
+.review .mark:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.review .detail {
+  border-left: 3px solid color-mix(in srgb, GrayText 50%, transparent);
+  margin: 0.75rem 0 0.25rem;
+  padding-left: 1rem;
+}
+
+.review .detail dt {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-top: 0.75rem;
+  text-transform: uppercase;
+}
+
+.review .detail dd {
+  margin: 0.15rem 0 0;
+}
+
+.review .detail .answer {
+  white-space: pre-wrap;
+}
+
+.review .citations {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+@media (max-width: 36rem) {
+  .review .summary {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}
