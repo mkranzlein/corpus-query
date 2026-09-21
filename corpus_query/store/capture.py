@@ -184,12 +184,24 @@ def _migrate(connection: sqlite3.Connection, version: int) -> None:
     and asking someone to delete theirs to pick up a new column would cost
     them every record it held.
 
+    The transaction is opened with an explicit ``BEGIN``. In its default
+    mode, Python's :mod:`sqlite3` opens a transaction on its own only before
+    an INSERT, UPDATE, DELETE, or REPLACE, never before DDL, so under a bare
+    ``with connection:`` each ``ALTER TABLE`` would commit the moment it
+    ran. A failure partway through would then leave some columns added and
+    the old version recorded, and every later open would retry the first
+    ALTER and fail on a column that already exists. SQLite's DDL is
+    transactional, so inside an explicit transaction the ALTERs roll back
+    with everything else.
+
     Args:
-        connection: An open connection whose tables are at ``version``.
+        connection: An open connection whose tables are at ``version``,
+            with no transaction in progress.
         version: The version recorded in the file, a key of
             :data:`_MIGRATIONS`.
     """
-    with connection:
+    connection.execute("BEGIN")
+    try:
         while version != SCHEMA_VERSION:
             for statement in _MIGRATIONS[version]:
                 connection.execute(statement)
@@ -198,6 +210,10 @@ def _migrate(connection: sqlite3.Connection, version: int) -> None:
             "UPDATE capture_meta SET value = ? WHERE key = ?",
             (str(SCHEMA_VERSION), SCHEMA_VERSION_KEY),
         )
+    except BaseException:
+        connection.rollback()
+        raise
+    connection.commit()
 
 
 def _has_tables(connection: sqlite3.Connection) -> bool:

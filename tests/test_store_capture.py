@@ -13,6 +13,7 @@ import sqlite3
 
 import pytest
 
+from corpus_query.store import capture
 from corpus_query.store.capture import (
     KINDS,
     SCHEMA_VERSION,
@@ -442,13 +443,15 @@ def test_marking_an_id_that_is_not_there_is_refused(records) -> None:
         mark_reviewed(records, "corrections", 404)
 
 
-def test_a_file_from_before_reviewing_is_brought_up_to_date(tmp_path) -> None:
-    """Rows written before the review mark existed are kept, and read as new.
+def a_version_one_file(path) -> None:
+    """Write a usage database as version 1 left it, with one of each record.
 
-    The version-1 file is made by taking the column back off a current one,
-    which leaves exactly the tables that version wrote.
+    It is made by taking the column back off a current file, which leaves
+    exactly the tables that version wrote.
+
+    Args:
+        path: Where to write it.
     """
-    path = tmp_path / "usage.db"
     old = connect(path)
     try:
         answer_id = an_answer(old)
@@ -463,6 +466,12 @@ def test_a_file_from_before_reviewing_is_brought_up_to_date(tmp_path) -> None:
         old.commit()
     finally:
         old.close()
+
+
+def test_a_file_from_before_reviewing_is_brought_up_to_date(tmp_path) -> None:
+    """Rows written before the review mark existed are kept, and read as new."""
+    path = tmp_path / "usage.db"
+    a_version_one_file(path)
 
     upgraded = connect(path)
     try:
@@ -479,3 +488,45 @@ def test_a_file_from_before_reviewing_is_brought_up_to_date(tmp_path) -> None:
     assert rows[2]["note"] == "stale"
     assert all(row["reviewed_at"] is None for row in rows)
     assert marked["reviewed_at"]
+
+
+def test_an_upgrade_that_fails_partway_leaves_the_file_as_it_was(
+    tmp_path, monkeypatch
+) -> None:
+    """A failed upgrade is all or nothing, so the next open can try again.
+
+    The step that fails comes after the ALTERs that add the column. If those
+    had committed on their own, the file would be at version 1 with the
+    column already there, and every later open would fail on a duplicate.
+    """
+    path = tmp_path / "usage.db"
+    a_version_one_file(path)
+    original = capture._MIGRATIONS[1]
+    monkeypatch.setitem(
+        capture._MIGRATIONS, 1, (*original, "ALTER TABLE no_such_table ADD x TEXT")
+    )
+
+    with pytest.raises(sqlite3.OperationalError):
+        connect(path)
+
+    untouched = sqlite3.connect(path)
+    try:
+        (version,) = untouched.execute(
+            "SELECT value FROM capture_meta WHERE key = ?", (SCHEMA_VERSION_KEY,)
+        ).fetchone()
+        columns = {
+            table: {row[1] for row in untouched.execute(f"PRAGMA table_info({table})")}
+            for table in KINDS
+        }
+    finally:
+        untouched.close()
+    assert version == "1"
+    assert all("reviewed_at" not in names for names in columns.values())
+
+    monkeypatch.setitem(capture._MIGRATIONS, 1, original)
+    upgraded = connect(path)
+    try:
+        rows = [gaps(upgraded)[0], corrections(upgraded)[0], feedback(upgraded)[0]]
+    finally:
+        upgraded.close()
+    assert all(row["reviewed_at"] is None for row in rows)
