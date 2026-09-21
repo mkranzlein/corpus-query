@@ -1,19 +1,31 @@
-"""The graph: a model that may search, the loop around it, and what to do
-when the search did not settle the question.
+"""The graph: a rewrite, a model that may search, the loop around it, a
+verification pass, and what to do when the search did not settle the
+question.
 
-Three nodes. ``think`` calls the model. ``tools`` runs whatever the model
-asked for and feeds the results back. The edge between them is conditional,
-so a question the model answers outright never reaches retrieval at all, and
-a question with two halves goes round twice. That loop is the whole reason
-the agent exists as a graph rather than a function that searches and then
-summarizes.
+Five nodes. ``rewrite`` turns the newest turn into a question that stands on
+its own, before anything searches, since a follow-up like "what about the
+refinery one?" is only that specific once the rest of the conversation is
+read alongside it. ``think`` calls the model. ``tools`` runs whatever the
+model asked for and feeds the results back. The edge between them is
+conditional, so a question the model answers outright never reaches
+retrieval at all, and a question with two halves goes round twice. That loop
+is most of the reason the agent exists as a graph rather than a function
+that searches and then summarizes.
 
-``route`` runs once, after the model has stopped calling tools, and does
-something only for a turn that searched. It asks whether the answer settled
-the question, and when it did not, turns the passages that failed to answer
-it into a suggestion of who to ask. Its model call is its own: neither the
-prompt nor the reply joins the conversation, because a drafted question
-appended to the history is something the next turn would try to answer.
+``verify`` runs once the model has stopped calling tools and has drafted an
+answer that cites something. It re-checks each of the answer's claims
+against the passages that were searched for, and when a claim is not there,
+sends the model back to ``think`` for another draft — bounded, so a claim the
+model cannot stop making is eventually returned as-is rather than chased
+forever; see :data:`MAX_REGENERATIONS`.
+
+``route`` runs after verification has settled, and does something only for a
+turn that searched. It asks whether the answer settled the question, and
+when it did not, turns the passages that failed to answer it into a
+suggestion of who to ask. Its model call is its own, like verification's:
+neither the prompt nor the reply joins the conversation, because a drafted
+question or a verification note appended to the history is something the
+next turn would try to answer or re-litigate.
 
 The model is passed in. Nothing here imports a provider, names one, or knows
 what is answering — tools are attached with ``bind_tools``, so the tool schema
@@ -36,7 +48,9 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from corpus_query.agent.prompts import load
+from corpus_query.agent.rewriting import resolved_query as read_rewrite
 from corpus_query.agent.routing import drafted_question, suggestion
+from corpus_query.agent.verification import read_verdict
 
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
@@ -50,6 +64,16 @@ if TYPE_CHECKING:
 #: decide it again indefinitely, and a request that never returns is worse
 #: than one that answers from four searches.
 MAX_SEARCHES = 6
+
+#: How many redrafts one turn may go through when verification keeps
+#: rejecting a claim, on top of the first draft. Real unsupported claims are
+#: usually gone after one redraft with the rejection named; a claim that
+#: survives this many redrafts is treated as this model's ceiling rather
+#: than chased indefinitely, and what happens instead is deliberate: the
+#: last draft is returned as it stands, and :data:`Answer.verification`
+#: says outright that it was not cleared, rather than the turn either
+#: looping or silently keeping a claim nobody checked.
+MAX_REGENERATIONS = 2
 
 
 @dataclass(frozen=True)
@@ -86,6 +110,28 @@ class Answer:
     """The conversation this turn belongs to. Passing it back continues the
     conversation; leaving it out starts a new one."""
 
+    resolved_query: str
+    """The question this turn actually searched from: the raw question,
+    rewritten to stand on its own when there was earlier conversation to
+    resolve it against, and the raw question unchanged otherwise. Recorded
+    because a mangled rewrite is the first suspect when retrieval quality
+    drops on a follow-up, and this is what settles whether that is what
+    happened."""
+
+    verification: dict[str, Any] | None
+    """What citation verification found, or ``None`` when the turn drafted
+    nothing to verify or every claim it made was supported on the first
+    pass. Otherwise one of two shapes. When the model named specific
+    unsupported claims: ``rejected``, those claims from the last check, and
+    ``exhausted``, whether that check ran out of redrafts to try — see
+    :data:`MAX_REGENERATIONS`. When the model's reply was neither the
+    sentinel nor a single labelled rejection — a shape verification cannot
+    act on: ``unreadable`` (``True``) and ``reply``, what the model actually
+    said. An unreadable reply is not redrafted, since a redraft cannot
+    converge on a check that never named anything to fix. The answer itself
+    is always the last draft produced, whether or not verification ever
+    cleared it."""
+
 
 @dataclass(frozen=True)
 class Agent:
@@ -101,6 +147,14 @@ class Agent:
     reason the system prompt is: it travels as state rather than being read
     inside the node, so editing the file changes resumed conversations as
     well as new ones."""
+
+    rewrite_prompt: str = field(default_factory=lambda: load("rewrite"))
+    """What the rewrite node expands a turn's question with. Held here for
+    the same reason the other prompts are."""
+
+    verify_prompt: str = field(default_factory=lambda: load("verify"))
+    """What the verify node checks a drafted answer's claims with. Held here
+    for the same reason the other prompts are."""
 
     async def answer(self, question: str, thread_id: str | None = None) -> Answer:
         """Answer one question.
@@ -119,11 +173,17 @@ class Agent:
                 "messages": [HumanMessage(question)],
                 "system_prompt": self.system_prompt,
                 "routing_prompt": self.routing_prompt,
+                "rewrite_prompt": self.rewrite_prompt,
+                "verify_prompt": self.verify_prompt,
                 # Cleared on the way in. State outlives a turn, so a
-                # suggestion left over from an earlier question would
-                # otherwise come back attached to the answer to this one.
+                # suggestion, a rewrite, or a verification left over from an
+                # earlier question would otherwise come back attached to the
+                # answer to this one.
                 "routing": None,
                 "abstained": False,
+                "resolved_query": "",
+                "verification": None,
+                "verify_attempts": 0,
             },
             config={"configurable": {"thread_id": thread}},
         )
@@ -135,6 +195,8 @@ class Agent:
             routing=state.get("routing"),
             abstained=bool(state.get("abstained")),
             thread_id=thread,
+            resolved_query=state.get("resolved_query") or question,
+            verification=state.get("verification"),
         )
 
 
@@ -149,8 +211,13 @@ class State(MessagesState):
 
     system_prompt: str
     routing_prompt: str
+    rewrite_prompt: str
+    verify_prompt: str
     routing: dict[str, Any] | None
     abstained: bool
+    resolved_query: str
+    verification: dict[str, Any] | None
+    verify_attempts: int
 
 
 def build_graph(
@@ -158,6 +225,7 @@ def build_graph(
     tools: list[BaseTool],
     checkpointer: BaseCheckpointSaver | None = None,
     max_searches: int = MAX_SEARCHES,
+    max_regenerations: int = MAX_REGENERATIONS,
 ) -> Any:
     """Compile the agent's graph.
 
@@ -174,11 +242,44 @@ def build_graph(
             leaves the graph unpersisted, which is only what a test wants.
         max_searches: How many tool results one turn may accumulate before
             the model is called without tools and has to answer.
+        max_regenerations: How many redrafts one turn may go through when
+            verification keeps rejecting a claim. See
+            :data:`MAX_REGENERATIONS`.
 
     Returns:
         The compiled graph.
     """
     with_tools = model.bind_tools(tools)
+
+    async def rewrite(state: State) -> dict[str, str]:
+        """Expand the newest turn into a question that stands on its own.
+
+        A turn with no conversation before it has nothing to resolve, so
+        that case is answered without a model call: the question is already
+        standalone by construction. Every other turn is rewritten, since
+        whether a follow-up needed resolving is exactly what a small model
+        that skipped this step would get wrong.
+
+        Args:
+            state: The conversation, with the newest turn at the end.
+
+        Returns:
+            The standalone form of this turn's question, to record and for
+            ``think`` to search from.
+        """
+        turn = _this_turn(state["messages"])
+        question = _question(turn)
+        history = state["messages"][: len(state["messages"]) - len(turn)]
+        if not history:
+            return {"resolved_query": question}
+        reply = await model.ainvoke(
+            [
+                SystemMessage(state["rewrite_prompt"]),
+                *history,
+                HumanMessage(f"Newest question: {question}"),
+            ]
+        )
+        return {"resolved_query": read_rewrite(_text_of(reply), fallback=question)}
 
     async def think(state: State) -> dict[str, list[AIMessage]]:
         """Call the model on the conversation so far.
@@ -189,7 +290,14 @@ def build_graph(
         Returns:
             The model's reply, to append to the conversation.
         """
-        messages = [SystemMessage(state["system_prompt"]), *state["messages"]]
+        system = state["system_prompt"]
+        resolved = state.get("resolved_query") or ""
+        if resolved and resolved != _question(_this_turn(state["messages"])):
+            system = (
+                f"{system}\n\nThis turn's question, resolved to stand on its "
+                f"own: {resolved}"
+            )
+        messages = [SystemMessage(system), *state["messages"]]
         searches = sum(
             isinstance(message, ToolMessage)
             for message in _this_turn(state["messages"])
@@ -200,6 +308,61 @@ def build_graph(
         # have to explain away.
         speaker = model if searches >= max_searches else with_tools
         return {"messages": [await speaker.ainvoke(messages)]}
+
+    async def verify(state: State) -> dict[str, Any]:
+        """Re-check the drafted answer's claims against what was searched.
+
+        A turn that cited nothing has nothing to check — the out-of-scope
+        decline and the answer taken straight from earlier conversation
+        both skip the model call the same way ``route`` skips its own.
+
+        Past :data:`max_regenerations` redrafts, a claim that is still
+        rejected is left in the answer rather than redrafted again: the
+        last draft is what ``route`` and the caller see, and
+        ``state["verification"]`` says the check did not clear it.
+
+        A reply this module cannot read as either the sentinel or a
+        labelled rejection is not redrafted either — a reply outside that
+        shape is not evidence a claim was rejected, and asking the model to
+        redraft over it cannot converge on a check that never named
+        anything to fix. ``state["verification"]`` records that the check
+        could not be read, and the draft stands as it is.
+
+        Args:
+            state: The conversation, with the drafted answer at the end.
+
+        Returns:
+            Nothing, when there was nothing to verify or every claim held
+            up. Otherwise the verification outcome, and — when redrafts
+            remain because specific claims were rejected — a note appended
+            to the conversation asking the model to draft again.
+        """
+        turn = _this_turn(state["messages"])
+        if not _citations(turn):
+            return {}
+        passages = _passages_text(turn)
+        judgement = await model.ainvoke(
+            [
+                SystemMessage(state["verify_prompt"]),
+                HumanMessage(
+                    f"Passages:\n{passages}\n\nDrafted answer:\n{_final_text(turn)}"
+                ),
+            ]
+        )
+        reply = _text_of(judgement)
+        verdict = read_verdict(reply)
+        if not verdict.rejected:
+            if verdict.readable:
+                return {"verification": None}
+            return {"verification": {"unreadable": True, "reply": _truncated(reply)}}
+        attempts = state.get("verify_attempts", 0)
+        if attempts >= max_regenerations:
+            return {"verification": {"rejected": verdict.rejected, "exhausted": True}}
+        return {
+            "messages": [SystemMessage(_regeneration_note(verdict.rejected))],
+            "verification": {"rejected": verdict.rejected, "exhausted": False},
+            "verify_attempts": attempts + 1,
+        }
 
     async def route(state: State) -> dict[str, Any]:
         """Suggest who to ask, if the answer did not settle the question.
@@ -251,15 +414,40 @@ def build_graph(
             "abstained": drafted_question(reply) is not None,
         }
 
+    def after_verify(state: State) -> str:
+        """Decide whether a verified turn is done or needs another draft.
+
+        Args:
+            state: The conversation and the verification just performed.
+
+        Returns:
+            ``"think"`` when verification appended a redraft request,
+            ``"route"`` otherwise — a pass, nothing to verify, an
+            unreadable reply, or the regeneration bound was reached. A
+            verification dict with no ``"exhausted"`` key — the unreadable
+            case — defaults to done rather than redrafted, for the same
+            reason ``verify`` never appends a redraft request for it.
+        """
+        verification = state.get("verification")
+        if verification is not None and not verification.get("exhausted", True):
+            return "think"
+        return "route"
+
     builder = StateGraph(State)
+    builder.add_node("rewrite", rewrite)
     builder.add_node("think", think)
     builder.add_node("tools", ToolNode(tools))
+    builder.add_node("verify", verify)
     builder.add_node("route", route)
-    builder.add_edge(START, "think")
+    builder.add_edge(START, "rewrite")
+    builder.add_edge("rewrite", "think")
     builder.add_conditional_edges(
-        "think", tools_condition, {"tools": "tools", END: "route"}
+        "think", tools_condition, {"tools": "tools", END: "verify"}
     )
     builder.add_edge("tools", "think")
+    builder.add_conditional_edges(
+        "verify", after_verify, {"think": "think", "route": "route"}
+    )
     builder.add_edge("route", END)
     return builder.compile(checkpointer=checkpointer)
 
@@ -361,3 +549,67 @@ def _citations(messages: list[Any]) -> list[dict[str, Any]]:
             seen.add(entry["chunk_id"])
             collected.append(entry)
     return collected
+
+
+def _passages_text(messages: list[Any]) -> str:
+    """Collect the rendered passage text this turn's searches produced.
+
+    This is what the model itself read before drafting — the same blocks
+    :func:`corpus_query.agent.retrieval.render_passages` built, document and
+    date and all — rather than the citations, which drop the text a claim
+    would be checked against.
+
+    Args:
+        messages: This turn's messages.
+
+    Returns:
+        Every search's rendered results, in the order they were run,
+        joined into one block. Empty when nothing was searched.
+    """
+    return "\n\n".join(
+        message.content
+        for message in messages
+        if isinstance(message, ToolMessage) and isinstance(message.content, str)
+    )
+
+
+def _regeneration_note(rejected: list[str]) -> str:
+    """Write the message that sends a rejected draft back for another one.
+
+    Args:
+        rejected: The claims verification found no passage supporting.
+
+    Returns:
+        An instruction to append to the conversation, naming exactly what
+        was rejected rather than asking for a redraft in the abstract.
+    """
+    listed = "\n".join(f"- {claim}" for claim in rejected)
+    return (
+        "The passages above do not support at least one claim in the answer "
+        f"you just gave:\n{listed}\n"
+        "Write the answer again, using only what the passages actually say. "
+        "Drop or soften anything they do not support; if that leaves nothing "
+        "left to answer with, say the record does not say."
+    )
+
+
+#: How much of an unreadable verification reply to keep in
+#: :data:`Answer.verification`. Long enough to show what the model actually
+#: wrote instead of a labelled rejection; short enough that a state record
+#: never grows unboundedly on a model that reliably misses the format.
+_UNREADABLE_REPLY_LIMIT = 500
+
+
+def _truncated(reply: str) -> str:
+    """Bound how much of an unreadable reply is kept.
+
+    Args:
+        reply: The verification model's raw reply.
+
+    Returns:
+        The reply, cut to :data:`_UNREADABLE_REPLY_LIMIT` characters with a
+        marker showing it was cut, or left whole if it already fit.
+    """
+    if len(reply) <= _UNREADABLE_REPLY_LIMIT:
+        return reply
+    return reply[:_UNREADABLE_REPLY_LIMIT] + "…"
