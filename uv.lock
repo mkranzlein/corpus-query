@@ -517,6 +517,7 @@ dependencies = [
     { name = "constructs" },
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "langchain-aws" },
     { name = "langchain-ollama" },
     { name = "langgraph" },
     { name = "langgraph-checkpoint-sqlite" },
@@ -551,6 +552,7 @@ requires-dist = [
     { name = "constructs", specifier = ">=10.0.0,<11.0.0" },
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "langchain-aws", specifier = ">=1.7.8" },
     { name = "langchain-ollama", specifier = ">=1.1.0" },
     { name = "langgraph", specifier = ">=1.2.11" },
     { name = "langgraph-checkpoint-sqlite", specifier = ">=3.1.1" },
@@ -1152,6 +1154,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ca/57/b07b96353f902aa1bdbe00e878e3a12a137977d03a962479785576aa8ec9/kubernetes-36.0.3.tar.gz", hash = "sha256:36993ed25ce59b789c9341473a228fcf268504a2fec7c2b2b1531d73072e5ce7", size = 2337528, upload-time = "2026-07-13T20:38:12.128Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5b/30/a96d47df739689ac0001ade0afefc16e3b477fc2fb426b568515fdc8afce/kubernetes-36.0.3-py2.py3-none-any.whl", hash = "sha256:8fde9241c4b298e6374a069dcf728359b4e72c2fb29489a975ba4e1c047cf10f", size = 4618066, upload-time = "2026-07-13T20:38:10.172Z" },
+]
+
+[[package]]
+name = "langchain-aws"
+version = "1.7.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "boto3" },
+    { name = "langchain-core" },
+    { name = "numpy" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f2/cc/d6a33e8ecea375d8f0900b6708e3d93bd67da7b0f50ba5c2e01222302c99/langchain_aws-1.7.8.tar.gz", hash = "sha256:3e1349231ab1c6952242946427ea63fbe97037eec21fab6a3c87327757fb2ef1", size = 762459, upload-time = "2026-09-16T17:29:44.936Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8a/fe/24a8503cccc7e47f95318c5e993ed880fcc487156d5144b5887b3e9c83f0/langchain_aws-1.7.8-py3-none-any.whl", hash = "sha256:ebaf0cf3378c5934ca4482f2512b06eafe58e5df8bf03de6f47846777842be23", size = 237441, upload-time = "2026-09-16T17:29:43.367Z" },
 ]
 
 [[package]]

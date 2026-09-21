@@ -3,7 +3,9 @@
 These drive the real context manager: a real aiosqlite connection to a real
 file, LangGraph's own ``setup()``, the compiled graph, and the teardown. Only
 the chat model is injected, which ``open_agent`` already takes as a parameter,
-so none of this reaches Ollama or any network.
+so none of this reaches Ollama or any network. What the factory builds when
+nothing is injected is
+:mod:`test_agent_model`'s subject rather than this one's.
 
 What is worth proving here is what the lifespan is for. The checkpointer's
 tables exist afterwards, a conversation that ran leaves a row behind rather
@@ -19,12 +21,6 @@ import sqlite3
 import pytest
 from fastapi import FastAPI
 
-from corpus_query.agent.model import (
-    DEFAULT_CONTEXT_WINDOW,
-    DEFAULT_MODEL,
-    DEFAULT_TEMPERATURE,
-    load_chat_model,
-)
 from corpus_query.agent.prompts import PROMPT_DIR, PromptError, load
 from corpus_query.agent.runtime import open_agent
 from test_agent_answer import ScriptedModel, says
@@ -150,37 +146,6 @@ def test_the_default_usage_database_is_used_when_none_is_given(tmp_path) -> None
     asyncio.run(run())
 
     assert (tmp_path / "usage.db").exists()
-
-
-def test_the_chat_model_is_built_the_way_the_project_wants_it() -> None:
-    """The local model is asked for by name, cold, with a sized window.
-
-    Constructing the client does no I/O, so this can assert on the settings
-    directly. It pins the context window in particular: 16384 was measured
-    against the longest real turns rather than picked, and Ollama's own
-    default silently evicts the system prompt when it is too small, so a
-    change to that number should be a deliberate one. #87 will rewrite this
-    function to choose between backends; these are the settings the local
-    one has to keep.
-    """
-    model = load_chat_model()
-
-    assert model.model == DEFAULT_MODEL == "granite4.1:8b"
-    assert model.temperature == DEFAULT_TEMPERATURE == 0.0
-    assert model.num_ctx == DEFAULT_CONTEXT_WINDOW == 16384
-
-
-def test_the_chat_model_takes_overrides() -> None:
-    """Every setting can be asked for, which is how a test or a tool pins one."""
-    model = load_chat_model(
-        model="something-else:1b", temperature=0.7, context_window=2048
-    )
-
-    assert (model.model, model.temperature, model.num_ctx) == (
-        "something-else:1b",
-        0.7,
-        2048,
-    )
 
 
 def test_a_prompt_that_is_not_there_is_reported_as_one() -> None:
