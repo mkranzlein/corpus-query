@@ -35,6 +35,7 @@ from anthropic.types import Message
 from pydantic import BaseModel
 
 from infra.config import ConfigError, load_env, require
+from scripts.bedrock_client import build_client
 
 #: Environment file this script reads. Deliberately not ``infra.config``'s
 #: default of ``.env.admin`` — that file holds AWS provisioning settings,
@@ -64,24 +65,6 @@ class SmokeTestAnswer(BaseModel):
     capital: str
     is_coastal: bool
     summary: str
-
-
-def build_client(env: dict[str, str]) -> AnthropicBedrock:
-    """Build the Anthropic client pointed at Bedrock Runtime.
-
-    Args:
-        env: Settings as returned by :func:`infra.config.load_env`.
-
-    Returns:
-        A client configured with the key and region from ``env``.
-
-    Raises:
-        ConfigError: If a required setting is missing.
-    """
-    return AnthropicBedrock(
-        api_key=require(env, "AWS_BEARER_TOKEN_BEDROCK"),
-        aws_region=require(env, "AWS_REGION"),
-    )
 
 
 def describe_empty(message: Message) -> str:

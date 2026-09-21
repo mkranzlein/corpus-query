@@ -45,7 +45,8 @@ from corpus_query.transcripts.roster import (
 from corpus_query.transcripts.schema import Meeting, Meetings
 from corpus_query.transcripts.slugs import unique_slug
 from corpus_query.transcripts.summaries import DEFAULT_DATABASE_FILE, read_summaries
-from infra.config import ConfigError, load_env, require
+from infra.config import ConfigError, load_env
+from scripts.bedrock_client import build_client
 
 #: Environment file this script reads, holding the inference client's
 #: settings rather than the AWS provisioning ones.
@@ -274,24 +275,6 @@ def check_roster(meetings: Meetings, roster: tuple[str, ...]) -> list[str]:
                     f"is not on the roster"
                 )
     return problems
-
-
-def build_client(env: dict[str, str]) -> AnthropicBedrock:
-    """Build the Anthropic client pointed at Bedrock Runtime.
-
-    Args:
-        env: Settings as returned by :func:`infra.config.load_env`.
-
-    Returns:
-        A client configured with the key and region from ``env``.
-
-    Raises:
-        ConfigError: If a required setting is missing.
-    """
-    return AnthropicBedrock(
-        api_key=require(env, "AWS_BEARER_TOKEN_BEDROCK"),
-        aws_region=require(env, "AWS_REGION"),
-    )
 
 
 def request_batch(

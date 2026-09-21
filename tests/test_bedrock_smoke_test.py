@@ -8,15 +8,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from infra.config import ConfigError
 from scripts.bedrock_smoke_test import (
     MODEL,
     PROMPT,
     TEMPERATURE,
     SmokeTestAnswer,
-    build_client,
     main,
     run,
 )
@@ -141,17 +137,3 @@ def test_main_wires_settings_through_to_the_client(tmp_path: Path, monkeypatch):
 
     assert exit_code == 0
     assert seen_env["AWS_REGION"] == "us-east-1"
-
-
-def test_build_client_reports_a_missing_key():
-    with pytest.raises(ConfigError, match="AWS_BEARER_TOKEN_BEDROCK"):
-        build_client(
-            {k: v for k, v in SETTINGS.items() if k != "AWS_BEARER_TOKEN_BEDROCK"}
-        )
-
-
-def test_build_client_uses_the_configured_key_and_region():
-    client = build_client(SETTINGS)
-
-    assert client.api_key == "bedrock-api-key-fake"
-    assert client.aws_region == "us-east-1"

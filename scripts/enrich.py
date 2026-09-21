@@ -58,7 +58,8 @@ from corpus_query.enrich.topics import (
     read_seed_topics,
 )
 from corpus_query.store.db import DEFAULT_DATABASE_FILE, SchemaVersionError, connect
-from infra.config import ConfigError, load_env, require
+from infra.config import ConfigError, load_env
+from scripts.bedrock_client import build_client
 
 #: Environment file this script reads, holding the inference client's
 #: settings rather than the AWS provisioning ones.
@@ -122,24 +123,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="print the prompts that would be sent and exit without calling anything",
     )
     return parser.parse_args(argv)
-
-
-def build_client(env: dict[str, str]) -> AnthropicBedrock:
-    """Build the Anthropic client pointed at Bedrock Runtime.
-
-    Args:
-        env: Settings as returned by :func:`infra.config.load_env`.
-
-    Returns:
-        A client configured with the key and region from ``env``.
-
-    Raises:
-        ConfigError: If a required setting is missing.
-    """
-    return AnthropicBedrock(
-        api_key=require(env, "AWS_BEARER_TOKEN_BEDROCK"),
-        aws_region=require(env, "AWS_REGION"),
-    )
 
 
 def build_embedder() -> tuple[Embed, str]:
