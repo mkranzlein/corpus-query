@@ -457,6 +457,24 @@ curl -s localhost:8000/feedback \
 An id that does not name an answer this service gave is a `404`. Storing it
 anyway would make a row nothing could ever read back.
 
+A correction can also be typed into the conversation, as the next message on
+the same thread:
+
+```bash
+curl -s localhost:8000/answer \
+  -H 'content-type: application/json' \
+  -d '{"thread_id": "…",
+       "question": "No, that is wrong. The freeze moved to March 19th."}'
+```
+
+The agent recognizes a message that says an earlier answer was wrong and
+what is right instead, and records it against that answer's id in the same
+table, without searching. Its reply says what it recorded, and the response's
+`correction` field carries the row. A question about an answer, or
+disagreement that does not say what is right, is not recorded. When the
+conversation holds more than one answer and the message does not make clear
+which one it means, the agent asks rather than guessing.
+
 Read the three back most recent first, each row carrying the question that
 produced it and the answer that was given, so a reader working through them
 does not need a second call per row:
