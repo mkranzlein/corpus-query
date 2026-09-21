@@ -7,11 +7,15 @@ the same path.
 
 Two backends can answer a question, and the setup differs only in one step:
 
-- **Local**, the default. A chat model served by Ollama on this machine.
-  Nothing is billed and no account is needed.
-- **Bedrock**. A hosted model, called with a Bedrock API key you are given
-  separately. Every question is a billed call. See [Which model
-  answers](../README.md#which-model-answers) for what each one costs.
+- **Bedrock**, the recommended one. A hosted model, called with the
+  credentials in a `.env` file you are given separately. Nothing to install
+  for it beyond the project itself.
+- **Local**. A chat model served by Ollama on this machine, for keeping
+  everything offline. It needs Ollama installed and a ~5.3 GB model pulled,
+  and answers slowly without a GPU for Ollama to use.
+
+See [Which model answers](../README.md#which-model-answers) for how the two
+compare.
 
 Searching needs neither: `/search` runs on the local embedding and reranking
 models alone.
@@ -97,21 +101,18 @@ Every command from here on runs from the root of the clone.
 
 ## 3. Choose a backend
 
-### Local, with Ollama
-
-Ollama has to be running, which it is after the install above:
-
-```bash
-ollama pull granite4.1:8b     # ~5.3 GB, once
-```
-
 ### Bedrock
 
 Skip Ollama entirely. The Bedrock settings live in a `.env` file at the root
 of the clone, which is gitignored and never committed. If you were given a
-`.env`, put it there. Otherwise start from the template the repository
-ships, which has every setting the service reads from that file and no
-values for the secret ones:
+`.env`, copy it there and this step is done:
+
+```bash
+cp /path/to/your/.env .env
+```
+
+Otherwise start from the template the repository ships, which has every
+setting the service reads from that file and no values for the secret ones:
 
 ```bash
 cp -n .env.example .env   # -n leaves an existing .env alone
@@ -126,14 +127,23 @@ Then fill in:
 | `CORPUS_QUERY_MODEL_BACKEND` | Optional. `bedrock` here makes every start answer from Bedrock; leave it out to choose per start, as below. |
 
 A key in `.env` does not by itself select Bedrock. Only
-`CORPUS_QUERY_MODEL_BACKEND` does, so that a key kept there for other reasons
-never turns a free question into a billed one.
+`CORPUS_QUERY_MODEL_BACKEND` does: name it when you start the service, as
+below, or set it in `.env` to make Bedrock the choice on every start.
+
+### Local, with Ollama
+
+The alternative, for keeping everything on this machine. Ollama has to be
+running, which it is after the install above:
+
+```bash
+ollama pull granite4.1:8b     # ~5.3 GB, once
+```
 
 ## 4. Start it and ask something
 
 ```bash
-uv run scripts/serve.py                                      # local
 CORPUS_QUERY_MODEL_BACKEND=bedrock uv run scripts/serve.py   # Bedrock
+uv run scripts/serve.py                                      # local
 ```
 
 On the way up it prints which model `/answer` is answering from. The committed

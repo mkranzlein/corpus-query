@@ -25,40 +25,53 @@ What the corpus could not answer is kept. A question the record does not
 settle is written down as a gap without anybody filing it, and corrections and
 feedback record what a person has to say about an answer.
 
-Everything runs on your machine by default: a SQLite document store on disk, a
-local embedding model, a local reranking model, and a local chat model served
-by Ollama. **Searching needs no AWS account, no Bedrock endpoint, and no API
-key**, and neither does answering unless you ask for the hosted model by
-name — see [Which model answers](#which-model-answers). A hosted model wrote
-the transcripts and enriched them, but that work is done and its output ships
-in the database. Building a corpus of your own is the one thing here that
-needs credentials; see [Building a corpus](#building-a-corpus).
+Answers come from Claude on Bedrock, reached with the credentials in a `.env`
+file at the root of the clone, or from a local model served by Ollama if you
+would rather keep everything on your machine — see [Which model
+answers](#which-model-answers). Retrieval always runs locally: a SQLite
+document store on disk, a local embedding model, and a local reranking model,
+so **`/search` needs no credentials at all**. A hosted model wrote the
+transcripts and enriched them, but that work is done and its output ships in
+the database.
 
 ## Quickstart
 
 Starting from nothing, on macOS or Ubuntu. [docs/setup.md](docs/setup.md)
-has every step for each of them: installing uv and Ollama, answering from
-Bedrock instead, and a [teardown](docs/setup.md#teardown) that stops
-everything and removes what was downloaded and written, saying which of it is
-worth keeping.
+has every step for each of them, including installing uv, answering from a
+local model instead, and a [teardown](docs/setup.md#teardown) that stops
+everything and removes what was downloaded and written.
 
 ```bash
-# 1. Install uv, and Ollama for the local model: see docs/setup.md for the
-#    commands on macOS and on Ubuntu.
+# 1. Install uv: see docs/setup.md for the command on macOS and on Ubuntu.
 
 # 2. Install the project, with the model stack.
 git clone https://github.com/mkranzlein/corpus-query.git
 cd corpus-query
 uv sync --extra models
+```
 
-# 3. Fetch the embedding and reranking weights (~215 MB, once).
+> [!IMPORTANT]
+> **3. Put your `.env` in the clone.** The credentials `/answer` uses live in
+> a file named `.env` at the root of the clone — the `corpus-query` directory
+> you just changed into, next to this README. Copy the `.env` you were given
+> there:
+>
+> ```bash
+> cp /path/to/your/.env .env
+> ```
+>
+> It is gitignored, so it stays on your machine. No `.env`? Start from the
+> template with `cp -n .env.example .env` and fill in
+> `AWS_BEARER_TOKEN_BEDROCK` and `AWS_REGION`; [docs/setup.md](docs/setup.md#bedrock)
+> says what each one is.
+
+```bash
+# 4. Fetch the embedding and reranking weights (~215 MB, once).
 uv run scripts/fetch_models.py
 
-# 4. Pull the chat model /answer runs on (~5.3 GB, once). Ollama must be running.
-ollama pull granite4.1:8b
-
-# 5. Start the service. The committed corpus at data/corpus.db is ready to query.
-uv run scripts/serve.py
+# 5. Start the service, answering from Bedrock. The committed corpus at
+#    data/corpus.db is ready to query.
+CORPUS_QUERY_MODEL_BACKEND=bedrock uv run scripts/serve.py
 # The page is at http://127.0.0.1:8000, the endpoints are below it.
 # Ctrl+C stops it.
 ```
@@ -68,24 +81,26 @@ time and the build is committed, so running the whole system takes Python and
 nothing else. See [The committed
 frontend](docs/frontend.md).
 
-Ollama and step 4 are only needed for `/answer`. `/search` ranks without a
-chat model, and the service starts either way — a question asked of `/answer`
-with no Ollama running is the one thing that fails.
+The service reads the `.env` at startup, and `CORPUS_QUERY_MODEL_BACKEND=bedrock`
+is what points `/answer` at Bedrock. `/search` needs neither: it ranks without
+a chat model, so the service starts and searches even with no `.env` at all.
 
-They are also only needed for the local model, which is the default. To
-answer from the hosted model instead, skip them, put a Bedrock key and a
-region in `.env` — [`.env.example`](.env.example) is a template with every
-setting that file takes — and name the backend when you start the service:
+### Answering from a local model instead
+
+To keep everything on your machine, `/answer` can run on `granite4.1:8b`
+served by Ollama. There is no `.env` to put in place for this; install Ollama
+instead ([docs/setup.md](docs/setup.md#1-install-the-tools) has the commands
+for each OS), then pull the model and start the service without the variable:
 
 ```bash
-cp -n .env.example .env   # leaves an existing .env alone; then fill in AWS_BEARER_TOKEN_BEDROCK and AWS_REGION
-CORPUS_QUERY_MODEL_BACKEND=bedrock uv run scripts/serve.py
+ollama pull granite4.1:8b      # ~5.3 GB, once; Ollama must be running
+uv run scripts/serve.py
 ```
 
-That path makes a real, billed call for every question. [Which model
-answers](#which-model-answers) has what each mode costs, and
-[docs/models.md](docs/models.md) what happens when the one you chose is not
-reachable.
+It is a small model, and on a machine without a GPU for Ollama to use it
+answers slowly. [Which model answers](#which-model-answers) compares the two,
+and [docs/models.md](docs/models.md) has what happens when the one you chose is
+not reachable.
 
 The corpus committed at `data/corpus.db` is ready as-is, and the service builds
 its vector index itself at startup, so there is nothing to build first. If the
@@ -208,22 +223,23 @@ not applied: nothing feeds them back into answers.
 
 `/answer` runs on one of two models, and which one is yours to choose:
 
-|            | local (the default)                   | hosted                                                    |
-| ---------- | ------------------------------------- | --------------------------------------------------------- |
-| model      | `granite4.1:8b`                       | Claude Sonnet 4.6, as `us.anthropic.claude-sonnet-4-6`     |
-| served by  | Ollama, on this machine               | Bedrock                                                    |
-| needs      | Ollama running, that model pulled     | `AWS_BEARER_TOKEN_BEDROCK` and `AWS_REGION`                |
-| costs      | nothing, beyond the laptop's battery  | a billed call per model turn, and a turn that searches makes several |
+|            | Bedrock (recommended)                                  | local                                  |
+| ---------- | ------------------------------------------------------ | -------------------------------------- |
+| model      | Claude Sonnet 4.6, as `us.anthropic.claude-sonnet-4-6` | `granite4.1:8b`                        |
+| served by  | Bedrock                                                | Ollama, on this machine                |
+| needs      | `AWS_BEARER_TOKEN_BEDROCK` and `AWS_REGION`, in `.env` | Ollama running, that model pulled      |
+| chosen by  | `CORPUS_QUERY_MODEL_BACKEND=bedrock`                   | leaving `CORPUS_QUERY_MODEL_BACKEND` unset |
 
 ```bash
+CORPUS_QUERY_MODEL_BACKEND=bedrock uv run scripts/serve.py    # Bedrock
 uv run scripts/serve.py                                       # local
-CORPUS_QUERY_MODEL_BACKEND=bedrock uv run scripts/serve.py    # hosted
 ```
 
 `CORPUS_QUERY_MODEL_BACKEND` is the only thing that decides. **Having a
-Bedrock key does not select Bedrock**, so a key kept in `.env` never turns a
-free question into a billed one. [docs/setup.md](docs/setup.md#bedrock) sets
-up the hosted model, and [docs/models.md](docs/models.md) has the rest: what
+Bedrock key in `.env` does not select Bedrock on its own**: name it when you
+start the service, as above, or add `CORPUS_QUERY_MODEL_BACKEND=bedrock` to
+`.env` to make it the choice on every start. Left unset, the service answers
+from the local model. [docs/setup.md](docs/setup.md#bedrock) sets up Bedrock, and [docs/models.md](docs/models.md) has the rest: what
 the service checks at startup, what happens when the model cannot be reached,
 and how the two backends fit into one agent.
 

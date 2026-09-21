@@ -2,15 +2,32 @@
 
 `/answer` runs on one of two models, and which one is yours to choose:
 
-|            | local (the default)                   | hosted                                                    |
-| ---------- | ------------------------------------- | --------------------------------------------------------- |
-| model      | `granite4.1:8b`                       | Claude Sonnet 4.6, as `us.anthropic.claude-sonnet-4-6`     |
-| served by  | Ollama, on this machine               | Bedrock                                                    |
-| needs      | Ollama running, that model pulled     | `AWS_BEARER_TOKEN_BEDROCK` and `AWS_REGION`                |
-| costs      | nothing, beyond the laptop's battery  | a billed call per model turn, and a turn that searches makes several |
+|            | Bedrock (recommended)                                  | local                                  |
+| ---------- | ------------------------------------------------------ | -------------------------------------- |
+| model      | Claude Sonnet 4.6, as `us.anthropic.claude-sonnet-4-6` | `granite4.1:8b`                        |
+| served by  | Bedrock                                                | Ollama, on this machine                |
+| needs      | `AWS_BEARER_TOKEN_BEDROCK` and `AWS_REGION`, in `.env` | Ollama running, that model pulled      |
+| chosen by  | `CORPUS_QUERY_MODEL_BACKEND=bedrock`                   | leaving `CORPUS_QUERY_MODEL_BACKEND` unset |
 
-The local model is the only moving part here that has to be installed
-separately. [docs/setup.md](setup.md#1-install-the-tools) installs
+Bedrock needs an API key and a region, read from the process environment or
+from `.env` at the root of the clone. If you were given a `.env`, putting it
+there is all the setup Bedrock needs. It is the same file
+[`scripts/bedrock_smoke_test.py`](../scripts/bedrock_smoke_test.py) and the
+corpus scripts read theirs from, and not `.env.admin`, which holds
+provisioning settings instead. Without one, [`.env.example`](../.env.example)
+is a template with every setting that file takes, and no values for the
+secret ones:
+
+```bash
+cp -n .env.example .env   # -n leaves an existing .env alone
+```
+
+Then fill in `AWS_BEARER_TOKEN_BEDROCK` and `AWS_REGION`;
+[docs/setup.md](setup.md#bedrock) says what each one is.
+[docs/provisioning.md](provisioning.md) is where a key comes from.
+
+The local model is the alternative, and the only moving part here that has to
+be installed separately. [docs/setup.md](setup.md#1-install-the-tools) installs
 Ollama on macOS and on Ubuntu; with it running, pull the model:
 
 ```bash
@@ -24,28 +41,11 @@ from memory, or a second search it did not need — and expect an occasional
 answer that reads like it was written by a small model. Nothing tunes that
 away.
 
-The hosted model needs a Bedrock API key and a region, read from the process
-environment or from `.env` — the same file
-[`scripts/bedrock_smoke_test.py`](../scripts/bedrock_smoke_test.py) and the
-corpus scripts read theirs from, and not `.env.admin`, which holds
-provisioning settings instead. [`.env.example`](../.env.example) is a
-template with every setting that file takes, and no values for the secret
-ones:
-
-```bash
-cp -n .env.example .env   # -n leaves an existing .env alone
-```
-
-Then fill in `AWS_BEARER_TOKEN_BEDROCK` and `AWS_REGION`;
-[docs/setup.md](setup.md#bedrock) says what each one is.
-[docs/provisioning.md](provisioning.md) is where a key comes from and how
-the spend is bounded.
-
 ## Choosing one
 
 ```bash
+CORPUS_QUERY_MODEL_BACKEND=bedrock uv run scripts/serve.py    # Bedrock
 uv run scripts/serve.py                                       # local
-CORPUS_QUERY_MODEL_BACKEND=bedrock uv run scripts/serve.py    # hosted
 ```
 
 `CORPUS_QUERY_MODEL_BACKEND` takes `ollama` or `bedrock`, is read from the
@@ -60,8 +60,7 @@ opens, and the service says which on the way up:
 /answer is answering from granite4.1:8b on ollama.
 ```
 
-A value that is neither backend is refused by name rather than guessed at,
-because the two differ in what they cost:
+A value that is neither backend is refused by name rather than guessed at:
 
 ```
 error: 'bedrok' is not a backend this project has. Set CORPUS_QUERY_MODEL_BACKEND to 'ollama' or 'bedrock', or leave it unset to answer from the local model.
