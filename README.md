@@ -23,6 +23,12 @@ The agent is a caller of `/search` rather than a replacement for it. It posts
 to that endpoint like any other client, so the two can be asked the same
 question and compared, and `curl` still reaches the ranking on its own.
 
+What the corpus could not answer is kept. A question the record does not
+settle is written down as a gap without anybody filing it, and `/corrections`
+and `/feedback` take what a person has to say about an answer. All of it reads
+back out of the same endpoints — see [Telling it when it is
+wrong](#telling-it-when-it-is-wrong).
+
 There is a browser application too, served at `/` by the same process. Today
 it is a shell: it loads, and it reports what the service is running on. The
 question box and the answer view are being built on top of it. Until they
@@ -197,7 +203,8 @@ curl -s localhost:8000/answer \
   ],
   "searches": 1,
   "routing": null,
-  "thread_id": "bafccadb164e4447b21f7a8899f11390"
+  "thread_id": "bafccadb164e4447b21f7a8899f11390",
+  "answer_id": "5f1c0b7a2c1e4d8fa0b9c7d6e5f43210"
 }
 ```
 
@@ -261,8 +268,11 @@ which is what makes a suggestion as traceable as an answer.
 
 `question` is the user's question restated to stand on its own, with the
 context that made it unanswerable, for someone who has not seen the original.
-It is text to edit. Nothing is sent anywhere, nothing is recorded, and the
-suggestion is gone when the response is.
+It is text to edit. Nothing is sent anywhere.
+
+The suggestion is recorded, though. A question the record did not settle is a
+gap, and the service files one itself, with the suggestion exactly as it was
+made — see [Telling it when it is wrong](#telling-it-when-it-is-wrong).
 
 A question the corpus answers gets no routing, and neither does one declined
 without a search: the capital of France is not something anyone here should
@@ -283,14 +293,91 @@ Conversations are checkpointed to disk, so a thread survives a restart. That
 goes in a second SQLite file, `data/usage.db`, and not into the corpus. The
 corpus is a committed artifact and stays read-only in normal use; the usage
 database is local, is not committed, and is created the first time you ask a
-question. Deleting it costs you the threads it held and nothing else. Point
-`--usage-db` somewhere else to keep it elsewhere.
+question. The gaps, corrections, and feedback below go in that same file.
+Deleting it costs you the threads and the records it held and nothing else.
+Point `--usage-db` somewhere else to keep it elsewhere.
 
 The chat model is `granite4.1:8b`, served locally by Ollama, and it is the
 only moving part here that has to be installed separately. It is a small model
 chosen to fit a 16GB machine: expect it to pick its tools less surely than a
 large one, and expect an occasional answer that reads like it was written by a
 small model. Nothing about `/answer` calls a hosted model or costs anything.
+
+### Telling it when it is wrong
+
+Three kinds of record, deliberately not one.
+
+A **gap** is detected rather than reported: whenever the record does not
+settle a question, the service writes one, carrying the routing suggestion
+when there was one to make. Nobody has to remember to file it.
+
+A **correction** is what a person says the answer got wrong, and what is true
+instead. Both halves are required.
+
+**Feedback** is a thumbs up or down, with an optional note. A bare thumbs down
+is feedback rather than a correction: it says an answer was bad and carries
+nothing anybody can act on, and a queue of things to act on that is full of
+them wastes the reader's time.
+
+All three hang off the `answer_id` that came back with the answer. That is
+what lets a correction written a week later name the answer it corrects,
+rather than a question that may have been asked more than once:
+
+```bash
+curl -s localhost:8000/corrections \
+  -H 'content-type: application/json' \
+  -d '{"answer_id": "5f1c0b7a2c1e4d8fa0b9c7d6e5f43210",
+       "what_was_wrong": "It said the firmware freeze is March 12th.",
+       "what_is_right": "The freeze moved to March 19th."}'
+
+curl -s localhost:8000/feedback \
+  -H 'content-type: application/json' \
+  -d '{"answer_id": "5f1c0b7a2c1e4d8fa0b9c7d6e5f43210",
+       "verdict": "down", "note": "cited the wrong meeting"}'
+```
+
+An id that does not name an answer this service gave is a `404`. Storing it
+anyway would make a row nothing could ever read back.
+
+Read the three back most recent first, each row carrying the question that
+produced it and the answer that was given, so a reader working through them
+does not need a second call per row:
+
+```bash
+curl -s localhost:8000/gaps
+curl -s localhost:8000/corrections
+curl -s localhost:8000/feedback
+```
+
+```jsonc
+{
+  "gaps": [
+    {
+      "id": 4,
+      "answer_id": "5f1c0b7a2c1e4d8fa0b9c7d6e5f43210",
+      "created_at": "2026-03-12T16:04:11.238Z",
+      "thread_id": "bafccadb164e4447b21f7a8899f11390",
+      "question": "What tolerance did we set on the rev B connector?",
+      "answer": "The record does not give a tolerance for the rev B connector.",
+      "abstained": true,
+      "routing": { /* who to ask, as it was suggested at the time */ }
+    }
+  ]
+}
+```
+
+`?limit=` bounds a read; the default is 50 and the ceiling is 200.
+
+**Corrections are recorded, not applied.** Nothing here feeds them back into
+retrieval or generation, and an answer to the same question tomorrow will be
+the same answer. That is a deliberate stopping point: the records are for
+people to read. Applying them would take three things this does not have —
+a way to decide which corrections are still true when two of them disagree, a
+way to attach one to the passages it contradicts rather than to the question
+that surfaced it, and a way to tell an answer's reader that part of what they
+are reading came from a correction rather than from the record. Feeding
+unreviewed corrections into answers without those is a way to make the system
+confidently wrong in a new direction.
 
 ### Check that it is up
 
