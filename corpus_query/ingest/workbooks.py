@@ -89,6 +89,9 @@ MAX_LISTED_VALUES = 10
 #: ingesting from anywhere resolves authors against the same file.
 ROSTER_FILE = Path(__file__).resolve().parents[2] / DEFAULT_ROSTER_FILE
 
+#: Where a workbook's core properties live inside the file.
+CORE_PROPERTIES = "docProps/core.xml"
+
 #: A row of cell values, as openpyxl hands them back.
 type Row = tuple[object, ...]
 
@@ -275,16 +278,45 @@ def _author(path: Path, workbook: Workbook, roster_path: Path) -> str:
 
 
 def _document_date(path: Path, workbook: Workbook) -> str:
-    """Return when the workbook is dated: last modified, else created.
+    """Return when the workbook is dated: created, else last modified.
+
+    Created is preferred because it is the date the workbook is about,
+    while the modified date is whenever the file was last written — a
+    library that opens a workbook and saves it again moves that date to
+    today without a cell having changed.
+
+    Args:
+        path: The workbook, to check its core properties carry a date at
+            all.
+        workbook: The opened workbook.
+
+    Returns:
+        The date, as ``YYYY-MM-DD``.
 
     Raises:
-        IngestError: If the core properties carry neither date.
+        IngestError: If the core properties carry neither date. That is
+            checked against the file rather than against what openpyxl
+            reports, because openpyxl answers for a workbook with no dates
+            in it by handing back the time it was opened, which would date
+            every such document today without saying so.
     """
+    if not _dated(path):
+        raise IngestError(f"{path} has no date in its core properties.")
     properties = workbook.properties
-    when = properties.modified or properties.created
+    when = properties.created or properties.modified
     if when is None:
         raise IngestError(f"{path} has no date in its core properties.")
     return when.date().isoformat()
+
+
+def _dated(path: Path) -> bool:
+    """Return whether the file's core properties carry a date at all."""
+    try:
+        with zipfile.ZipFile(path) as archive:
+            core = archive.read(CORE_PROPERTIES).decode("utf-8", errors="replace")
+    except OSError, KeyError, zipfile.BadZipFile:
+        return False
+    return "dcterms:created" in core or "dcterms:modified" in core
 
 
 def _title(path: Path, workbook: Workbook, sheets: Sequence[Sheet | None]) -> str:
